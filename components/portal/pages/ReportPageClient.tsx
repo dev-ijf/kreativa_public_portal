@@ -3,6 +3,7 @@
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { FileText } from 'lucide-react';
 import { MOCK_GRADES } from '@/lib/data/mock/school';
 
 export function ReportPageClient() {
@@ -34,7 +35,7 @@ export function ReportPageClient() {
             {data.subjects.map((subj, i) => (
               <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="flex items-center">
-                  <span className="text-slate-400 mr-3">📄</span>
+                  <FileText size={16} className="text-slate-400 mr-3" />
                   <span className="font-bold text-slate-600 text-sm">{subj.name}</span>
                 </div>
                 <span

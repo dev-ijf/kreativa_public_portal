@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import { BarChart2 } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
@@ -39,7 +40,7 @@ function HabitItem({
           checked ? 'bg-emerald-500 text-white' : 'bg-white border border-slate-200 text-slate-400',
         ].join(' ')}
       >
-        {checked ? '✓' : ''}
+        {checked ? '✅' : ''}
       </span>
     </button>
   );
@@ -122,7 +123,9 @@ export function HabitsPageClient() {
           <div className="mt-4">
             <div className="bg-primary rounded-3xl p-5 text-white shadow-lg shadow-primary/25 mb-6">
               <div className="flex justify-between items-center mb-4">
-                <span className="font-bold flex items-center">📊 {lang === 'en' ? 'Weekly Progress Summary' : 'Ringkasan Mingguan'}</span>
+                <span className="font-bold flex items-center">
+                  <BarChart2 size={18} className="mr-2" /> {lang === 'en' ? 'Weekly Progress Summary' : 'Ringkasan Mingguan'}
+                </span>
               </div>
               <div>
                 <p className="text-xs text-white/70 mb-1">{lang === 'en' ? 'Completion Rate' : 'Tingkat Kepatuhan'}</p>

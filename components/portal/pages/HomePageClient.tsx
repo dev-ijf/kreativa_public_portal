@@ -83,7 +83,7 @@ export function HomePageClient() {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setLang(lang === 'en' ? 'id' : 'en')}
-                  className="bg-white/20 hover:bg-white/30 text-white font-bold py-1.5 px-3.5 rounded-full text-xs transition-colors flex items-center shadow-sm border border-white/10"
+                  className="bg-white/20 hover:bg-white/30 text-white font-semibold py-1.5 px-3.5 rounded-full text-xs transition-colors flex items-center shadow-sm border border-white/10"
                 >
                   {t(lang, 'langBtn')}
                 </button>
@@ -112,7 +112,7 @@ export function HomePageClient() {
                   key={idx}
                   href={banner.type === 'update' ? `/updates/${banner.updateId}` : banner.link}
                   target={banner.type === 'web' ? '_blank' : undefined}
-                  className="snap-start shrink-0 w-[280px] rounded-2xl overflow-hidden bg-white shadow-sm border border-white/10"
+                  className="snap-start shrink-0 w-[280px] rounded-2xl overflow-hidden bg-white shadow-sm"
                 >
                   <div className="relative h-[140px] w-full">
                     {banner.image ? (
@@ -122,7 +122,7 @@ export function HomePageClient() {
                     )}
                     <div className="absolute inset-0 bg-linear-to-t from-black/55 via-black/10 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3">
-                      <p className="text-white font-bold text-sm leading-tight">{banner.title}</p>
+                      <p className="text-white font-semibold text-sm leading-tight">{banner.title}</p>
                       {banner.subtitle ? <p className="text-white/85 text-xs mt-0.5">{banner.subtitle}</p> : null}
                     </div>
                   </div>
@@ -175,7 +175,7 @@ export function HomePageClient() {
       </div>
 
       <div className="relative z-20 px-4 pt-3 pb-2">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           {t(lang, 'selectChild')}
         </p>
       </div>
@@ -192,7 +192,7 @@ export function HomePageClient() {
                   <div className={['w-14 h-14 rounded-2xl flex items-center justify-center', m.color].join(' ')}>
                     {m.icon}
                   </div>
-                  <p className="text-[11px] font-bold text-slate-700 mt-2 leading-tight">{m.label}</p>
+                  <p className="text-xs font-semibold text-slate-600 mt-2 leading-tight">{m.label}</p>
                 </Link>
               ))}
             </div>
@@ -211,10 +211,10 @@ export function HomePageClient() {
               {MOCK_UPCOMING_EVENTS.slice(0, 3).map((e) => (
                 <div key={e.id} className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-bold text-slate-700 leading-tight">{e.title}</p>
+                    <p className="text-sm font-semibold text-slate-700 leading-tight">{e.title}</p>
                     <p className="text-xs text-slate-500">{e.dateLabel}</p>
                   </div>
-                  <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">{e.type}</span>
+                  <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">{e.type}</span>
                 </div>
               ))}
             </div>

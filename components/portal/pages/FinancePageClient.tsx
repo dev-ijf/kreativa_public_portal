@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import { AlertCircle, ShoppingCart, Wallet } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
@@ -49,7 +50,7 @@ export function FinancePageClient() {
         backHref="/"
         rightSlot={
           <Link href="/cart" className="relative p-2 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Cart">
-            <span className="text-lg">🛒</span>
+            <ShoppingCart size={20} />
             {cart.length > 0 ? (
               <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white">
                 {cart.length}
@@ -93,7 +94,7 @@ export function FinancePageClient() {
         <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/25 flex flex-col relative overflow-hidden text-white">
           <div className="flex justify-between items-center mb-4 relative z-10">
             <div className="flex items-center font-bold">
-              <span className="mr-2 opacity-80">👛</span>
+              <Wallet size={20} className="mr-2 text-white/70" />
               {lang === 'en' ? 'Tuition' : 'Keuangan'}
             </div>
           </div>
@@ -114,7 +115,7 @@ export function FinancePageClient() {
         {prevBills.length > 0 ? (
           <div className="bg-red-50 rounded-3xl p-5 shadow-sm border border-red-100">
             <div className="flex items-center mb-4">
-              <span className="text-red-500 mr-2">⚠️</span>
+              <AlertCircle size={18} className="text-red-500 mr-2" />
               <h2 className="font-bold text-red-700 text-lg">{lang === 'en' ? 'Past Due (Previous AY)' : 'Tunggakan (Tahun Ajaran Lalu)'}</h2>
             </div>
             <div className="space-y-3">
@@ -135,7 +136,7 @@ export function FinancePageClient() {
                         className={['w-8 h-8 rounded-full flex items-center justify-center transition-all', isInCart ? 'bg-primary text-white shadow-md' : 'bg-red-100 text-red-600 hover:bg-red-200'].join(' ')}
                         aria-label={isInCart ? 'Remove from cart' : 'Add to cart'}
                       >
-                        {isInCart ? '✓' : '🛒'}
+                        {isInCart ? '✅' : <ShoppingCart size={14} />}
                       </button>
                     </div>
                   </div>
@@ -164,7 +165,7 @@ export function FinancePageClient() {
               return (
                 <button key={m.monthKey} disabled={isPaid} onClick={() => toggleTuitionToCart(m.monthKey, title, m.amount)} className={btnClass}>
                   <span className="text-xs font-bold mb-1">{label}</span>
-                  <span className="mb-1">{isPaid ? '✅' : isInCart ? '🛒' : '○'}</span>
+                  <span className="mb-1">{isPaid ? '✅' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}</span>
                   <span className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(' ')}>{formatRupiah(m.amount)}</span>
                 </button>
               );

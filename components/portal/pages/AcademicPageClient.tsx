@@ -3,6 +3,7 @@
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { BookOpen, Coffee } from 'lucide-react';
 import { MOCK_SCHEDULE } from '@/lib/data/mock/school';
 
 export function AcademicPageClient() {
@@ -28,7 +29,11 @@ export function AcademicPageClient() {
                     <p className="font-bold text-slate-700 text-sm">{item.subject}</p>
                     <p className="text-xs text-slate-500">{lang === 'en' ? 'Teacher' : 'Guru'}: {item.teacher}</p>
                   </div>
-                  {item.subject !== 'Break' ? <span className="text-indigo-300 text-lg">📘</span> : <span className="text-slate-300 text-lg">☕</span>}
+                  {item.subject !== 'Break' ? (
+                    <BookOpen size={18} className="text-indigo-300" />
+                  ) : (
+                    <Coffee size={18} className="text-slate-300" />
+                  )}
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from 'react';
+import { CalendarDays, Clock } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
@@ -107,10 +108,14 @@ export function AgendaPageClient() {
             ) : (
               displayedEvents.map((ev) => (
                 <div key={ev.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-start">
-                  <div className="bg-primary-light rounded-xl p-2 mr-3 text-primary shrink-0">🗓️</div>
+                  <div className="bg-primary-light rounded-xl p-2 mr-3 text-primary shrink-0">
+                    <CalendarDays size={20} />
+                  </div>
                   <div className="flex-1">
                     <p className="font-bold text-slate-700 text-sm mb-1">{lang === 'en' ? ev.titleEn : ev.titleId}</p>
-                    <p className="text-xs text-slate-500 flex items-center mb-1">⏰ {ev.time}</p>
+                    <p className="text-xs text-slate-500 flex items-center mb-1">
+                      <Clock size={12} className="mr-1.5" /> {ev.time}
+                    </p>
                     {!selectedDateStr ? (
                       <p className="text-[10px] text-indigo-500 font-bold bg-indigo-50 inline-block px-2 py-0.5 rounded-md mt-1">{ev.date}</p>
                     ) : null}

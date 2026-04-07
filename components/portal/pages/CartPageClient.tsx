@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { ShoppingCart } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { formatRupiah } from '@/lib/utils/format';
@@ -16,7 +17,9 @@ export function CartPageClient() {
       <div className="px-4 pt-4">
         {cart.length === 0 ? (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
-            <div className="text-3xl mb-3">🛒</div>
+            <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 inline-flex items-center justify-center mb-3">
+              <ShoppingCart size={22} />
+            </div>
             <p className="font-bold text-slate-700">{lang === 'en' ? 'Empty Cart' : 'Keranjang Kosong'}</p>
             <p className="text-sm text-slate-500 mt-1">
               {lang === 'en'

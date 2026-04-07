@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { Brain, Target } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
@@ -26,7 +27,9 @@ export function AdaptiveLearningPageClient() {
         <div className="bg-primary rounded-3xl p-6 shadow-lg shadow-primary/25 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-5 rounded-full -mr-10 -mt-10" />
           <div className="flex justify-between items-center mb-6 relative z-10">
-            <h3 className="font-bold text-lg flex items-center">🎯 {lang === 'en' ? 'Scoreboard' : 'Scoreboard'}</h3>
+            <h3 className="font-bold text-lg flex items-center">
+              <Target size={18} className="mr-2" /> {lang === 'en' ? 'Scoreboard' : 'Scoreboard'}
+            </h3>
           </div>
           <div className="grid grid-cols-2 gap-4 relative z-10">
             <div>
@@ -44,7 +47,9 @@ export function AdaptiveLearningPageClient() {
           {subjects.map((subj) => (
             <div key={subj.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
               <div className="flex items-center">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 ${subj.color}`}>🧠</div>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 ${subj.color}`}>
+                  <Brain size={24} />
+                </div>
                 <span className="font-bold text-slate-700">{lang === 'en' ? subj.nameEn : subj.nameId}</span>
               </div>
               <Link href={`/adaptive-learning/test?subject=${encodeURIComponent(subj.id)}`} className="bg-primary-light text-primary px-4 py-2 rounded-full font-bold hover:bg-indigo-100">
@@ -66,7 +71,11 @@ export function AdaptiveLearningPageClient() {
                 .slice()
                 .reverse()
                 .map((test) => (
-                  <div key={test.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                  <Link
+                    key={test.id}
+                    href={`/adaptive-learning/history/${encodeURIComponent(test.id)}`}
+                    className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center hover:bg-slate-50 transition-colors"
+                  >
                     <div>
                       <p className="font-bold text-slate-700 text-sm mb-1">{test.subject}</p>
                       <p className="text-[10px] text-slate-400">{test.date}</p>
@@ -77,7 +86,7 @@ export function AdaptiveLearningPageClient() {
                         {lang === 'en' ? 'Mastery' : 'Mastery'}: {(test.mastery * 100).toFixed(0)}%
                       </p>
                     </div>
-                  </div>
+                  </Link>
                 ))
             )}
           </div>

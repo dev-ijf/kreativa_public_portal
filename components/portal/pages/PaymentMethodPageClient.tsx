@@ -1,6 +1,7 @@
 "use client";
 
 import Link from 'next/link';
+import { Building2, QrCode, ReceiptText, Smartphone } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { formatRupiah } from '@/lib/utils/format';
@@ -42,14 +43,22 @@ export function PaymentMethodPageClient() {
                 >
                   <div className="flex items-center">
                     <div className={['w-10 h-10 rounded-full flex items-center justify-center mr-3', active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'].join(' ')}>
-                      <span className="text-sm">{m.type === 'va' ? '🏦' : m.type === 'qris' ? '📱' : '🧾'}</span>
+                      {m.type === 'va' ? (
+                        <Building2 size={18} />
+                      ) : m.type === 'qris' ? (
+                        <QrCode size={18} />
+                      ) : m.type === 'manual' ? (
+                        <ReceiptText size={18} />
+                      ) : (
+                        <Smartphone size={18} />
+                      )}
                     </div>
                     <div>
                       <p className="font-bold text-slate-700">{m.label}</p>
                       {m.sublabel ? <p className="text-xs text-slate-500 mt-0.5">{m.sublabel}</p> : null}
                     </div>
                   </div>
-                  <span className={['text-sm font-bold', active ? 'text-primary' : 'text-slate-400'].join(' ')}>{active ? '✓' : '○'}</span>
+                  <span className={['text-sm font-bold', active ? 'text-primary' : 'text-slate-400'].join(' ')}>{active ? '✅' : '○'}</span>
                 </button>
               );
             })}
