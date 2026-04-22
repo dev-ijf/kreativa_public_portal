@@ -6,14 +6,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
 import { TopHero } from '@/components/portal/TopHero';
-import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { ChildSelector } from '@/components/portal/ChildSelector';
+import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
 import { t, type Lang } from '@/lib/i18n/translations';
-import { MOCK_BANNERS, MOCK_CHILDREN, MOCK_UPCOMING_EVENTS } from '@/lib/data/mock/home';
+import { MOCK_BANNERS, MOCK_UPCOMING_EVENTS } from '@/lib/data/mock/home';
 
 export function HomePageClient() {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
-  const { lang, setLang, activeChildId, setActiveChildId } = usePortalState();
+  const { lang, setLang } = usePortalState();
+  const activeChild = useActiveChild();
   const [now, setNow] = useState(() => new Date());
   const [mounted, setMounted] = useState(false);
 
@@ -47,8 +49,6 @@ export function HomePageClient() {
   const formattedTime = useMemo(() => {
     return now.toLocaleTimeString('en-GB', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }, [now]);
-
-  const activeChild = MOCK_CHILDREN.find((c) => c.id === activeChildId) ?? MOCK_CHILDREN[0];
 
   // Avoid hydration mismatch: server + first client paint use English copy; after mount, follow portal lang.
   const stableLang: Lang = mounted ? lang : 'en';
@@ -144,49 +144,8 @@ export function HomePageClient() {
         </div>
       </TopHero>
 
-      {/* Child selector floating between hero and content */}
-      <div className="relative z-20 -mt-4 px-4">
-        <div className="w-full">
-          <div>
-            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-              {MOCK_CHILDREN.map((child) => (
-                <button
-                  key={child.id}
-                  onClick={() => setActiveChildId(child.id)}
-                  className={[
-                    'shrink-0 flex items-center px-3 py-2 rounded-full border transition-all',
-                    activeChildId === child.id
-                      ? 'border-primary bg-primary-light shadow-sm'
-                      : 'border-slate-200 bg-white hover:bg-slate-50',
-                  ].join(' ')}
-                >
-                  <div
-                    className={[
-                      'w-8 h-8 rounded-full flex items-center justify-center mr-2 text-lg',
-                      activeChildId === child.id
-                        ? 'bg-primary text-white border-2 border-primary-light'
-                        : 'bg-slate-100 text-slate-500 border border-slate-200',
-                    ].join(' ')}
-                  >
-                    {child.avatar}
-                  </div>
-                  <div className="text-left pr-1">
-                    <p className={['font-bold text-sm leading-tight', activeChildId === child.id ? 'text-primary' : 'text-slate-700'].join(' ')}>
-                      {child.name.split(' ')[0]}
-                    </p>
-                    <p className="text-[10px] text-slate-500 -mt-0.5">{child.gradeLabel}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative z-20 px-4 pt-3 pb-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          {t(lang, 'selectChild')}
-        </p>
+      <div className="relative z-20 -mt-4">
+        <ChildSelector />
       </div>
 
       <div className="relative z-10 pb-6">
@@ -227,11 +186,13 @@ export function HomePageClient() {
                 </div>
               ))}
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-100">
-              <p className="text-xs text-slate-500">
-                Active child: <span className="font-bold text-slate-700">{activeChild.name}</span>
-              </p>
-            </div>
+            {activeChild && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <p className="text-xs text-slate-500">
+                  Active child: <span className="font-bold text-slate-700">{activeChild.fullName}</span>
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>

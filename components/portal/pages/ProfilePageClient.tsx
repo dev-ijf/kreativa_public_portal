@@ -4,11 +4,10 @@ import { useSession, signOut } from 'next-auth/react';
 import { LogOut } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { MOCK_CHILDREN } from '@/lib/data/mock/home';
 import { t } from '@/lib/i18n/translations';
 
 export function ProfilePageClient() {
-  const { lang } = usePortalState();
+  const { lang, portalChildren } = usePortalState();
   const { data: session } = useSession();
 
   return (
@@ -30,14 +29,12 @@ export function ProfilePageClient() {
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
           <p className="text-xs text-slate-500 font-semibold">{lang === 'en' ? 'Children Information' : 'Data Anak'}</p>
           <div className="mt-4 space-y-3">
-            {MOCK_CHILDREN.map((c) => (
+            {portalChildren.map((c) => (
               <div key={c.id} className="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-lg mr-3">{c.avatar}</div>
-                  <div>
-                    <p className="font-bold text-slate-700">{c.name}</p>
-                    <p className="text-xs text-slate-500">{c.gradeLabel}</p>
-                  </div>
+                <div>
+                  <p className="font-bold text-sm text-slate-700 leading-snug">{c.fullName}</p>
+                  <p className="text-[10px] text-slate-500 leading-snug mt-0.5">{c.className ?? '—'}</p>
+                  <p className="text-xs font-medium text-slate-600 leading-snug mt-0.5">{c.schoolName}</p>
                 </div>
                 <span className="text-slate-400">›</span>
               </div>

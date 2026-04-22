@@ -6,16 +6,17 @@ import { AlertCircle, ShoppingCart, Wallet } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
-import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { MOCK_CHILDREN } from '@/lib/data/mock/home';
+import { ChildSelector } from '@/components/portal/ChildSelector';
+import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
 import { INSTALLMENTS_BY_CHILD, PREVIOUS_BILLS_BY_CHILD, TUITION_MONTHS } from '@/lib/data/mock/finance';
 import { formatInputNumber, formatRupiah } from '@/lib/utils/format';
 
 export function FinancePageClient() {
-  const { lang, activeChildId, setActiveChildId, cart, setCart } = usePortalState();
+  const { lang, activeChildId, cart, setCart } = usePortalState();
+  const activeChild = useActiveChild();
   const [installmentInputs, setInstallmentInputs] = useState<Record<string, number>>({});
 
-  const activeChild = MOCK_CHILDREN.find((c) => c.id === activeChildId) ?? MOCK_CHILDREN[0];
+  const childName = activeChild?.fullName ?? '';
   const installments = useMemo(() => INSTALLMENTS_BY_CHILD[activeChildId] ?? [], [activeChildId]);
   const prevBills = useMemo(() => PREVIOUS_BILLS_BY_CHILD[activeChildId] ?? [], [activeChildId]);
 
@@ -28,17 +29,17 @@ export function FinancePageClient() {
 
   const toggleTuitionToCart = (monthKey: string, label: string, amount: number) => {
     const id = `spp-${activeChildId}-${monthKey}`;
-    setCart((prev) => (prev.some((i) => i.id === id) ? prev.filter((i) => i.id !== id) : [...prev, { id, childId: activeChildId, childName: activeChild.name, type: 'tuition', title: label, amount }]));
+    setCart((prev) => (prev.some((i) => i.id === id) ? prev.filter((i) => i.id !== id) : [...prev, { id, childId: activeChildId, childName: childName, type: 'tuition', title: label, amount }]));
   };
 
   const togglePrevBillToCart = (billId: string, title: string, amount: number) => {
     const id = `prev-${activeChildId}-${billId}`;
-    setCart((prev) => (prev.some((i) => i.id === id) ? prev.filter((i) => i.id !== id) : [...prev, { id, childId: activeChildId, childName: activeChild.name, type: 'previous', title, amount }]));
+    setCart((prev) => (prev.some((i) => i.id === id) ? prev.filter((i) => i.id !== id) : [...prev, { id, childId: activeChildId, childName: childName, type: 'previous', title, amount }]));
   };
 
   const addInstallmentToCart = (instId: string, title: string, amount: number) => {
     const id = `inst-${instId}`;
-    setCart((prev) => [...prev, { id, childId: activeChildId, childName: activeChild.name, type: 'installment', title, amount }]);
+    setCart((prev) => [...prev, { id, childId: activeChildId, childName: childName, type: 'installment', title, amount }]);
   };
 
   const removeFromCart = (id: string) => setCart((prev) => prev.filter((i) => i.id !== id));
@@ -60,35 +61,7 @@ export function FinancePageClient() {
         }
       />
 
-      <div className="px-4 mb-5 mt-2">
-        <p className="text-xs font-bold mb-3 uppercase tracking-wider text-primary">{lang === 'en' ? 'Select Child Profile' : 'Pilih Profil Anak'}</p>
-        <div className="flex space-x-3 overflow-x-auto pb-2">
-          {MOCK_CHILDREN.map((child) => (
-            <button
-              key={child.id}
-              onClick={() => setActiveChildId(child.id)}
-              className={[
-                'shrink-0 flex items-center p-2 pr-4 rounded-full border transition-all',
-                activeChildId === child.id ? 'border-primary bg-primary-light shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-indigo-200',
-              ].join(' ')}
-            >
-              <div
-                className={[
-                  'w-8 h-8 rounded-full flex items-center justify-center mr-2 text-lg',
-                  activeChildId === child.id ? 'bg-primary text-white border-2 border-primary-light' : 'bg-slate-100 text-slate-500',
-                ].join(' ')}
-              >
-                {child.avatar}
-              </div>
-              <div className="text-left">
-                <p className={['font-bold text-sm leading-tight', activeChildId === child.id ? 'text-primary' : 'text-slate-700'].join(' ')}>
-                  {child.name.split(' ')[0]}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+      <ChildSelector />
 
       <div className="px-4 mb-6 mt-2">
         <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/25 flex flex-col relative overflow-hidden text-white">
@@ -101,7 +74,7 @@ export function FinancePageClient() {
           <div className="flex justify-between items-end relative z-10">
             <div>
               <p className="text-xs text-white/70 font-semibold mb-1">
-                {lang === 'en' ? 'Total Outstanding' : 'Total Tertunggak'} ({activeChild.name.split(' ')[0]})
+                {lang === 'en' ? 'Total Outstanding' : 'Total Tertunggak'} ({childName.split(' ')[0]})
               </p>
               <p className="text-3xl font-bold text-white">{formatRupiah(totalOutstanding)}</p>
             </div>

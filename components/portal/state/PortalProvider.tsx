@@ -2,6 +2,7 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { PortalChildRow } from '@/lib/data/server/children';
 
 export type Lang = 'en' | 'id';
 
@@ -24,6 +25,7 @@ export type PaymentMethod = {
 type PortalState = {
   lang: Lang;
   setLang: Dispatch<SetStateAction<Lang>>;
+  portalChildren: PortalChildRow[];
   activeChildId: number;
   setActiveChildId: Dispatch<SetStateAction<number>>;
   cart: CartItem[];
@@ -34,13 +36,19 @@ type PortalState = {
 
 const PortalContext = createContext<PortalState | null>(null);
 
-export function PortalProvider({ children }: { children: ReactNode }) {
-  // Important for SSR hydration:
-  // keep initial values deterministic (server === client), then sync from localStorage after mount.
+type ProviderProps = {
+  children: ReactNode;
+  initialPortalChildren?: PortalChildRow[];
+};
+
+export function PortalProvider({ children, initialPortalChildren = [] }: ProviderProps) {
   const [lang, setLang] = useState<Lang>('en');
-  const [activeChildId, setActiveChildId] = useState<number>(1);
+  const [portalChildren] = useState<PortalChildRow[]>(initialPortalChildren);
+  const [activeChildId, setActiveChildId] = useState<number>(initialPortalChildren[0]?.id ?? 0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
+
+  const childIds = useMemo(() => new Set(portalChildren.map((c) => c.id)), [portalChildren]);
 
   useEffect(() => {
     try {
@@ -53,7 +61,9 @@ export function PortalProvider({ children }: { children: ReactNode }) {
       if (storedLang === 'en' || storedLang === 'id') setLang(storedLang);
 
       const parsedChild = storedChild ? Number(storedChild) : NaN;
-      if (!Number.isNaN(parsedChild) && parsedChild > 0) setActiveChildId(parsedChild);
+      if (!Number.isNaN(parsedChild) && childIds.has(parsedChild)) {
+        setActiveChildId(parsedChild);
+      }
 
       if (storedCart) setCart(JSON.parse(storedCart) as CartItem[]);
 
@@ -61,44 +71,36 @@ export function PortalProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-  }, []);
+  }, [childIds]);
 
   useEffect(() => {
     try {
       window.localStorage.setItem('portal.lang', lang);
-    } catch {
-      // ignore storage errors
-    }
+    } catch { /* ignore */ }
   }, [lang]);
 
   useEffect(() => {
     try {
       window.localStorage.setItem('portal.activeChildId', String(activeChildId));
-    } catch {
-      // ignore storage errors
-    }
+    } catch { /* ignore */ }
   }, [activeChildId]);
 
   useEffect(() => {
     try {
       window.localStorage.setItem('portal.cart', JSON.stringify(cart));
-    } catch {
-      // ignore storage errors
-    }
+    } catch { /* ignore */ }
   }, [cart]);
 
   useEffect(() => {
     try {
       if (!selectedPayment) window.localStorage.removeItem('portal.selectedPayment');
       else window.localStorage.setItem('portal.selectedPayment', JSON.stringify(selectedPayment));
-    } catch {
-      // ignore storage errors
-    }
+    } catch { /* ignore */ }
   }, [selectedPayment]);
 
   const value = useMemo(
-    () => ({ lang, setLang, activeChildId, setActiveChildId, cart, setCart, selectedPayment, setSelectedPayment }),
-    [lang, activeChildId, cart, selectedPayment],
+    () => ({ lang, setLang, portalChildren, activeChildId, setActiveChildId, cart, setCart, selectedPayment, setSelectedPayment }),
+    [lang, portalChildren, activeChildId, cart, selectedPayment],
   );
 
   return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>;
@@ -108,5 +110,10 @@ export function usePortalState() {
   const ctx = useContext(PortalContext);
   if (!ctx) throw new Error('usePortalState must be used within PortalProvider');
   return ctx;
+}
+
+export function useActiveChild(): PortalChildRow | undefined {
+  const { portalChildren, activeChildId } = usePortalState();
+  return portalChildren.find((c) => c.id === activeChildId);
 }
 
