@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
 import { TopHero } from '@/components/portal/TopHero';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
@@ -11,6 +12,7 @@ import { MOCK_BANNERS, MOCK_CHILDREN, MOCK_UPCOMING_EVENTS } from '@/lib/data/mo
 
 export function HomePageClient() {
   const carouselRef = useRef<HTMLDivElement | null>(null);
+  const { data: session } = useSession();
   const { lang, setLang, activeChildId, setActiveChildId } = usePortalState();
   const [now, setNow] = useState(() => new Date());
   const [mounted, setMounted] = useState(false);
@@ -76,7 +78,11 @@ export function HomePageClient() {
                 />
               </div>
               <p className="text-sm opacity-90">{t(lang, 'greeting')}</p>
-              <h1 className="text-xl font-bold">{t(lang, 'parents')}</h1>
+              <h1 className="text-xl font-bold">
+                {session?.user?.role === 'parent'
+                  ? `${t(lang, 'honorific')} ${session.user.fullName}`
+                  : session?.user?.fullName ?? ''}
+              </h1>
             </div>
 
             <div className="flex flex-col items-end mt-1">

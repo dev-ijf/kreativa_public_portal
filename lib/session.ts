@@ -1,7 +1,19 @@
-export type SessionUser = { userId: number };
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
-// UI-only auth phase: we treat the user as logged in with a static id.
+export type SessionUser = { userId: number; role: string; fullName: string };
+
 export async function getSessionUser(): Promise<SessionUser> {
-  return { userId: 2 };
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.userId) {
+    throw new Error('Unauthorized');
+  }
+
+  return {
+    userId: session.user.userId,
+    role: session.user.role,
+    fullName: session.user.fullName,
+  };
 }
 
