@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from 'react';
+import type { Session } from 'next-auth';
 import { SessionProvider, signOut, useSession } from 'next-auth/react';
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
@@ -19,9 +20,9 @@ function SessionGuard({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children, session }: { children: ReactNode; session?: Session | null }) {
   return (
-    <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
+    <SessionProvider session={session ?? undefined} refetchInterval={5 * 60} refetchOnWindowFocus>
       <SessionGuard>{children}</SessionGuard>
     </SessionProvider>
   );

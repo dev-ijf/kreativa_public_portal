@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react';
 import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
 import { TopHero } from '@/components/portal/TopHero';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { t } from '@/lib/i18n/translations';
+import { t, type Lang } from '@/lib/i18n/translations';
 import { MOCK_BANNERS, MOCK_CHILDREN, MOCK_UPCOMING_EVENTS } from '@/lib/data/mock/home';
 
 export function HomePageClient() {
@@ -50,6 +50,9 @@ export function HomePageClient() {
 
   const activeChild = MOCK_CHILDREN.find((c) => c.id === activeChildId) ?? MOCK_CHILDREN[0];
 
+  // Avoid hydration mismatch: server + first client paint use English copy; after mount, follow portal lang.
+  const stableLang: Lang = mounted ? lang : 'en';
+
   const menus = [
     { href: '/finance', label: t(lang, 'tuition'), color: 'bg-indigo-100', icon: <Receipt size={28} className="text-primary" /> },
     { href: '/academic', label: t(lang, 'academic'), color: 'bg-blue-100', icon: <BookOpen size={28} className="text-blue-600" /> },
@@ -77,10 +80,10 @@ export function HomePageClient() {
                   priority
                 />
               </div>
-              <p className="text-sm opacity-90">{t(lang, 'greeting')}</p>
+              <p className="text-sm opacity-90">{t(stableLang, 'greeting')}</p>
               <h1 className="text-xl font-bold">
                 {session?.user?.role === 'parent'
-                  ? `${t(lang, 'honorific')} ${session.user.fullName}`
+                  ? `${t(stableLang, 'honorific')} ${session.user.fullName ?? ''}`.trim()
                   : session?.user?.fullName ?? ''}
               </h1>
             </div>

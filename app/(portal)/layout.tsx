@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
+import { getServerSession } from 'next-auth';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PortalProvider } from '@/components/portal/state/PortalProvider';
+import { authOptions } from '@/lib/auth';
 
-export default function PortalLayout({ children }: { children: ReactNode }) {
+export default async function PortalLayout({ children }: { children: ReactNode }) {
+  const session = await getServerSession(authOptions);
+
   return (
-    <AuthProvider>
+    <AuthProvider session={session}>
       <PortalProvider>
         <div className="min-h-screen bg-slate-50 text-slate-800">
           <div className="min-h-screen w-full flex justify-center">
