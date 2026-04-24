@@ -660,11 +660,12 @@ CREATE TABLE "public"."academic_clinic_visits" (
     PRIMARY KEY ("id")
 );
 
-DROP TABLE IF EXISTS "public"."academic_habits";
+DROP TABLE IF EXISTS "public"."academic_habits" CASCADE;
 -- Sequence and defined type
 CREATE SEQUENCE IF NOT EXISTS academic_habits_id_seq;
 
--- Table Definition
+-- Parent table: RANGE partitioned by habit_date (child partitions route automatically).
+-- Application code always reads/writes "academic_habits" only.
 CREATE TABLE "public"."academic_habits" (
     "id" int8 NOT NULL DEFAULT nextval('academic_habits_id_seq'::regclass),
     "student_id" int4 NOT NULL,
@@ -682,8 +683,19 @@ CREATE TABLE "public"."academic_habits" (
     "help_parents" bool DEFAULT false,
     "created_at" timestamp DEFAULT now(),
     "updated_at" timestamp DEFAULT now(),
-    PRIMARY KEY ("id")
-);
+    "pray_with_parents" bool DEFAULT false,
+    "give_greetings" bool DEFAULT false,
+    "smile_greet_polite" bool DEFAULT false,
+    "on_time_arrival" varchar,
+    "parent_hug_pray" bool DEFAULT false,
+    "child_tell_parents" bool DEFAULT false,
+    "quran_juz_info" text,
+    CONSTRAINT "academic_habits_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."core_students"("id"),
+    PRIMARY KEY ("id", "habit_date")
+) PARTITION BY RANGE ("habit_date");
+
+-- Catches rows outside explicit monthly partitions (dev / seed / future months).
+CREATE TABLE "public"."academic_habits_p_default" PARTITION OF "public"."academic_habits" DEFAULT;
 
 DROP TABLE IF EXISTS "public"."academic_adaptive_tests";
 -- Sequence and defined type
@@ -930,9 +942,9 @@ INSERT INTO "public"."academic_clinic_visits" ("id", "student_id", "visit_date",
 (1, 1, '2023-11-12', 'Fever', 'Demam', 'Given paracetamol and rested', 'Diberi paracetamol dan istirahat', NULL),
 (2, 2, '2023-09-02', 'Scraped knee', 'Lutut lecet', 'Cleaned and bandaged', 'Dibersihkan dan diperban', NULL);
 
-INSERT INTO "public"."academic_habits" ("id", "student_id", "habit_date", "fajr", "dhuhr", "asr", "maghrib", "isha", "dhuha", "tahajud", "read_quran", "sunnah_fasting", "wake_up_early", "help_parents", "created_at", "updated_at") VALUES
-(1, 1, '2023-11-18', 't', 't', 'f', 'f', 'f', 't', 'f', 'f', 'f', 't', 't', '2026-04-06 15:22:13.286646', '2026-04-06 15:22:13.286646'),
-(2, 1, '2023-11-17', 't', 't', 't', 't', 't', 'f', 'f', 't', 'f', 't', 't', '2026-04-06 15:22:13.286646', '2026-04-06 15:22:13.286646');
+INSERT INTO "public"."academic_habits" ("id", "student_id", "habit_date", "fajr", "dhuhr", "asr", "maghrib", "isha", "dhuha", "tahajud", "read_quran", "sunnah_fasting", "wake_up_early", "help_parents", "created_at", "updated_at", "pray_with_parents", "give_greetings", "smile_greet_polite", "on_time_arrival", "parent_hug_pray", "child_tell_parents", "quran_juz_info") VALUES
+(1, 1, '2023-11-18', 't', 't', 'f', 'f', 'f', 't', 'f', 'f', 'f', 't', 't', '2026-04-06 15:22:13.286646', '2026-04-06 15:22:13.286646', 'f', 'f', 'f', NULL, 'f', 'f', NULL),
+(2, 1, '2023-11-17', 't', 't', 't', 't', 't', 'f', 'f', 't', 'f', 't', 't', '2026-04-06 15:22:13.286646', '2026-04-06 15:22:13.286646', 'f', 'f', 'f', NULL, 'f', 'f', NULL);
 
 INSERT INTO "public"."academic_adaptive_tests" ("id", "student_id", "subject_id", "test_date", "score", "mastery_level") VALUES
 (1, 1, 1, '2023-11-18 14:00:00', 85, 0.85),

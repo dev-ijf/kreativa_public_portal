@@ -1,32 +1,3 @@
-export const MOCK_ATTENDANCE: Record<
-  number,
-  {
-    present: number;
-    sick: number;
-    permission: number;
-    absent: number;
-    history: { date: string; status: 'sick' | 'permission'; noteEn: string; noteId: string }[];
-  }
-> = {
-  1: {
-    present: 42,
-    sick: 1,
-    permission: 2,
-    absent: 0,
-    history: [
-      { date: '2026-03-04', status: 'sick', noteEn: 'Flu', noteId: 'Flu' },
-      { date: '2026-02-18', status: 'permission', noteEn: 'Family event', noteId: 'Acara keluarga' },
-    ],
-  },
-  2: {
-    present: 40,
-    sick: 0,
-    permission: 1,
-    absent: 1,
-    history: [{ date: '2026-03-11', status: 'permission', noteEn: 'Doctor appointment', noteId: 'Kontrol dokter' }],
-  },
-};
-
 export const MOCK_GRADES: Record<number, { semester: string; subjects: { name: string; score: number }[] }> = {
   1: {
     semester: '2025/2026 - Semester 2',

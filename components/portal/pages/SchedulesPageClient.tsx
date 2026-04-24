@@ -5,10 +5,21 @@ import { BookOpen, Coffee } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { t } from '@/lib/i18n/translations';
+import { t, type Lang } from '@/lib/i18n/translations';
+import type { TranslationKey } from '@/lib/i18n/translations';
 import type { PortalScheduleRow } from '@/lib/data/server/schedules';
 
 const WEEKDAY_LABELS_ID = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'] as const;
+
+const WEEKDAY_KEYS: readonly TranslationKey[] = [
+  'weekdayMon',
+  'weekdayTue',
+  'weekdayWed',
+  'weekdayThu',
+  'weekdayFri',
+  'weekdaySat',
+  'weekdaySun',
+];
 
 const EN_DAY_TO_CANONICAL: Record<string, (typeof WEEKDAY_LABELS_ID)[number]> = {
   monday: 'Senin',
@@ -29,11 +40,16 @@ function canonicalWeekdayLabel(dayRaw: string): string {
   return dayRaw.trim();
 }
 
-function indonesianWeekdayToday(): (typeof WEEKDAY_LABELS_ID)[number] {
+function weekdayIndexFromCanonical(dayRaw: string): number {
+  const canon = canonicalWeekdayLabel(dayRaw);
+  const i = (WEEKDAY_LABELS_ID as readonly string[]).indexOf(canon);
+  return i >= 0 ? i : 0;
+}
+
+function todayWeekdayIndex(): number {
   const d = new Date();
   const js = d.getDay();
-  const idx = js === 0 ? 6 : js - 1;
-  return WEEKDAY_LABELS_ID[idx];
+  return js === 0 ? 6 : js - 1;
 }
 
 type Props = {
@@ -43,9 +59,7 @@ type Props = {
 export function SchedulesPageClient({ initialSchedules }: Props) {
   const { lang } = usePortalState();
   const activeChild = useActiveChild();
-  const [selectedDay, setSelectedDay] = useState<(typeof WEEKDAY_LABELS_ID)[number]>(() =>
-    indonesianWeekdayToday(),
-  );
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => todayWeekdayIndex());
 
   const rowsForChild = useMemo(() => {
     if (!activeChild?.classId || activeChild.academicYearId == null) return [];
@@ -55,13 +69,16 @@ export function SchedulesPageClient({ initialSchedules }: Props) {
   }, [initialSchedules, activeChild]);
 
   const items = useMemo(() => {
-    return rowsForChild.filter((r) => canonicalWeekdayLabel(r.dayOfWeek) === selectedDay);
-  }, [rowsForChild, selectedDay]);
+    return rowsForChild.filter((r) => weekdayIndexFromCanonical(r.dayOfWeek) === selectedDayIndex);
+  }, [rowsForChild, selectedDayIndex]);
 
   const title = t(lang, 'schedules');
   const pickDay = t(lang, 'schedulePickDay');
   const noClass = t(lang, 'scheduleNoClass');
   const emptyDay = t(lang, 'scheduleEmptyDay');
+
+  const dayLabel = (idx: number, l: Lang) => t(l, WEEKDAY_KEYS[idx]!);
+  const dayLabelShort = (idx: number, l: Lang) => dayLabel(idx, l).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-6">
@@ -71,22 +88,23 @@ export function SchedulesPageClient({ initialSchedules }: Props) {
       <div className="px-4 space-y-4">
         <div>
           <p className="text-xs font-semibold text-slate-500 mb-2">{pickDay}</p>
-          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide -mx-1 px-1">
-            {WEEKDAY_LABELS_ID.map((d) => {
-              const isOn = d === selectedDay;
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+            {WEEKDAY_KEYS.map((_, idx) => {
+              const isOn = idx === selectedDayIndex;
               return (
                 <button
-                  key={d}
+                  key={idx}
                   type="button"
-                  onClick={() => setSelectedDay(d)}
+                  title={dayLabel(idx, lang)}
+                  onClick={() => setSelectedDayIndex(idx)}
                   className={[
-                    'shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors border',
+                    'rounded-lg px-2.5 py-2 text-xs font-bold transition-colors border shrink-0',
                     isOn
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40',
                   ].join(' ')}
                 >
-                  {d.slice(0, 3)}
+                  {dayLabelShort(idx, lang)}
                 </button>
               );
             })}
@@ -127,7 +145,7 @@ export function SchedulesPageClient({ initialSchedules }: Props) {
                       <div className="min-w-0">
                         <p className="font-bold text-slate-700 text-sm">{subject}</p>
                         <p className="text-xs text-slate-500 truncate">
-                          {lang === 'en' ? 'Teacher' : 'Guru'}: {teacher}
+                          {t(lang, 'scheduleTeacher')}: {teacher}
                         </p>
                       </div>
                       {item.isBreak ? (
