@@ -1,18 +1,3 @@
-export const MOCK_SCHEDULE: Record<number, { time: string; subject: string; teacher: string }[]> = {
-  1: [
-    { time: '07:15 - 08:00', subject: 'Math', teacher: 'Ms. Rina' },
-    { time: '08:00 - 08:45', subject: 'English', teacher: 'Mr. David' },
-    { time: '08:45 - 09:15', subject: 'Break', teacher: '-' },
-    { time: '09:15 - 10:00', subject: 'Science', teacher: 'Ms. Nadia' },
-  ],
-  2: [
-    { time: '07:00 - 07:45', subject: 'Science', teacher: 'Mr. Hasan' },
-    { time: '07:45 - 08:30', subject: 'Math', teacher: 'Ms. Tika' },
-    { time: '08:30 - 09:00', subject: 'Break', teacher: '-' },
-    { time: '09:00 - 09:45', subject: 'English', teacher: 'Ms. Sarah' },
-  ],
-};
-
 export const MOCK_ATTENDANCE: Record<
   number,
   {

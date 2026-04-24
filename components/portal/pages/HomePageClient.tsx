@@ -81,7 +81,7 @@ export function HomePageClient({ initialAgendas, initialAnnouncements }: Props) 
 
   const menus = [
     { href: '/finance', label: t(lang, 'tuition'), color: 'bg-indigo-100', icon: <Receipt size={28} className="text-primary" /> },
-    { href: '/academic', label: t(lang, 'academic'), color: 'bg-blue-100', icon: <BookOpen size={28} className="text-blue-600" /> },
+    { href: '/schedules', label: t(lang, 'schedules'), color: 'bg-blue-100', icon: <BookOpen size={28} className="text-blue-600" /> },
     { href: '/attendance', label: t(lang, 'attendance'), color: 'bg-orange-100', icon: <CheckSquare size={28} className="text-orange-600" /> },
     { href: '/report', label: t(lang, 'report'), color: 'bg-purple-100', icon: <Award size={28} className="text-purple-600" /> },
     { href: '/agenda', label: t(lang, 'agenda'), color: 'bg-red-100', icon: <Calendar size={28} className="text-red-600" /> },

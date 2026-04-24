@@ -538,13 +538,14 @@ CREATE SEQUENCE IF NOT EXISTS academic_schedules_id_seq;
 -- Table Definition
 CREATE TABLE "public"."academic_schedules" (
     "id" int8 NOT NULL DEFAULT nextval('academic_schedules_id_seq'::regclass),
-    "student_id" int4 NOT NULL,
     "subject_id" int8,
     "teacher_id" int4,
     "day_of_week" varchar NOT NULL,
     "start_time" varchar NOT NULL,
     "end_time" varchar NOT NULL,
     "is_break" bool DEFAULT false,
+    "class_id" int4 NOT NULL,
+    "academic_year_id" int4 NOT NULL,
     PRIMARY KEY ("id")
 );
 
@@ -893,15 +894,6 @@ INSERT INTO "public"."core_cohorts" ("id", "school_id", "name", "created_at") VA
 INSERT INTO "public"."tuition_payment_instructions" ("id", "title", "description", "created_at", "updated_at", "step_order", "payment_channel_id") VALUES
 (1, 'Pembayaran melalui ATM Mandiri', '<ol><li>Catat kode pembayaran yang anda dapat.</li><li>Gunakan ATM Mandiri untuk menyelesaikan pembayaran.</li><li>Masukkan PIN anda.</li><li>Pilih ''''BAYAR/BELI''''.</li><li>Pilih LAINNYA.</li><li>Cari pilihan MULTI PAYMENT.</li><li>Masukkan kode perusahaan 88558.</li><li>Masukkan kode VIRTUAL ACCOUNT.</li><li>Masukkan atau Pastikan Jumlah Pembayaran sesuai dengan Jumlah Tagihan anda kemudian tekan ''''Benar''''.</li><li>Pilih Tagihan Anda jika sudah sesuai tekan YA.</li><li>Konfirmasikan tagihan anda apakah sudah sesuai lalu tekan YA.</li><li>Harap Simpan Struk Transaksi yang anda dapatkan.</li></ol>', '2026-04-01 23:10:47.296852+00', '2026-04-01 23:10:47.296852+00', 1, 1);
 
-INSERT INTO "public"."academic_schedules" ("id", "student_id", "subject_id", "teacher_id", "day_of_week", "start_time", "end_time", "is_break") VALUES
-(1, 1, 3, 3, 'Monday', '11:00', '12:30', 'f'),
-(2, 2, 1, 1, 'Monday', '10:00', '11:30', 'f'),
-(3, 2, NULL, NULL, 'Monday', '09:30', '10:00', 't'),
-(4, 1, 2, 2, 'Monday', '09:00', '10:30', 'f'),
-(5, 1, NULL, NULL, 'Monday', '10:30', '11:00', 't'),
-(6, 2, 4, 4, 'Monday', '08:00', '09:30', 'f'),
-(7, 1, 1, 1, 'Monday', '07:30', '09:00', 'f');
-
 INSERT INTO "public"."academic_subjects" ("id", "code", "name_en", "name_id", "color_theme") VALUES
 (1, 'MATH', 'Math', 'Matematika', 'bg-blue-100 text-blue-600'),
 (2, 'SCI', 'Science', 'Ilmu Pengetahuan Alam', 'bg-emerald-100 text-emerald-600'),
@@ -958,6 +950,14 @@ INSERT INTO "public"."core_teachers" ("id", "user_id", "nip", "join_date", "late
 (2, 11, NULL, NULL, NULL),
 (3, 12, NULL, NULL, NULL),
 (4, 13, NULL, NULL, NULL);
+
+INSERT INTO "public"."academic_schedules" ("id", "subject_id", "teacher_id", "day_of_week", "start_time", "end_time", "is_break", "class_id", "academic_year_id") VALUES
+(1, 1, 1, 'Senin', '07:30', '09:00', 'f', 1, 2),
+(2, 2, 2, 'Senin', '09:00', '10:30', 'f', 1, 2),
+(3, NULL, NULL, 'Senin', '10:30', '11:00', 't', 1, 2),
+(4, 3, 3, 'Senin', '11:00', '12:30', 'f', 1, 2),
+(5, 1, 1, 'Selasa', '07:30', '09:00', 'f', 1, 2),
+(6, 4, 4, 'Senin', '08:00', '09:30', 'f', 2, 2);
 
 INSERT INTO "public"."tuition_transaction_details" ("id", "transaction_id", "transaction_created_at", "bill_id", "product_id", "amount_paid", "created_at") VALUES
 (1, 1, '2024-10-15 17:00:00', 1, 1, 800000.00, '2024-10-15 17:00:00');
@@ -1032,10 +1032,12 @@ CREATE INDEX idx_tuition_payment_instructions_step_order ON public.tuition_payme
 CREATE UNIQUE INDEX uniq_tuition_payment_instructions_channel_step_order ON public.tuition_payment_instructions USING btree (payment_channel_id, step_order) WHERE (step_order IS NOT NULL);
 ALTER TABLE "public"."academic_schedules" ADD FOREIGN KEY ("teacher_id") REFERENCES "public"."core_teachers"("id") ON DELETE SET NULL;
 ALTER TABLE "public"."academic_schedules" ADD FOREIGN KEY ("subject_id") REFERENCES "public"."academic_subjects"("id") ON DELETE SET NULL;
+ALTER TABLE "public"."academic_schedules" ADD FOREIGN KEY ("class_id") REFERENCES "public"."core_classes"("id");
+ALTER TABLE "public"."academic_schedules" ADD FOREIGN KEY ("academic_year_id") REFERENCES "public"."core_academic_years"("id");
 
 
 -- Indices
-CREATE INDEX idx_acad_sch_student_day ON public.academic_schedules USING btree (student_id, day_of_week);
+CREATE INDEX idx_acad_sch_class_year_day ON public.academic_schedules USING btree (class_id, academic_year_id, day_of_week);
 
 
 -- Indices

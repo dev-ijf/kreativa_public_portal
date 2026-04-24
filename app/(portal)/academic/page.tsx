@@ -1,6 +1,5 @@
-import { AcademicPageClient } from '@/components/portal/pages/AcademicPageClient';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <AcademicPageClient />;
+  redirect('/schedules');
 }
-
