@@ -6,19 +6,11 @@ import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
 import type { PortalAgendaRow } from '@/lib/data/server/agendas';
+import { agendaForChild } from '@/lib/portal/agenda-filter';
 
 type Props = {
   initialAgendas: PortalAgendaRow[];
 };
-
-function agendaForChild(rows: PortalAgendaRow[], schoolId: number, levelGradeName: string | null) {
-  return rows.filter((row) => {
-    if (row.schoolId !== schoolId) return false;
-    if (row.targetGrade == null) return true;
-    if (levelGradeName == null) return false;
-    return row.targetGrade === levelGradeName;
-  });
-}
 
 export function AgendaPageClient({ initialAgendas }: Props) {
   const { lang } = usePortalState();

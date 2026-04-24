@@ -592,6 +592,7 @@ CREATE TABLE "public"."academic_announcements" (
     "content_en" text NOT NULL,
     "content_id" text NOT NULL,
     "featured_image" text,
+    "active" bool NOT NULL DEFAULT true,
     PRIMARY KEY ("id")
 );
 
@@ -912,9 +913,9 @@ INSERT INTO "public"."academic_attendances" ("id", "student_id", "attendance_dat
 (1, 1, '2023-11-12', 'sick', 'Fever', 'Demam', '2026-04-06 15:22:13.286646'),
 (2, 1, '2023-10-05', 'permission', 'Family event', 'Acara keluarga', '2026-04-06 15:22:13.286646');
 
-INSERT INTO "public"."academic_announcements" ("id", "school_id", "publish_date", "title_en", "title_id", "content_en", "content_id", "featured_image") VALUES
-(1, 4, '2023-11-18', 'New School Bus Route', 'Rute Bus Sekolah Baru', 'Starting next month, we are adding a new route covering the South District.', 'Mulai bulan depan, kami menambahkan rute baru yang mencakup Area Selatan.', '/assets/announcements/school-bus.jpg'),
-(2, 4, '2023-11-15', 'Library Renovation Completed', 'Renovasi Perpustakaan Selesai', 'Students can now enjoy the newly renovated library.', 'Siswa kini dapat menikmati perpustakaan yang baru direnovasi.', '/assets/announcements/library.jpg');
+INSERT INTO "public"."academic_announcements" ("id", "school_id", "publish_date", "title_en", "title_id", "content_en", "content_id", "featured_image", "active") VALUES
+(1, 4, '2023-11-18', 'New School Bus Route', 'Rute Bus Sekolah Baru', 'Starting next month, we are adding a new route covering the South District.', 'Mulai bulan depan, kami menambahkan rute baru yang mencakup Area Selatan.', '/assets/announcements/school-bus.jpg', true),
+(2, 4, '2023-11-15', 'Library Renovation Completed', 'Renovasi Perpustakaan Selesai', 'Students can now enjoy the newly renovated library.', 'Siswa kini dapat menikmati perpustakaan yang baru direnovasi.', '/assets/announcements/library.jpg', true);
 
 INSERT INTO "public"."academic_semesters" ("id", "academic_year", "semester_label", "is_active") VALUES
 (1, '2023/2024', '1', 't');

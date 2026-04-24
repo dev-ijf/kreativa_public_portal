@@ -1,42 +1,51 @@
 "use client";
 
-import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { MOCK_UPDATES } from '@/lib/data/mock/school';
+import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
 
-export function UpdateDetailPageClient() {
+type Props = {
+  announcement: PortalAnnouncementRow;
+};
+
+export function UpdateDetailPageClient({ announcement }: Props) {
   const { lang } = usePortalState();
-  const params = useParams<{ id: string }>();
-  const id = params?.id;
-  const update = MOCK_UPDATES.find((u) => u.id === id);
-
-  if (!update) {
-    return (
-      <div className="min-h-screen bg-slate-50 pb-6">
-        <Header title={lang === 'en' ? 'Updates' : 'Info'} backHref="/updates" />
-        <div className="px-4 mt-4">
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-sm text-slate-600">
-            {lang === 'en' ? 'Update not found.' : 'Info tidak ditemukan.'}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const title = lang === 'en' ? announcement.titleEn : announcement.titleId;
+  const html = lang === 'en' ? announcement.contentEn : announcement.contentId;
+  const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(`${announcement.publishDate}T12:00:00`));
 
   return (
     <div className="min-h-screen bg-slate-50 pb-6">
       <Header title={lang === 'en' ? 'Updates' : 'Info'} backHref="/updates" />
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-          <span className="text-xs font-semibold text-slate-400 mb-3 block">{update.date}</span>
-          <h2 className="font-bold text-slate-700 text-xl mb-4 leading-tight">{lang === 'en' ? update.titleEn : update.titleId}</h2>
-          <div className="text-slate-600 leading-relaxed whitespace-pre-wrap text-sm border-t border-slate-100 pt-4">
-            {lang === 'en' ? update.descEn : update.descId}
+        <article className="bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100">
+          {announcement.featuredImage ? (
+            <div className="relative aspect-video w-full bg-slate-100">
+              <Image
+                src={announcement.featuredImage}
+                alt={title}
+                fill
+                sizes="100vw"
+                className="object-cover"
+                priority
+              />
+            </div>
+          ) : null}
+          <div className="p-6">
+            <span className="text-xs font-semibold text-slate-400 mb-3 block">{dateLabel}</span>
+            <h2 className="font-bold text-slate-700 text-xl mb-4 leading-tight">{title}</h2>
+            <div
+              className="prose prose-slate max-w-none text-slate-600 text-sm leading-relaxed border-t border-slate-100 pt-4 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-5"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
           </div>
-        </div>
+        </article>
       </div>
     </div>
   );
 }
-

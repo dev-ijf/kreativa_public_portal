@@ -9,9 +9,21 @@ import { TopHero } from '@/components/portal/TopHero';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
 import { t, type Lang } from '@/lib/i18n/translations';
-import { MOCK_BANNERS, MOCK_UPCOMING_EVENTS } from '@/lib/data/mock/home';
+import type { PortalAgendaRow } from '@/lib/data/server/agendas';
+import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
+import { agendaForChild } from '@/lib/portal/agenda-filter';
 
-export function HomePageClient() {
+function todayLocalISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+type Props = {
+  initialAgendas: PortalAgendaRow[];
+  initialAnnouncements: PortalAnnouncementRow[];
+};
+
+export function HomePageClient({ initialAgendas, initialAnnouncements }: Props) {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
   const { lang, setLang } = usePortalState();
@@ -52,6 +64,20 @@ export function HomePageClient() {
 
   // Avoid hydration mismatch: server + first client paint use English copy; after mount, follow portal lang.
   const stableLang: Lang = mounted ? lang : 'en';
+
+  const upcomingForHome = useMemo(() => {
+    if (!activeChild) return [];
+    const childRows = agendaForChild(
+      initialAgendas,
+      activeChild.schoolId,
+      activeChild.levelGradeName,
+    );
+    const today = todayLocalISO();
+    return childRows
+      .filter((ev) => ev.eventDate >= today)
+      .sort((a, b) => (a.eventDate < b.eventDate ? 1 : a.eventDate > b.eventDate ? -1 : Number(b.id) - Number(a.id)))
+      .slice(0, 5);
+  }, [initialAgendas, activeChild]);
 
   const menus = [
     { href: '/finance', label: t(lang, 'tuition'), color: 'bg-indigo-100', icon: <Receipt size={28} className="text-primary" /> },
@@ -116,27 +142,46 @@ export function HomePageClient() {
 
           <div className="mb-2 w-full">
             <div ref={carouselRef} className="flex space-x-3 overflow-x-auto pb-4 pl-4 snap-x snap-mandatory scroll-smooth scrollbar-hide">
-              {MOCK_BANNERS.map((banner, idx) => (
-                <Link
-                  key={idx}
-                  href={banner.type === 'update' ? `/updates/${banner.updateId}` : banner.link}
-                  target={banner.type === 'web' ? '_blank' : undefined}
-                  className="snap-start shrink-0 w-[280px] rounded-2xl overflow-hidden bg-white shadow-sm"
-                >
-                  <div className="relative h-[140px] w-full">
-                    {banner.image ? (
-                      <Image src={banner.image} alt={banner.title} fill sizes="280px" className="object-cover" />
-                    ) : (
-                      <div className="h-full w-full bg-slate-100" />
-                    )}
-                    <div className="absolute inset-0 bg-linear-to-t from-black/55 via-black/10 to-transparent" />
-                    <div className="absolute bottom-3 left-3 right-3">
-                      <p className="text-white font-semibold text-sm leading-tight">{banner.title}</p>
-                      {banner.subtitle ? <p className="text-white/85 text-xs mt-0.5">{banner.subtitle}</p> : null}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+              {initialAnnouncements.length === 0 ? (
+                <div className="snap-start shrink-0 w-[280px] rounded-lg overflow-hidden bg-white/10 border border-white/20 p-4 text-white/80 text-sm">
+                  {stableLang === 'en' ? 'No announcements yet.' : 'Belum ada pengumuman.'}
+                </div>
+              ) : (
+                initialAnnouncements.map((ann) => {
+                  const title = stableLang === 'en' ? ann.titleEn : ann.titleId;
+                  const subtitle = new Intl.DateTimeFormat(stableLang === 'en' ? 'en-GB' : 'id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  }).format(new Date(`${ann.publishDate}T12:00:00`));
+                  return (
+                    <Link
+                      key={ann.id}
+                      href={`/updates/${ann.id}`}
+                      className="snap-start shrink-0 w-[280px] rounded-lg overflow-hidden bg-white shadow-sm"
+                    >
+                      <div className="relative h-[140px] w-full">
+                        {ann.featuredImage ? (
+                          <Image
+                            src={ann.featuredImage}
+                            alt={title}
+                            fill
+                            sizes="280px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-slate-200" />
+                        )}
+                        <div className="absolute inset-0 bg-linear-to-t from-black/55 via-black/10 to-transparent" />
+                        <div className="absolute bottom-3 left-3 right-3">
+                          <p className="text-white font-semibold text-sm leading-tight">{title}</p>
+                          <p className="text-white/85 text-xs mt-0.5">{subtitle}</p>
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -176,15 +221,40 @@ export function HomePageClient() {
               </Link>
             </div>
             <div className="space-y-3">
-              {MOCK_UPCOMING_EVENTS.slice(0, 3).map((e) => (
-                <div key={e.id} className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700 leading-tight">{e.title}</p>
-                    <p className="text-xs text-slate-500">{e.dateLabel}</p>
-                  </div>
-                  <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">{e.type}</span>
-                </div>
-              ))}
+              {!activeChild ? (
+                <p className="text-sm text-slate-500">
+                  {lang === 'en' ? 'Select a student to see upcoming events.' : 'Pilih siswa untuk melihat agenda mendatang.'}
+                </p>
+              ) : upcomingForHome.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  {lang === 'en' ? 'No upcoming events.' : 'Tidak ada agenda mendatang.'}
+                </p>
+              ) : (
+                upcomingForHome.map((e) => {
+                  const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'id-ID', {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  }).format(new Date(`${e.eventDate}T12:00:00`));
+                  return (
+                    <Link
+                      key={e.id}
+                      href="/agenda"
+                      className="flex items-center justify-between rounded-xl hover:bg-slate-50 -mx-1 px-1 py-0.5 transition-colors"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="text-sm font-semibold text-slate-700 leading-tight truncate">
+                          {lang === 'en' ? e.titleEn : e.titleId}
+                        </p>
+                        <p className="text-xs text-slate-500">{dateLabel}</p>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full shrink-0">
+                        {e.eventType}
+                      </span>
+                    </Link>
+                  );
+                })
+              )}
             </div>
             {activeChild && (
               <div className="mt-4 pt-4 border-t border-slate-100">
