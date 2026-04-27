@@ -2,10 +2,22 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/portal/favicon'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const hostHeader = request.headers.get('host') ?? request.nextUrl.hostname;
+  const portalHostname = hostHeader.split(':')[0]?.trim().toLowerCase() ?? '';
+
+  if (pathname === '/favicon.ico') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/api/portal/favicon';
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-portal-hostname', portalHostname);
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
+
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   const token = await getToken({
@@ -23,9 +35,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
-  const hostHeader = request.headers.get('host') ?? request.nextUrl.hostname;
-  const portalHostname = hostHeader.split(':')[0]?.trim().toLowerCase() ?? '';
-
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-portal-hostname', portalHostname);
   requestHeaders.set(
@@ -42,6 +51,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

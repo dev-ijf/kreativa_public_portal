@@ -11,19 +11,15 @@ const sourceSans = Source_Sans_3({
 export async function generateMetadata(): Promise<Metadata> {
   const theme = await getPortalThemeForRequest();
 
-  const meta: Metadata = {
+  return {
     title: theme.portal_title,
     description: 'Parent Portal and Student Adaptive Learning',
+    // Same-origin: Chromium sering memakai /favicon.ico; middleware rewrite ke route ini lalu redirect ke Blob.
+    icons: {
+      icon: [{ url: '/api/portal/favicon', type: 'image/png' }],
+      apple: [{ url: '/api/portal/favicon' }],
+    },
   };
-
-  if (theme.favicon_url) {
-    meta.icons = {
-      icon: [{ url: theme.favicon_url }],
-      apple: [{ url: theme.favicon_url }],
-    };
-  }
-
-  return meta;
 }
 
 export default async function RootLayout({
