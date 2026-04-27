@@ -8,27 +8,33 @@ import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { INSTALLMENTS_BY_CHILD, PREVIOUS_BILLS_BY_CHILD, TUITION_MONTHS } from '@/lib/data/mock/finance';
+import { emptyFinanceChildPayload, type FinanceChildPayload } from '@/lib/data/server/finance';
 import { formatInputNumber, formatRupiah } from '@/lib/utils/format';
 
-export function FinancePageClient() {
+type FinancePageClientProps = {
+  financeByChildId?: Record<number, FinanceChildPayload>;
+};
+
+export function FinancePageClient({ financeByChildId = {} }: FinancePageClientProps) {
   const { lang, activeChildId, cart, setCart } = usePortalState();
   const activeChild = useActiveChild();
   const [installmentInputs, setInstallmentInputs] = useState<Record<string, number>>({});
 
   const childName = activeChild?.fullName ?? '';
-  const installments = useMemo(() => INSTALLMENTS_BY_CHILD[activeChildId] ?? [], [activeChildId]);
-  const prevBills = useMemo(() => PREVIOUS_BILLS_BY_CHILD[activeChildId] ?? [], [activeChildId]);
+  const finance = financeByChildId[activeChildId] ?? emptyFinanceChildPayload();
+  const tuitionMonths = finance.months;
+  const installments = finance.installments;
+  const prevBills = finance.previous;
 
   const totalOutstanding = useMemo(() => {
-    const tuitionUnpaid = TUITION_MONTHS.filter((m) => m.status === 'unpaid').reduce((s, m) => s + m.amount, 0);
+    const tuitionUnpaid = tuitionMonths.filter((m) => m.status === 'unpaid' && m.billId).reduce((s, m) => s + m.amount, 0);
     const instUnpaid = installments.reduce((s, i) => s + (i.total - i.paid), 0);
     const prevUnpaid = prevBills.reduce((s, b) => s + b.amount, 0);
     return tuitionUnpaid + instUnpaid + prevUnpaid;
-  }, [installments, prevBills]);
+  }, [tuitionMonths, installments, prevBills]);
 
-  const toggleTuitionToCart = (monthKey: string, label: string, amount: number) => {
-    const id = `spp-${activeChildId}-${monthKey}`;
+  const toggleTuitionToCart = (billId: string, label: string, amount: number) => {
+    const id = `spp-${activeChildId}-${billId}`;
     setCart((prev) => (prev.some((i) => i.id === id) ? prev.filter((i) => i.id !== id) : [...prev, { id, childId: activeChildId, childName: childName, type: 'tuition', title: label, amount }]));
   };
 
@@ -122,24 +128,41 @@ export function FinancePageClient() {
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-5">
             <h2 className="font-bold text-slate-700 text-lg">{lang === 'en' ? 'Digital Tuition Card' : 'Kartu SPP Digital'}</h2>
-            <span className="text-xs font-bold bg-primary-light text-primary px-2.5 py-1 rounded-md">AY 2023/2024</span>
+            <span className="text-xs font-bold bg-primary-light text-primary px-2.5 py-1 rounded-md">
+              {finance.academicYearLabel ? `AY ${finance.academicYearLabel}` : '—'}
+            </span>
           </div>
           <div className="grid grid-cols-4 gap-2.5">
-            {TUITION_MONTHS.map((m) => {
-              const id = `spp-${activeChildId}-${m.monthKey}`;
-              const isInCart = cart.some((i) => i.id === id);
+            {tuitionMonths.map((m) => {
+              const hasBill = m.billId != null;
+              const id = hasBill ? `spp-${activeChildId}-${m.billId}` : `spp-${activeChildId}-${m.monthKey}-empty`;
+              const isInCart = hasBill && cart.some((i) => i.id === id);
               const isPaid = m.status === 'paid';
+              const noBill = !hasBill;
               const label = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
               const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
               const btnClass = [
                 'flex flex-col items-center justify-center py-2 px-1 rounded-2xl border transition-all relative overflow-hidden',
-                isPaid ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed opacity-80' : isInCart ? 'bg-primary border-primary text-white shadow-md shadow-primary/25 scale-[1.03]' : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400',
+                noBill || isPaid
+                  ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed opacity-80'
+                  : isInCart
+                    ? 'bg-primary border-primary text-white shadow-md shadow-primary/25 scale-[1.03]'
+                    : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400',
               ].join(' ');
               return (
-                <button key={m.monthKey} disabled={isPaid} onClick={() => toggleTuitionToCart(m.monthKey, title, m.amount)} className={btnClass}>
+                <button
+                  key={m.monthKey}
+                  disabled={noBill || isPaid}
+                  onClick={() => {
+                    if (m.billId) toggleTuitionToCart(m.billId, title, m.amount);
+                  }}
+                  className={btnClass}
+                >
                   <span className="text-xs font-bold mb-1">{label}</span>
-                  <span className="mb-1">{isPaid ? '✅' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}</span>
-                  <span className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(' ')}>{formatRupiah(m.amount)}</span>
+                  <span className="mb-1">{isPaid ? '✅' : noBill ? '—' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}</span>
+                  <span className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(' ')}>
+                    {noBill ? '—' : formatRupiah(m.amount)}
+                  </span>
                 </button>
               );
             })}
@@ -157,7 +180,8 @@ export function FinancePageClient() {
               const cartItem = cart.find((i) => i.id === cartId);
               const progressPercentage = inst.total === 0 ? 0 : (inst.paid / inst.total) * 100;
               const remaining = inst.total - inst.paid;
-              const defaultInput = installmentInputs[inst.id] ?? inst.minPayment;
+              const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+              const defaultInput = installmentInputs[inst.id] ?? instFloor;
               const name = lang === 'en' ? inst.nameEn : inst.nameId;
 
               return (
@@ -198,7 +222,8 @@ export function FinancePageClient() {
                       ) : (
                         <div className="flex flex-col h-full justify-center">
                           <p className="text-[10px] text-slate-500 mb-1.5 font-semibold">
-                            {lang === 'en' ? 'Pay Amount' : 'Nominal Bayar'} ({lang === 'en' ? 'Min.' : 'Min.'} {formatRupiah(inst.minPayment)})
+                            {lang === 'en' ? 'Pay Amount' : 'Nominal Bayar'} ({lang === 'en' ? 'Min.' : 'Min.'}{' '}
+                            {formatRupiah(instFloor)})
                           </p>
                           <div className="relative w-full mb-2">
                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">Rp</span>
@@ -217,8 +242,9 @@ export function FinancePageClient() {
                           </div>
                           <button
                             onClick={() => {
-                              const input = installmentInputs[inst.id] ?? inst.minPayment;
-                              const finalAmount = Math.min(Math.max(input, inst.minPayment), remaining);
+                              const floor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                              const input = installmentInputs[inst.id] ?? floor;
+                              const finalAmount = Math.min(Math.max(input, floor), remaining);
                               addInstallmentToCart(inst.id, name, finalAmount);
                             }}
                             className="bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-600 transition-colors w-full"

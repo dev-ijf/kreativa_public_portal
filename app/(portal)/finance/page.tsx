@@ -1,6 +1,21 @@
+import { getServerSession } from 'next-auth';
 import { FinancePageClient } from '@/components/portal/pages/FinancePageClient';
+import { authOptions } from '@/lib/auth';
+import { getPortalChildren } from '@/lib/data/server/children';
+import { getFinanceDashboardForPortal } from '@/lib/data/server/finance';
 
-export default function Page() {
-  return <FinancePageClient />;
+export const dynamic = 'force-dynamic';
+
+export default async function Page() {
+  const session = await getServerSession(authOptions);
+  const children =
+    session?.user?.userId != null
+      ? await getPortalChildren(session.user.userId, session.user.role)
+      : [];
+  const financeByChildId =
+    session?.user?.userId != null && children.length > 0
+      ? await getFinanceDashboardForPortal(session.user.userId, session.user.role, children)
+      : {};
+
+  return <FinancePageClient financeByChildId={financeByChildId} />;
 }
-

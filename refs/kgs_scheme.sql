@@ -305,6 +305,10 @@ CREATE TABLE "public"."tuition_bills" (
     "related_month" date,
     "created_at" timestamp DEFAULT now(),
     "updated_at" timestamp DEFAULT now(),
+    "school_id" int8,
+    "cohort_id" int8,
+    "discount_amount" numeric(15,2) DEFAULT 0,
+    "notes" text,
     PRIMARY KEY ("id")
 );
 
@@ -352,6 +356,7 @@ CREATE TABLE "public"."tuition_products" (
     "coa" varchar(50),
     "coa_another" varchar(50),
     "description" text,
+    "is_installment" bool DEFAULT false,
     PRIMARY KEY ("id")
 );
 
