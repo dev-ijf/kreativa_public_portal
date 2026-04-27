@@ -8,7 +8,12 @@ import { BookOpen, Globe, GraduationCap, Loader2, Microscope, Palette } from 'lu
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { t } from '@/lib/i18n/translations';
 
-export function LoginPageClient() {
+type LoginPageClientProps = {
+  logoUrl: string;
+  logoAlt: string;
+};
+
+export function LoginPageClient({ logoUrl, logoAlt }: LoginPageClientProps) {
   const { lang, setLang } = usePortalState();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -49,19 +54,12 @@ export function LoginPageClient() {
 
       <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
         <div className="h-20 w-[220px] relative mb-10 drop-shadow-xl">
-          <Image
-            src="/assets/tenant/kreativa-logo.png"
-            alt="Kreativa Global"
-            fill
-            sizes="220px"
-            className="object-contain"
-            priority
-          />
+          <Image src={logoUrl} alt={logoAlt} fill sizes="220px" className="object-contain" priority />
         </div>
 
         <div className="text-center mb-12">
           <h1 className="text-2xl font-bold text-white mb-3 leading-tight">{t(lang, 'welcome')}</h1>
-          <p className="text-indigo-200 text-sm leading-relaxed">{t(lang, 'loginDesc')}</p>
+          <p className="text-white/80 text-sm leading-relaxed">{t(lang, 'loginDesc')}</p>
         </div>
 
         {error && (
@@ -73,7 +71,7 @@ export function LoginPageClient() {
         <button
           onClick={handleGoogleSignIn}
           disabled={isLoading}
-          className="w-full bg-white text-slate-700 font-bold py-3.5 px-4 rounded-full hover:bg-slate-50 transition-all shadow-xl shadow-indigo-900/20 flex items-center justify-center group border border-transparent hover:border-slate-200 disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full bg-white text-slate-700 font-bold py-3.5 px-4 rounded-full hover:bg-slate-50 transition-all shadow-xl shadow-black/15 flex items-center justify-center group border border-transparent hover:border-slate-200 disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <Loader2 size={20} className="mr-3 animate-spin" />

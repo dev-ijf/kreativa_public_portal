@@ -19,11 +19,13 @@ function todayLocalISO(): string {
 }
 
 type Props = {
+  logoUrl: string;
+  logoAlt: string;
   initialAgendas: PortalAgendaRow[];
   initialAnnouncements: PortalAnnouncementRow[];
 };
 
-export function HomePageClient({ initialAgendas, initialAnnouncements }: Props) {
+export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements }: Props) {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
   const { lang, setLang } = usePortalState();
@@ -97,14 +99,7 @@ export function HomePageClient({ initialAgendas, initialAnnouncements }: Props) 
           <div className="flex justify-between items-start px-4 mb-4 text-white">
             <div className="flex flex-col items-start">
               <div className="h-10 w-[140px] relative mb-4">
-                <Image
-                  src="/assets/tenant/kreativa-logo.png"
-                  alt="Kreativa Global"
-                  fill
-                  sizes="140px"
-                  className="object-contain"
-                  priority
-                />
+                <Image src={logoUrl} alt={logoAlt} fill sizes="140px" className="object-contain" priority />
               </div>
               <p className="text-sm opacity-90">{t(stableLang, 'greeting')}</p>
               <h1 className="text-xl font-bold">

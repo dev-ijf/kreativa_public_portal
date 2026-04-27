@@ -23,9 +23,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(homeUrl);
   }
 
-  const tenantId = 'kreativa';
+  const hostHeader = request.headers.get('host') ?? request.nextUrl.hostname;
+  const portalHostname = hostHeader.split(':')[0]?.trim().toLowerCase() ?? '';
+
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-tenant-id', tenantId);
+  requestHeaders.set('x-portal-hostname', portalHostname);
+  requestHeaders.set(
+    'x-tenant-id',
+    portalHostname.includes('talentajuara') ? 'talenta' : 'kreativa',
+  );
 
   return NextResponse.next({
     request: {

@@ -80,6 +80,7 @@ CREATE TABLE "public"."core_portal_themes" (
     "primary_color" varchar(20),
     "login_bg_url" text,
     "welcome_text" text,
+    "favicon_url" text,
     "created_at" timestamp DEFAULT now(),
     "updated_at" timestamp DEFAULT now(),
     PRIMARY KEY ("id")
@@ -800,9 +801,9 @@ INSERT INTO "public"."core_parent_student_relations" ("user_id", "student_id", "
 (2, 1, 'father'),
 (2, 2, 'father');
 
-INSERT INTO "public"."core_portal_themes" ("id", "host_domain", "portal_title", "logo_url", "primary_color", "login_bg_url", "welcome_text", "created_at", "updated_at") VALUES
-(1, 'parents.kreativaglobal.sch.id', 'Kreativa Parent Portal', '/assets/brand/kreativa-main.png', '#2563eb', '/assets/bg/kreativa-bg.jpg', 'Selamat Datang di Portal Kreativa Global School.', '2026-03-29 16:29:55.364925', '2026-03-29 16:29:55.364925'),
-(2, 'parents.talentajuara.sch.id', 'Talenta Juara Portal', '/assets/brand/talenta-main.png', '#ea580c', '/assets/bg/talenta-bg.jpg', 'Mari bersama membangun generasi juara di Talenta Juara.', '2026-03-29 16:29:55.364925', '2026-03-29 16:29:55.364925');
+INSERT INTO "public"."core_portal_themes" ("id", "host_domain", "portal_title", "logo_url", "primary_color", "login_bg_url", "welcome_text", "favicon_url", "created_at", "updated_at") VALUES
+(1, 'parents.kreativaglobal.sch.id', 'Kreativa Parent Portal', '/assets/brand/kreativa-main.png', '#2563eb', '/assets/bg/kreativa-bg.jpg', 'Selamat Datang di Portal Kreativa Global School.', NULL, '2026-03-29 16:29:55.364925', '2026-03-29 16:29:55.364925'),
+(2, 'parents.talentajuara.sch.id', 'Talenta Juara Portal', '/assets/brand/talenta-main.png', '#ea580c', '/assets/bg/talenta-bg.jpg', 'Mari bersama membangun generasi juara di Talenta Juara.', NULL, '2026-03-29 16:29:55.364925', '2026-03-29 16:29:55.364925');
 
 INSERT INTO "public"."core_provinces" ("id", "name") VALUES
 (1, 'Jawa Barat');
