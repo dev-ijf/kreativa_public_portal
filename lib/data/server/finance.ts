@@ -4,7 +4,7 @@
  *
  * Kolom opsional di Neon produksi (sinkron dengan refs/kgs_scheme.sql):
  * tuition_bills.school_id, cohort_id, discount_amount, notes;
- * tuition_products.is_installment — view saat ini memakai kolom inti refs;
+ * tuition_products.is_installment — diekspos view sebagai is_installment;
  * jika discount_amount ada, sesuaikan definisi view di DB (GREATEST(total - paid - discount, 0)).
  */
 import {
@@ -48,11 +48,12 @@ type BillViewRow = {
   product_id: number;
   product_name: string;
   payment_type: string;
+  is_installment: boolean;
   title: string;
-  total_amount: string;
-  paid_amount: string;
-  min_payment: string;
-  balance_amount: string;
+  total_amount: string | number;
+  paid_amount: string | number;
+  min_payment: string | number;
+  balance_amount: string | number;
   is_fully_paid: boolean;
   bill_month: number | null;
   bill_year: number | null;
@@ -99,9 +100,43 @@ function billMatchesSlot(
 
 function num(v: string | number | null | undefined): number {
   if (v == null) return 0;
-  if (typeof v === 'number') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'bigint') return Number(v);
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+/** Angka uang dari baris DB (Neon/JSON kadang string, bigint, atau key camelCase). */
+function numMoney(row: Record<string, unknown>, snake: string, camel: string): number {
+  const raw = row[snake] ?? row[camel];
+  if (raw == null) return 0;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : 0;
+  if (typeof raw === 'bigint') return Number(raw);
+  if (typeof raw === 'string') {
+    const t = raw.trim().replace(/\s/g, '');
+    const n = Number(t);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (typeof raw === 'object' && raw !== null && 'toString' in raw) {
+    const n = Number(String(raw));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+function coalescePgBool(v: unknown): boolean {
+  return v === true || v === 't' || v === 'true' || v === 1 || v === '1';
+}
+
+/**
+ * Tagihan non-bulanan yang boleh tampil di blok cicilan/DSP/DKT:
+ * utama `tuition_products.is_installment`; fallback `payment_type = 'installment'` untuk seed/data lama.
+ * `monthly` tetap hanya di kartu SPP 12 bulan.
+ */
+function rowIsInstallmentBillRow(r: BillViewRow): boolean {
+  if (r.payment_type === 'monthly') return false;
+  if (coalescePgBool(r.is_installment)) return true;
+  return r.payment_type === 'installment';
 }
 
 async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[]> {
@@ -118,20 +153,30 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
           product_name,
           payment_type,
           title,
-          total_amount,
-          paid_amount,
-          min_payment,
-          balance_amount,
+          (total_amount)::float8 AS total_amount,
+          (paid_amount)::float8 AS paid_amount,
+          (min_payment)::float8 AS min_payment,
+          (balance_amount)::float8 AS balance_amount,
           is_fully_paid,
           bill_month,
           bill_year,
-          related_month
+          related_month,
+          is_installment
         FROM v_portal_finance_bills
         WHERE student_id = ${studentId}
       `,
     ),
   );
-  return chunks.flat() as unknown as BillViewRow[];
+  return (chunks.flat() as unknown as Record<string, unknown>[]).map((raw) => {
+    const base = raw as BillViewRow;
+    return {
+      ...base,
+      total_amount: numMoney(raw, 'total_amount', 'totalAmount') as BillViewRow['total_amount'],
+      paid_amount: numMoney(raw, 'paid_amount', 'paidAmount') as BillViewRow['paid_amount'],
+      min_payment: numMoney(raw, 'min_payment', 'minPayment') as BillViewRow['min_payment'],
+      balance_amount: numMoney(raw, 'balance_amount', 'balanceAmount') as BillViewRow['balance_amount'],
+    };
+  });
 }
 
 async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLineRow[]> {
@@ -172,8 +217,9 @@ function buildChildPayload(
     null;
   const ayRange = ayName ? parseAcademicYearRange(ayName) : null;
 
-  const months: FinanceMonthSlot[] = FINANCE_MONTH_GRID.map((meta) => ({
+  const months: FinanceMonthSlot[] = FINANCE_MONTH_GRID.map((meta, slot) => ({
     ...meta,
+    calendarYear: ayRange ? calendarForSlot(slot, ayRange).y : null,
     amount: 0,
     status: 'unpaid' as const,
     billId: null,
@@ -186,8 +232,10 @@ function buildChildPayload(
       const chosen = candidates.sort((a, b) => num(b.balance_amount) - num(a.balance_amount))[0];
       const balance = num(chosen.balance_amount);
       const total = num(chosen.total_amount);
+      const y = calendarForSlot(slot, ayRange).y;
       months[slot] = {
         ...FINANCE_MONTH_GRID[slot],
+        calendarYear: y,
         amount: chosen.is_fully_paid ? total : balance > 0 ? balance : total,
         status: chosen.is_fully_paid ? 'paid' : 'unpaid',
         billId: String(chosen.bill_id),
@@ -215,7 +263,7 @@ function buildChildPayload(
   const installments: FinanceInstallmentRow[] = [];
   if (activeAyId != null) {
     const instRows = rows.filter(
-      (r) => r.student_id === child.id && r.academic_year_id === activeAyId && r.payment_type === 'installment',
+      (r) => r.student_id === child.id && r.academic_year_id === activeAyId && rowIsInstallmentBillRow(r),
     );
     for (const r of instRows) {
       const lines = paymentLinesByBillId.get(r.bill_id) ?? [];
@@ -224,13 +272,18 @@ function buildChildPayload(
         amount: num(ln.amount_paid),
       }));
       const minP = num(r.min_payment);
+      const totalAmt = num(r.total_amount);
+      const paidAmt = num(r.paid_amount);
+      const fully =
+        coalescePgBool(r.is_fully_paid) || (totalAmt > 0 && paidAmt >= totalAmt);
       installments.push({
         id: String(r.bill_id),
         nameEn: r.product_name,
         nameId: r.product_name,
-        total: num(r.total_amount),
-        paid: num(r.paid_amount),
+        total: totalAmt,
+        paid: paidAmt,
         minPayment: minP > 0 ? minP : 0,
+        isFullyPaid: fully,
         paymentHistory,
       });
     }
@@ -260,9 +313,7 @@ export async function getFinanceDashboardForPortal(
   const studentIds = safeChildren.map((c) => c.id);
   const allRows = await fetchBillsForStudents(studentIds);
 
-  const installmentBillIds = allRows
-    .filter((r) => r.payment_type === 'installment')
-    .map((r) => r.bill_id);
+  const installmentBillIds = allRows.filter((r) => rowIsInstallmentBillRow(r)).map((r) => r.bill_id);
   const uniqueBillIds = [...new Set(installmentBillIds)];
   const lineRows = await fetchPaymentLinesForBillIds(uniqueBillIds);
   const paymentLinesByBillId = new Map<number, PaymentLineRow[]>();

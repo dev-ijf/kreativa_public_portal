@@ -10,6 +10,9 @@
 -- balance di view menjadi:
 --   GREATEST(b.total_amount - b.paid_amount - COALESCE(b.discount_amount, 0::numeric), 0::numeric(15,2))
 -- lalu CREATE OR REPLACE VIEW v_portal_finance_bills AS ...
+--
+-- Kolom `is_installment` harus di AKHIR SELECT agar CREATE OR REPLACE VIEW valid:
+-- Postgres melarang mengubah urutan/nama kolom tengah (error: cannot change name of view column "title" to "is_installment").
 
 CREATE OR REPLACE VIEW v_portal_finance_bills AS
 SELECT
@@ -32,7 +35,8 @@ SELECT
   b.bill_year,
   b.related_month,
   b.created_at AS bill_created_at,
-  b.updated_at AS bill_updated_at
+  b.updated_at AS bill_updated_at,
+  COALESCE(p.is_installment, false) AS is_installment
 FROM tuition_bills b
 INNER JOIN tuition_products p ON p.id = b.product_id
 INNER JOIN core_academic_years ay ON ay.id = b.academic_year_id;

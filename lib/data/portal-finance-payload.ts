@@ -6,6 +6,8 @@ export type FinanceMonthSlot = {
   monthKey: string;
   monthLabelEn: string;
   monthLabelId: string;
+  /** Tahun kalender untuk slot Jul–Jun (mis. AY 2025/2026 → Jul–Des 2025, Jan–Jun 2026). */
+  calendarYear: number | null;
   amount: number;
   status: 'paid' | 'unpaid';
   billId: string | null;
@@ -18,6 +20,8 @@ export type FinanceInstallmentRow = {
   total: number;
   paid: number;
   minPayment: number;
+  /** Dari tagihan DB: lunas → gauge 100%, tanpa input / add to cart. */
+  isFullyPaid: boolean;
   paymentHistory: { date: string; amount: number }[];
 };
 
@@ -56,6 +60,7 @@ export function emptyFinanceChildPayload(): FinanceChildPayload {
     academicYearLabel: null,
     months: FINANCE_MONTH_GRID.map((meta) => ({
       ...meta,
+      calendarYear: null,
       amount: 0,
       status: 'unpaid' as const,
       billId: null,

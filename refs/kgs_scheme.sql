@@ -882,10 +882,10 @@ INSERT INTO "public"."tuition_product_tariffs" ("id", "school_id", "product_id",
 (5, 1, 1, 2, 2, 850000.00, '2026-03-29 16:29:56.314102', '2026-03-29 16:29:56.314102'),
 (6, 4, 1, 2, 3, 1200000.00, '2026-03-29 16:29:56.314102', '2026-03-29 16:29:56.314102');
 
-INSERT INTO "public"."tuition_products" ("id", "name", "payment_type", "coa", "coa_another", "description") VALUES
-(1, 'SPP Bulanan', 'monthly', NULL, NULL, NULL),
-(2, 'DSP', 'installment', NULL, NULL, NULL),
-(3, 'DKT', 'annualy', NULL, NULL, NULL);
+INSERT INTO "public"."tuition_products" ("id", "name", "payment_type", "coa", "coa_another", "description", "is_installment") VALUES
+(1, 'SPP Bulanan', 'monthly', NULL, NULL, NULL, false),
+(2, 'DSP', 'one_time', NULL, NULL, NULL, true),
+(3, 'DKT', 'annualy', NULL, NULL, NULL, true);
 
 INSERT INTO "public"."core_level_grades" ("id", "school_id", "name", "level_order", "is_terminal") VALUES
 (1, 1, 'Kelas 1', 1, 'f'),

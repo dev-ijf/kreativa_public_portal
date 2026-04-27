@@ -3,8 +3,10 @@
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { PortalChildRow } from '@/lib/data/server/children';
+import type { Lang } from '@/lib/portal-lang-cookie';
+import { buildPortalLangCookieValue } from '@/lib/portal-lang-cookie';
 
-export type Lang = 'en' | 'id';
+export type { Lang };
 
 export type CartItem = {
   id: string;
@@ -39,10 +41,12 @@ const PortalContext = createContext<PortalState | null>(null);
 type ProviderProps = {
   children: ReactNode;
   initialPortalChildren?: PortalChildRow[];
+  /** Dari cookie server (`portal.lang`) agar teks bahasa pertama sama saat hidrasi. */
+  initialLang?: Lang;
 };
 
-export function PortalProvider({ children, initialPortalChildren = [] }: ProviderProps) {
-  const [lang, setLang] = useState<Lang>('en');
+export function PortalProvider({ children, initialPortalChildren = [], initialLang }: ProviderProps) {
+  const [lang, setLang] = useState<Lang>(() => (initialLang === 'en' || initialLang === 'id' ? initialLang : 'en'));
   const [portalChildren] = useState<PortalChildRow[]>(initialPortalChildren);
   const [activeChildId, setActiveChildId] = useState<number>(initialPortalChildren[0]?.id ?? 0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -58,7 +62,10 @@ export function PortalProvider({ children, initialPortalChildren = [] }: Provide
       const storedPayment = window.localStorage.getItem('portal.selectedPayment');
 
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (storedLang === 'en' || storedLang === 'id') setLang(storedLang);
+      if (storedLang === 'en' || storedLang === 'id') {
+        setLang(storedLang);
+        document.cookie = buildPortalLangCookieValue(storedLang);
+      }
 
       const parsedChild = storedChild ? Number(storedChild) : NaN;
       if (!Number.isNaN(parsedChild) && childIds.has(parsedChild)) {
@@ -76,6 +83,7 @@ export function PortalProvider({ children, initialPortalChildren = [] }: Provide
   useEffect(() => {
     try {
       window.localStorage.setItem('portal.lang', lang);
+      document.cookie = buildPortalLangCookieValue(lang);
     } catch { /* ignore */ }
   }, [lang]);
 

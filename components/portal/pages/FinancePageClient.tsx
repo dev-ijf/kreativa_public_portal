@@ -139,7 +139,8 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
               const isInCart = hasBill && cart.some((i) => i.id === id);
               const isPaid = m.status === 'paid';
               const noBill = !hasBill;
-              const label = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
+              const labelBase = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
+              const label = m.calendarYear != null ? `${labelBase} ${m.calendarYear}` : labelBase;
               const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
               const btnClass = [
                 'flex flex-col items-center justify-center py-2 px-1 rounded-2xl border transition-all relative overflow-hidden',
@@ -158,7 +159,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                   }}
                   className={btnClass}
                 >
-                  <span className="text-xs font-bold mb-1">{label}</span>
+                  <span className="text-[10px] sm:text-xs font-bold mb-1 text-center leading-tight px-0.5">{label}</span>
                   <span className="mb-1">{isPaid ? '✅' : noBill ? '—' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}</span>
                   <span className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(' ')}>
                     {noBill ? '—' : formatRupiah(m.amount)}
@@ -173,16 +174,22 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
         </div>
 
         <div>
-          <h2 className="font-bold text-slate-700 mb-3 px-1 text-lg">{lang === 'en' ? 'Pending Installments' : 'Cicilan'}</h2>
+          <h2 className="font-bold text-slate-700 mb-3 px-1 text-lg" suppressHydrationWarning>
+            {lang === 'en' ? 'Installments & other fees' : 'Cicilan & biaya lain'}
+          </h2>
           <div className="space-y-4">
             {installments.map((inst) => {
               const cartId = `inst-${inst.id}`;
-              const cartItem = cart.find((i) => i.id === cartId);
-              const progressPercentage = inst.total === 0 ? 0 : (inst.paid / inst.total) * 100;
-              const remaining = inst.total - inst.paid;
+              const remaining = Math.max(0, inst.total - inst.paid);
+              const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
+              const progressPercentage =
+                inst.total === 0 ? 0 : Math.min(100, (inst.paid / inst.total) * 100);
               const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-              const defaultInput = installmentInputs[inst.id] ?? instFloor;
+              const typedAmount = installmentInputs[inst.id];
+              const defaultInput =
+                typedAmount != null && typedAmount >= instFloor ? typedAmount : instFloor;
               const name = lang === 'en' ? inst.nameEn : inst.nameId;
+              const cartItem = !isFullyPaid ? cart.find((i) => i.id === cartId) : undefined;
 
               return (
                 <div key={inst.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
@@ -199,15 +206,30 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                     <div className="flex flex-col items-center shrink-0 w-1/3 border-r border-slate-100 pr-2">
                       <ProgressRing percentage={progressPercentage} />
                       <div className="mt-2 text-center w-full">
-                        <p className="text-[10px] text-slate-500 leading-tight">{lang === 'en' ? 'Left' : 'Sisa'}</p>
-                        <p className="text-xs font-bold text-slate-700 leading-tight">{formatRupiah(remaining)}</p>
+                        {isFullyPaid ? (
+                          <>
+                            <p className="text-[10px] text-slate-500 leading-tight">{lang === 'en' ? 'Billed' : 'Tagihan'}</p>
+                            <p className="text-xs font-bold text-slate-700 leading-tight">{formatRupiah(inst.total)}</p>
+                            <p className="text-[10px] font-bold text-emerald-600 mt-1">{lang === 'en' ? 'Paid in full' : 'Lunas'}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[10px] text-slate-500 leading-tight">{lang === 'en' ? 'Left' : 'Sisa'}</p>
+                            <p className="text-xs font-bold text-slate-700 leading-tight">{formatRupiah(remaining)}</p>
+                          </>
+                        )}
                       </div>
                     </div>
 
                     <div className="w-2/3 flex flex-col justify-center">
-                      {remaining === 0 ? (
-                        <div className="bg-emerald-50 text-emerald-700 text-sm p-3 rounded-xl flex items-center justify-center font-bold">
-                          <span className="mr-2">✅</span> {lang === 'en' ? 'Fully Paid' : 'Lunas'}
+                      {isFullyPaid ? (
+                        <div className="bg-emerald-50 text-emerald-800 text-sm p-3 rounded-xl flex flex-col gap-1 font-bold">
+                          <span className="flex items-center">
+                            <span className="mr-2">✅</span> {lang === 'en' ? 'Fully paid' : 'Sudah lunas'}
+                          </span>
+                          <span className="text-[11px] font-semibold text-emerald-700/90 normal-case">
+                            {lang === 'en' ? 'No further payment needed for this bill.' : 'Tidak perlu pembayaran tambahan untuk tagihan ini.'}
+                          </span>
                         </div>
                       ) : cartItem ? (
                         <div className="bg-primary-light border border-indigo-200 p-3 rounded-2xl flex flex-col justify-center items-center h-full space-y-2">
@@ -243,7 +265,8 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                           <button
                             onClick={() => {
                               const floor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-                              const input = installmentInputs[inst.id] ?? floor;
+                              const typed = installmentInputs[inst.id];
+                              const input = typed != null && typed >= floor ? typed : floor;
                               const finalAmount = Math.min(Math.max(input, floor), remaining);
                               addInstallmentToCart(inst.id, name, finalAmount);
                             }}
