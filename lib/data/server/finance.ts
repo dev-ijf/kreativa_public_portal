@@ -7,8 +7,17 @@
  * tuition_products.is_installment — view saat ini memakai kolom inti refs;
  * jika discount_amount ada, sesuaikan definisi view di DB (GREATEST(total - paid - discount, 0)).
  */
-import { sql } from '@/lib/db/client';
+import {
+  FINANCE_MONTH_GRID,
+  type FinanceChildPayload,
+  type FinanceInstallmentRow,
+  type FinanceMonthSlot,
+  type FinancePreviousBillRow,
+} from '@/lib/data/portal-finance-payload';
 import type { PortalChildRow } from '@/lib/data/server/children';
+import { sql } from '@/lib/db/client';
+
+export type { FinanceChildPayload, FinanceInstallmentRow, FinanceMonthSlot, FinancePreviousBillRow } from '@/lib/data/portal-finance-payload';
 
 /** Hanya student_id yang boleh di-query tagihan (parent / student), tidak percaya array dari client semata. */
 async function getStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
@@ -30,40 +39,6 @@ async function getStudentIdsAccessibleToViewer(userId: number, role: string): Pr
   `;
   return (rows as unknown as { studentId: number }[]).map((r) => r.studentId);
 }
-
-export type FinanceMonthSlot = {
-  monthKey: string;
-  monthLabelEn: string;
-  monthLabelId: string;
-  amount: number;
-  status: 'paid' | 'unpaid';
-  billId: string | null;
-};
-
-export type FinanceInstallmentRow = {
-  id: string;
-  nameEn: string;
-  nameId: string;
-  total: number;
-  paid: number;
-  minPayment: number;
-  paymentHistory: { date: string; amount: number }[];
-};
-
-export type FinancePreviousBillRow = {
-  id: string;
-  ay: string;
-  titleEn: string;
-  titleId: string;
-  amount: number;
-};
-
-export type FinanceChildPayload = {
-  academicYearLabel: string | null;
-  months: FinanceMonthSlot[];
-  previous: FinancePreviousBillRow[];
-  installments: FinanceInstallmentRow[];
-};
 
 type BillViewRow = {
   bill_id: number;
@@ -90,21 +65,6 @@ type PaymentLineRow = {
   detail_created_at: string;
   payment_date: string | null;
 };
-
-export const FINANCE_MONTH_GRID: { monthKey: string; monthLabelEn: string; monthLabelId: string }[] = [
-  { monthKey: 'jul', monthLabelEn: 'Jul', monthLabelId: 'Jul' },
-  { monthKey: 'aug', monthLabelEn: 'Aug', monthLabelId: 'Agu' },
-  { monthKey: 'sep', monthLabelEn: 'Sep', monthLabelId: 'Sep' },
-  { monthKey: 'oct', monthLabelEn: 'Oct', monthLabelId: 'Okt' },
-  { monthKey: 'nov', monthLabelEn: 'Nov', monthLabelId: 'Nov' },
-  { monthKey: 'dec', monthLabelEn: 'Dec', monthLabelId: 'Des' },
-  { monthKey: 'jan', monthLabelEn: 'Jan', monthLabelId: 'Jan' },
-  { monthKey: 'feb', monthLabelEn: 'Feb', monthLabelId: 'Feb' },
-  { monthKey: 'mar', monthLabelEn: 'Mar', monthLabelId: 'Mar' },
-  { monthKey: 'apr', monthLabelEn: 'Apr', monthLabelId: 'Apr' },
-  { monthKey: 'may', monthLabelEn: 'May', monthLabelId: 'Mei' },
-  { monthKey: 'jun', monthLabelEn: 'Jun', monthLabelId: 'Jun' },
-];
 
 function parseAcademicYearRange(name: string): { yStart: number; yEnd: number } | null {
   const m = name.trim().match(/^(\d{4})\s*\/\s*(\d{4})$/);
@@ -281,20 +241,6 @@ function buildChildPayload(
     months,
     previous,
     installments,
-  };
-}
-
-export function emptyFinanceChildPayload(): FinanceChildPayload {
-  return {
-    academicYearLabel: null,
-    months: FINANCE_MONTH_GRID.map((meta) => ({
-      ...meta,
-      amount: 0,
-      status: 'unpaid' as const,
-      billId: null,
-    })),
-    previous: [],
-    installments: [],
   };
 }
 

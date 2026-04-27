@@ -8,7 +8,7 @@ import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { emptyFinanceChildPayload, type FinanceChildPayload } from '@/lib/data/server/finance';
+import { emptyFinanceChildPayload, type FinanceChildPayload } from '@/lib/data/portal-finance-payload';
 import { formatInputNumber, formatRupiah } from '@/lib/utils/format';
 
 type FinancePageClientProps = {

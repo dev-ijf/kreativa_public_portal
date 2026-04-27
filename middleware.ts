@@ -4,6 +4,15 @@ import { getToken } from 'next-auth/jwt';
 
 const PUBLIC_PATHS = ['/login', '/api/auth', '/api/portal/favicon'];
 
+const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+
+/** Dev: samakan tema/tenant dengan produksi (override via PORTAL_LOCAL_HOST_ALIAS). */
+function effectivePortalHostname(portalHostname: string): string {
+  if (!LOCAL_DEV_HOSTNAMES.has(portalHostname)) return portalHostname;
+  const alias = process.env.PORTAL_LOCAL_HOST_ALIAS?.trim();
+  return alias || 'parents.kreativaglobal.sch.id';
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -14,7 +23,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/api/portal/favicon';
     const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-portal-hostname', portalHostname);
+    requestHeaders.set('x-portal-hostname', effectivePortalHostname(portalHostname));
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
@@ -36,7 +45,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-portal-hostname', portalHostname);
+  requestHeaders.set('x-portal-hostname', effectivePortalHostname(portalHostname));
   requestHeaders.set(
     'x-tenant-id',
     portalHostname.includes('talentajuara') ? 'talenta' : 'kreativa',
