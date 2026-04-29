@@ -1,14 +1,46 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { FileDown } from 'lucide-react';
+import { Clock, FileDown } from 'lucide-react';
 import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import type { PortalCheckoutSessionPayload, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
 import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
 import { formatRupiah } from '@/lib/utils/format';
+
+function useCountdown(targetIso: string | undefined | null) {
+  const targetMs = useMemo(() => {
+    if (!targetIso) return 0;
+    const t = new Date(targetIso).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }, [targetIso]);
+
+  const calc = useCallback(() => {
+    if (!targetMs) return { diff: 0, h: 0, m: 0, s: 0, expired: true };
+    const diff = Math.max(0, targetMs - Date.now());
+    const totalSec = Math.floor(diff / 1000);
+    return {
+      diff,
+      h: Math.floor(totalSec / 3600),
+      m: Math.floor((totalSec % 3600) / 60),
+      s: totalSec % 60,
+      expired: diff <= 0,
+    };
+  }, [targetMs]);
+
+  const [state, setState] = useState(calc);
+
+  useEffect(() => {
+    if (!targetMs) return;
+    setState(calc());
+    const id = setInterval(() => setState(calc()), 1000);
+    return () => clearInterval(id);
+  }, [targetMs, calc]);
+
+  return state;
+}
 
 export function InstructionPageClient() {
   const { lang, cart, selectedPayment, setCart } = usePortalState();
@@ -85,6 +117,7 @@ export function InstructionPageClient() {
     });
   }, [lang, checkoutSnap?.expiryAt]);
 
+  const countdown = useCountdown(checkoutSnap?.expiryAt);
   const showVaBlock = selectedPayment?.type === 'va';
 
   const instructionPdfHref = useMemo(() => {
@@ -201,6 +234,63 @@ export function InstructionPageClient() {
             <p className="text-sm font-bold text-slate-700">{deadline}</p>
           </div>
         </div>
+
+        {checkoutSnap?.expiryAt && (
+          <div className={`rounded-3xl p-5 shadow-sm border ${
+            countdown.expired
+              ? 'bg-red-50 border-red-200'
+              : countdown.h < 1
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-white border-slate-100'
+          }`}>
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={16} className={countdown.expired ? 'text-red-500' : countdown.h < 1 ? 'text-amber-500' : 'text-primary'} />
+              <p className={`text-xs font-semibold ${
+                countdown.expired ? 'text-red-600' : countdown.h < 1 ? 'text-amber-600' : 'text-slate-500'
+              }`}>
+                {countdown.expired
+                  ? (lang === 'en' ? 'Payment Expired' : 'Pembayaran Kadaluarsa')
+                  : (lang === 'en' ? 'Time Remaining' : 'Sisa Waktu Pembayaran')}
+              </p>
+            </div>
+            {countdown.expired ? (
+              <p className="text-sm text-red-600 font-semibold">
+                {lang === 'en'
+                  ? 'The payment deadline has passed. Please create a new transaction.'
+                  : 'Batas waktu pembayaran telah lewat. Silakan buat transaksi baru.'}
+              </p>
+            ) : (
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex flex-col items-center">
+                  <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
+                    {String(countdown.h).padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">
+                    {lang === 'en' ? 'HOURS' : 'JAM'}
+                  </span>
+                </div>
+                <span className="text-2xl font-bold text-slate-300 -mt-4">:</span>
+                <div className="flex flex-col items-center">
+                  <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
+                    {String(countdown.m).padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">
+                    {lang === 'en' ? 'MIN' : 'MENIT'}
+                  </span>
+                </div>
+                <span className="text-2xl font-bold text-slate-300 -mt-4">:</span>
+                <div className="flex flex-col items-center">
+                  <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
+                    {String(countdown.s).padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">
+                    {lang === 'en' ? 'SEC' : 'DETIK'}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {showVaBlock ? (
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">

@@ -290,10 +290,10 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
 
   const createdMs = new Date(String(dbCreatedAt)).getTime();
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());
-  const expiryDateStr =
-    themeId === 1
-      ? new Date(expiryMs).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
-      : new Date(expiryMs).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  const expiryDateStr = new Date(expiryMs).toLocaleString(
+    themeId === 1 ? 'en-GB' : 'id-ID',
+    { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' },
+  );
 
   const vaDisplay = formatVaSpaced(h.va_no);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);

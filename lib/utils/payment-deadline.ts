@@ -33,7 +33,6 @@ export function computePortalPaymentExpiryMs(createdAtMs: number): number {
     return Date.now() + SIX_H_MS;
   }
   const { y, m, d, hour } = jakartaYmdParts(createdAtMs);
-  /** Checkout dari jam 18:00 WIB ke atas → batas akhir hari yang sama 23:59:59 WIB. */
   if (hour >= 18) {
     return endOfJakartaCalendarDayUtcMs(y, m, d);
   }

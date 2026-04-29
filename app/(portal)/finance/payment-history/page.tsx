@@ -19,12 +19,17 @@ export default async function Page() {
   const children = await getPortalChildren(session.user.userId, session.user.role);
   const initialPaidByChildId: Record<number, PortalTuitionTransaction[]> = {};
   const initialPendingByChildId: Record<number, PortalTuitionTransaction[]> = {};
-  for (const c of children) {
-    const paid = await getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id);
-    const pending = await getPendingCheckoutTransactionsForPortal(session.user.userId, session.user.role, c.id);
-    initialPaidByChildId[c.id] = paid ?? [];
-    initialPendingByChildId[c.id] = pending ?? [];
-  }
+
+  await Promise.all(
+    children.map(async (c) => {
+      const [paid, pending] = await Promise.all([
+        getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id),
+        getPendingCheckoutTransactionsForPortal(session.user.userId, session.user.role, c.id),
+      ]);
+      initialPaidByChildId[c.id] = paid ?? [];
+      initialPendingByChildId[c.id] = pending ?? [];
+    }),
+  );
 
   return (
     <PaymentHistoryPageClient
