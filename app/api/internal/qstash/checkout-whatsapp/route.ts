@@ -15,24 +15,11 @@ function internalBypassOk(request: Request): boolean {
   return raw === internalSecret;
 }
 
-async function checkoutWhatsAppHandler(request: Request): Promise<Response> {
-  let body: { transactionId?: string; transactionCreatedAt?: string; userId?: number };
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return Response.json({ error: 'bad_json' }, { status: 400 });
-  }
-  return runCheckoutWhatsappFromBody(body);
-}
-
-async function runCheckoutWhatsappFromBody(body: {
-  transactionId?: string;
-  transactionCreatedAt?: string;
-  userId?: number;
-}): Promise<Response> {
-  const transactionId = body.transactionId;
-  const transactionCreatedAt = body.transactionCreatedAt;
-  const userId = body.userId;
+async function runJob(body: unknown): Promise<Response> {
+  const b = body as { transactionId?: string; transactionCreatedAt?: string; userId?: number };
+  const transactionId = b.transactionId;
+  const transactionCreatedAt = b.transactionCreatedAt;
+  const userId = b.userId;
   if (
     typeof transactionId !== 'string' ||
     typeof transactionCreatedAt !== 'string' ||
@@ -42,39 +29,40 @@ async function runCheckoutWhatsappFromBody(body: {
     return Response.json({ error: 'bad_body' }, { status: 400 });
   }
 
-  const result = await processCheckoutWhatsAppJob({
-    transactionId,
-    transactionCreatedAt,
-    userId,
-  });
+  const result = await processCheckoutWhatsAppJob({ transactionId, transactionCreatedAt, userId });
 
   if (result.retryableFailure) {
     return Response.json({ error: result.error ?? 'delivery_failed' }, { status: 500 });
   }
-
   return Response.json({ ok: true, outcome: result.outcome });
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // 1. Bypass internal via header secret (Postman / worker internal)
   if (internalBypassOk(request)) {
-    return checkoutWhatsAppHandler(request);
+    try {
+      return runJob(await request.json());
+    } catch {
+      return Response.json({ error: 'bad_json' }, { status: 400 });
+    }
   }
 
+  // 2. Tanpa signing key → dev / belum konfigurasi → terima langsung
   if (!qk || !qn) {
-    return Response.json(
-      {
-        error: 'qstash_signing_keys_not_configured',
-        hint: 'Set QSTASH_CURRENT_SIGNING_KEY dan QSTASH_NEXT_SIGNING_KEY dari Upstash Console.',
-      },
-      { status: 503 },
-    );
+    try {
+      return runJob(await request.json());
+    } catch {
+      return Response.json({ error: 'bad_json' }, { status: 400 });
+    }
   }
 
-  const sig = request.headers.get('upstash-signature') ?? request.headers.get('Upstash-Signature');
+  // 3. Produksi: verifikasi QStash signature
+  const sig = request.headers.get('upstash-signature');
   if (!sig) {
     return Response.json({ error: 'missing_upstash_signature' }, { status: 401 });
   }
 
+  // Baca body SEKALI sebagai text mentah (jangan .json() dulu — hash SHA-256 harus dari raw string)
   let bodyText: string;
   try {
     bodyText = await request.text();
@@ -82,38 +70,33 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'bad_body_read' }, { status: 400 });
   }
 
-  const receiver = new Receiver({
-    currentSigningKey: qk,
-    nextSigningKey: qn,
-  });
+  const receiver = new Receiver({ currentSigningKey: qk, nextSigningKey: qn });
 
   try {
-    // Tanpa `url`: JWT `sub` tidak dibandingkan string ke URL server (sering beda dengan
-    // `request.url` / proxy). Tetap aman: tanda tangan + issuer Upstash + hash SHA-256 body.
     await receiver.verify({
       signature: sig,
       body: bodyText,
-      clockTolerance: 120,
+      clockTolerance: 300,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('qstash_signature_verify_failed', { message: msg });
+    console.error('qstash_signature_verify_failed', {
+      message: msg,
+      bodyLength: bodyText.length,
+      sigLength: sig.length,
+    });
     return Response.json(
       {
         error: 'signature_verification_failed',
-        hint:
-          'Periksa QSTASH_CURRENT_SIGNING_KEY / QSTASH_NEXT_SIGNING_KEY dan QSTASH_TOKEN dari proyek yang sama. Body POST harus persis JSON yang dikirim QStash (jangan ubah di middleware).',
+        hint: 'Pastikan QSTASH_CURRENT_SIGNING_KEY dan QSTASH_NEXT_SIGNING_KEY dari proyek QStash yang sama dengan QSTASH_TOKEN. Pastikan middleware tidak consume body sebelum handler.',
       },
       { status: 401 },
     );
   }
 
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(bodyText) as unknown;
+    return runJob(JSON.parse(bodyText));
   } catch {
     return Response.json({ error: 'bad_json' }, { status: 400 });
   }
-
-  return runCheckoutWhatsappFromBody(parsed as { transactionId?: string; transactionCreatedAt?: string; userId?: number });
 }

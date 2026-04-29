@@ -9,8 +9,12 @@ let client: Redis | null | undefined;
 
 function getRedis(): Redis | null {
   if (client === undefined) {
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+    const url =
+      process.env.UPSTASH_REDIS_REST_URL?.trim() ||
+      process.env.KV_REST_API_URL?.trim();
+    const token =
+      process.env.UPSTASH_REDIS_REST_TOKEN?.trim() ||
+      process.env.KV_REST_API_TOKEN?.trim();
     if (!url || !token) {
       client = null;
     } else {

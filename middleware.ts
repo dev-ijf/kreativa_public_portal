@@ -16,6 +16,12 @@ function effectivePortalHostname(portalHostname: string): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // QStash webhook: skip semua middleware (jangan panggil getToken → bisa consume body stream
+  // sehingga handler mendapat body kosong → hash SHA-256 tidak cocok → signature failed).
+  if (pathname.startsWith('/api/internal/qstash')) {
+    return NextResponse.next();
+  }
+
   const hostHeader = request.headers.get('host') ?? request.nextUrl.hostname;
   const portalHostname = hostHeader.split(':')[0]?.trim().toLowerCase() ?? '';
 
