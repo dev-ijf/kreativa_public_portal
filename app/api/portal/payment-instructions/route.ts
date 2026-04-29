@@ -16,7 +16,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
-  const rows = await getPaymentInstructionsForPortalViewer(userId, role, methodId);
+  const studentIdRaw = searchParams.get('studentId');
+  const studentId = studentIdRaw != null && studentIdRaw !== '' ? Number(studentIdRaw) : undefined;
+  const studentOpt =
+    studentId != null && Number.isFinite(studentId) && studentId > 0 ? { studentId: Math.trunc(studentId) } : undefined;
+
+  const rows = await getPaymentInstructionsForPortalViewer(userId, role, methodId, studentOpt);
   if (rows === null) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

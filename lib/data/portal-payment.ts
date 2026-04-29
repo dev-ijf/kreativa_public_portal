@@ -59,4 +59,6 @@ export type PortalCheckoutSessionPayload = {
   instructionRows?: PortalPaymentInstructionRow[];
   /** Metode pembayaran saat snapshot checkout (untuk cocokkan dengan `selectedPayment`). */
   checkoutMethodId?: number;
+  /** Siswa checkout (filter instruksi `lang` per theme sekolah). */
+  studentId?: number;
 };

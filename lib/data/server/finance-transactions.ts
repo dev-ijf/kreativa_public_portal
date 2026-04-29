@@ -24,6 +24,8 @@ export type PortalTuitionTransaction = {
   paymentMethodLogoUrl?: string | null;
   checkoutExpiryIso?: string;
   isBmi?: boolean;
+  /** Siswa pemilik transaksi (instruksi bayar per theme sekolah). */
+  studentId?: number;
 };
 
 export type TuitionReceiptLine = { label: string; amount: number };
@@ -131,6 +133,7 @@ export async function getTuitionTransactionsForPortal(
         vaNo: r.va_no,
         paymentMethodName: r.payment_method_name,
         lines: [],
+        studentId,
       };
       byKey.set(key, tx);
       orderKeys.push(key);
@@ -215,6 +218,7 @@ export async function getPendingCheckoutTransactionsForPortal(
           ? computePortalPaymentExpiryIso(createdMs)
           : computePortalPaymentExpiryIso(Date.now()),
         isBmi: isBmiPaymentMethod(vendor, code),
+        studentId,
       };
       byKey.set(key, tx);
       orderKeys.push(key);

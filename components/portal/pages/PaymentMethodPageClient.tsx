@@ -139,6 +139,7 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     referenceNo?: string;
                     transactionId?: string;
                     transactionCreatedAt?: string;
+                    studentId?: number;
                     totalAmount?: number;
                     vaNo?: string | null;
                     vaDisplay?: string | null;
@@ -163,6 +164,10 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     referenceNo: String(data.referenceNo ?? ''),
                     transactionId: String(data.transactionId ?? ''),
                     transactionCreatedAt: String(data.transactionCreatedAt ?? ''),
+                    studentId:
+                      typeof data.studentId === 'number' && Number.isFinite(data.studentId) && data.studentId > 0
+                        ? data.studentId
+                        : undefined,
                     totalAmount: typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) ? data.totalAmount : undefined,
                     vaNo: data.vaNo ?? null,
                     vaDisplay: data.vaDisplay ?? null,

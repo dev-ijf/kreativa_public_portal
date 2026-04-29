@@ -31,6 +31,7 @@ export function persistPortalSessionForPendingInstruction(tx: PortalTuitionTrans
     referenceNo: tx.referenceNo,
     transactionId: tx.transactionId,
     transactionCreatedAt: tx.transactionCreatedAt,
+    studentId: tx.studentId,
     totalAmount: tx.totalAmount,
     vaNo: tx.vaNo,
     vaDisplay,

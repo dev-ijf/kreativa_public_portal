@@ -1,5 +1,9 @@
 import type { CheckoutWhatsAppJobBody } from '@/lib/qstash/checkout-whatsapp-job';
 import { fetchInstructionsFromDb } from '@/lib/data/server/payment-methods';
+import {
+  paymentInstructionDbLangFromThemeId,
+  type PaymentInstructionDbLang,
+} from '@/lib/utils/payment-instruction-lang';
 import { formatRupiah } from '@/lib/utils/format';
 import { computePortalPaymentExpiryMs } from '@/lib/utils/payment-deadline';
 import { sql } from '@/lib/db/client';
@@ -66,8 +70,8 @@ function htmlToWhatsAppText(html: string): string {
   return lines.join('\n');
 }
 
-async function loadInstructionPlainText(methodId: number): Promise<string> {
-  const rows = await fetchInstructionsFromDb(methodId);
+async function loadInstructionPlainText(methodId: number, lang: PaymentInstructionDbLang): Promise<string> {
+  const rows = await fetchInstructionsFromDb(methodId, lang);
   return rows
     .map((r) => {
       const body = htmlToWhatsAppText(r.description ?? '');
@@ -284,9 +288,12 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   const billDetails = lineRows.map((l) => `${l.title}: ${formatRupiah(Number(l.amount))}`).join('\n');
   const totalAmount = Number(h.total_amount);
   const methodId = Number(h.payment_method_id);
+  const primaryInstrLang = paymentInstructionDbLangFromThemeId(themeId);
+  const secondaryInstrLang: PaymentInstructionDbLang = primaryInstrLang === 'EN' ? 'ID' : 'EN';
   const paymentInstructions =
-    Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId) : '';
-  const paymentInstructionsEn = paymentInstructions;
+    Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId, primaryInstrLang) : '';
+  const paymentInstructionsEn =
+    Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId, secondaryInstrLang) : '';
 
   const createdMs = new Date(String(dbCreatedAt)).getTime();
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());

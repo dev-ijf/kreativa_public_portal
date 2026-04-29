@@ -2,14 +2,18 @@ import { cacheGetJson, cacheSetJson } from '@/lib/cache/upstash-redis';
 import type { PortalPaymentInstructionRow, PortalPaymentMethodOption } from '@/lib/data/portal-payment';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { sql } from '@/lib/db/client';
+import {
+  paymentInstructionDbLangFromThemeId,
+  type PaymentInstructionDbLang,
+} from '@/lib/utils/payment-instruction-lang';
 
 function methodsCacheKey(schoolIds: number[]): string {
   const part = [...new Set(schoolIds)].sort((a, b) => a - b).join(',') || 'none';
   return `portal:payment_methods:v2:${part}`;
 }
 
-function instructionsCacheKey(methodId: number): string {
-  return `portal:payment_instructions:v1:${methodId}`;
+function instructionsCacheKey(methodId: number, lang: PaymentInstructionDbLang): string {
+  return `portal:payment_instructions:v2:${methodId}:${lang}`;
 }
 
 /** Cache hasil cek akses viewer → metode (tanpa TTL). */
@@ -81,7 +85,10 @@ export async function getPublishedPaymentMethodsForSchools(schoolIds: number[]):
   return fresh;
 }
 
-export async function fetchInstructionsFromDb(methodId: number): Promise<PortalPaymentInstructionRow[]> {
+export async function fetchInstructionsFromDb(
+  methodId: number,
+  lang: PaymentInstructionDbLang,
+): Promise<PortalPaymentInstructionRow[]> {
   const rows = (await sql`
     SELECT
       id,
@@ -90,6 +97,7 @@ export async function fetchInstructionsFromDb(methodId: number): Promise<PortalP
       step_order AS "stepOrder"
     FROM tuition_payment_instructions
     WHERE payment_channel_id = ${methodId}
+      AND UPPER(TRIM(COALESCE(lang::text, 'ID'))) = ${lang}
     ORDER BY step_order ASC NULLS LAST, id ASC
   `) as unknown as Record<string, unknown>[];
 
@@ -144,6 +152,53 @@ async function viewerCanUsePublishedPaymentMethodFromDb(
   return allowedRows.length > 0;
 }
 
+/**
+ * Bahasa baris instruksi DB (`tuition_payment_instructions.lang`) dari sekolah siswa.
+ * `studentId` opsional: jika valid dan milik viewer, pakai theme sekolah siswa itu.
+ * Tanpa `studentId`: jika semua anak aktif viewer berada di sekolah theme_id = 1 → EN, selain itu ID.
+ */
+export async function resolvePaymentInstructionDbLangForViewer(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId?: number | null,
+): Promise<PaymentInstructionDbLang> {
+  const allowed = await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole);
+  if (allowed.length === 0) return 'ID';
+
+  const sid = studentId != null && Number.isFinite(studentId) ? Math.trunc(Number(studentId)) : null;
+  if (sid != null && sid > 0 && allowed.includes(sid)) {
+    const one = (await sql`
+      SELECT sch.theme_id AS "themeId"
+      FROM core_students s
+      INNER JOIN core_schools sch ON sch.id = s.school_id
+      WHERE s.id = ${sid}
+        AND s.enrollment_status = 'active'
+      LIMIT 1
+    `) as unknown as { themeId: number | null }[];
+    if (one.length > 0) {
+      return paymentInstructionDbLangFromThemeId(one[0].themeId);
+    }
+  }
+
+  const agg = (await sql`
+    SELECT DISTINCT sch.theme_id AS "themeId"
+    FROM core_students s
+    INNER JOIN core_schools sch ON sch.id = s.school_id
+    WHERE s.id = ANY(${allowed}::int4[])
+      AND s.enrollment_status = 'active'
+  `) as unknown as { themeId: number | null }[];
+
+  if (agg.length === 0) return 'ID';
+
+  const numericThemes = agg
+    .map((r) => (r.themeId == null ? NaN : Number(r.themeId)))
+    .filter((n) => Number.isFinite(n));
+  const distinct = [...new Set(numericThemes)];
+
+  if (distinct.length === 1 && distinct[0] === 1) return 'EN';
+  return 'ID';
+}
+
 /** True jika metode publish+active dan cocok dengan sekolah anak yang boleh diakses viewer. Cache Redis tanpa TTL. */
 export async function viewerCanUsePublishedPaymentMethod(
   viewerUserId: number,
@@ -168,34 +223,43 @@ export async function viewerCanUsePublishedPaymentMethod(
 
 /**
  * Instruksi pembayaran per channel. Hanya jika metode itu boleh diakses viewer (publish + active + sekolah).
+ * `studentId` opsional: menentukan `lang` instruksi dari theme sekolah siswa (vs agregat semua anak viewer).
  */
 export async function getPaymentInstructionsForPortalViewer(
   viewerUserId: number,
   viewerRole: string,
   methodId: number,
+  options?: { studentId?: number | null },
 ): Promise<PortalPaymentInstructionRow[] | null> {
   if (!Number.isFinite(methodId) || methodId <= 0) return null;
 
   const t0 = Date.now();
-  const instrKey = instructionsCacheKey(methodId);
-  const [allowed, instrHit] = await Promise.all([
-    viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId),
-    cacheGetJson<PortalPaymentInstructionRow[]>(instrKey),
-  ]);
+  const allowed = await viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId);
   const t1 = Date.now();
 
   if (!allowed) {
     console.info('payment_instr_denied', { methodId, ms: t1 - t0 });
     return null;
   }
+
+  const instrLang = await resolvePaymentInstructionDbLangForViewer(viewerUserId, viewerRole, options?.studentId);
+  const instrKey = instructionsCacheKey(methodId, instrLang);
+  const instrHit = await cacheGetJson<PortalPaymentInstructionRow[]>(instrKey);
+  const t2 = Date.now();
   if (instrHit && Array.isArray(instrHit)) {
-    console.info('payment_instr_cache_hit', { methodId, ms: t1 - t0, rows: instrHit.length });
+    console.info('payment_instr_cache_hit', { methodId, instrLang, ms: t2 - t0, rows: instrHit.length });
     return instrHit;
   }
 
-  const fresh = await fetchInstructionsFromDb(methodId);
+  const fresh = await fetchInstructionsFromDb(methodId, instrLang);
   await cacheSetJson(instrKey, fresh);
-  const t2 = Date.now();
-  console.info('payment_instr_cache_miss', { methodId, cacheCheckMs: t1 - t0, dbMs: t2 - t1, rows: fresh.length });
+  const t3 = Date.now();
+  console.info('payment_instr_cache_miss', {
+    methodId,
+    instrLang,
+    cacheCheckMs: t2 - t0,
+    dbMs: t3 - t2,
+    rows: fresh.length,
+  });
   return fresh;
 }

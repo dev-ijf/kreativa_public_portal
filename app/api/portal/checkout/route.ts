@@ -45,6 +45,7 @@ export async function POST(request: Request) {
       referenceNo: checkout.referenceNo,
       transactionId: checkout.transactionId,
       transactionCreatedAt: checkout.transactionCreatedAt,
+      studentId: checkout.studentId,
       totalAmount: checkout.totalAmount,
       vaNo: checkout.vaNo,
       vaDisplay: checkout.vaDisplay,

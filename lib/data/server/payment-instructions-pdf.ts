@@ -1,6 +1,7 @@
-import { getPaymentInstructionsForPortalViewer } from '@/lib/data/server/payment-methods';
+import { fetchInstructionsFromDb, viewerCanUsePublishedPaymentMethod } from '@/lib/data/server/payment-methods';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { computePortalPaymentExpiryMs } from '@/lib/utils/payment-deadline';
+import { paymentInstructionDbLangFromThemeId } from '@/lib/utils/payment-instruction-lang';
 import { sql } from '@/lib/db/client';
 
 /** Baris isi PDF: paragraf, item bernomor (dari `<ol><li>`), atau bullet (`<ul><li>`). */
@@ -156,11 +157,11 @@ export async function getPaymentInstructionsPdfPayloadForPortal(
 ): Promise<PaymentInstructionsPdfPayload | null> {
   if (!Number.isFinite(methodId) || methodId <= 0) return null;
 
-  const rows = await getPaymentInstructionsForPortalViewer(viewerUserId, viewerRole, methodId);
-  if (rows === null) return null;
-
   const idNum = Number(options.transactionId);
   if (!Number.isFinite(idNum) || idNum <= 0) return null;
+
+  const allowedMethod = await viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId);
+  if (!allowedMethod) return null;
 
   // Jangan bandingkan created_at dari query string ke kolom DB (format/presisi beda → 404).
   // PK partisi (id, created_at); ambil baris terbaru untuk id + pemilik portal.
@@ -188,6 +189,7 @@ export async function getPaymentInstructionsPdfPayloadForPortal(
       sch.name AS school_name,
       sch.address AS school_address,
       sch.school_logo_url,
+      sch.theme_id AS "themeId",
       pm.name AS method_name
     FROM tx t
     INNER JOIN tuition_transaction_details d
@@ -220,6 +222,9 @@ export async function getPaymentInstructionsPdfPayloadForPortal(
     LIMIT 1
   `) as unknown as { studentId: number }[];
   if (stRows.length === 0 || !allowed.has(Number(stRows[0].studentId))) return null;
+
+  const instrLang = paymentInstructionDbLangFromThemeId(num(h.themeId));
+  const rows = await fetchInstructionsFromDb(methodId, instrLang);
 
   const logoUrl = h.school_logo_url as string | null;
   const schoolLogoDataUrl = await fetchLogoDataUrl(logoUrl);

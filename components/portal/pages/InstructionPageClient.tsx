@@ -179,7 +179,26 @@ export function InstructionPageClient() {
 
     void (async () => {
       try {
-        const res = await fetch(`/api/portal/payment-instructions?methodId=${encodeURIComponent(String(methodId))}`);
+        let sidFromSession: number | null = checkoutSnap?.studentId ?? null;
+        if (sidFromSession == null && typeof window !== 'undefined') {
+          try {
+            const raw = sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY);
+            if (raw) {
+              const p = JSON.parse(raw) as PortalCheckoutSessionPayload;
+              if (typeof p.studentId === 'number' && Number.isFinite(p.studentId) && p.studentId > 0) {
+                sidFromSession = Math.trunc(p.studentId);
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        const sidRaw = sidFromSession ?? cart[0]?.childId;
+        const sid =
+          sidRaw != null && Number.isFinite(Number(sidRaw)) && Number(sidRaw) > 0 ? Math.trunc(Number(sidRaw)) : null;
+        const qs = new URLSearchParams({ methodId: String(methodId) });
+        if (sid != null) qs.set('studentId', String(sid));
+        const res = await fetch(`/api/portal/payment-instructions?${qs.toString()}`);
         if (!res.ok) {
           if (!cancelled) {
             setLoadError(res.status === 403 ? 'forbidden' : 'error');
@@ -205,7 +224,7 @@ export function InstructionPageClient() {
     return () => {
       cancelled = true;
     };
-  }, [selectedPayment?.dbMethodId]);
+  }, [selectedPayment?.dbMethodId, checkoutSnap?.studentId, cart]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8">

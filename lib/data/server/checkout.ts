@@ -3,6 +3,7 @@ import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
 import { buildBmiVa16 } from '@/lib/va/bmi-va';
 import type { PortalCheckoutCartItem, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
 import { fetchInstructionsFromDb, viewerCanUsePublishedPaymentMethod } from '@/lib/data/server/payment-methods';
+import { paymentInstructionDbLangFromThemeId } from '@/lib/utils/payment-instruction-lang';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { sql } from '@/lib/db/client';
 
@@ -475,7 +476,11 @@ export async function finalizePortalCheckout(params: {
   const createdMsForExpiry = new Date(tcat).getTime();
   const expiryAt = computePortalPaymentExpiryIso(Number.isFinite(createdMsForExpiry) ? createdMsForExpiry : Date.now());
 
-  const instructionRows = await fetchInstructionsFromDb(paymentMethodId);
+  const themeIdForInstr = num(schoolRow.theme_id);
+  const instructionRows = await fetchInstructionsFromDb(
+    paymentMethodId,
+    paymentInstructionDbLangFromThemeId(themeIdForInstr),
+  );
 
   return {
     transactionId: tidStr,
