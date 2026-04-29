@@ -1,10 +1,12 @@
 "use client";
 
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Building2, QrCode, ReceiptText, Smartphone } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import type { PortalPaymentMethodOption } from '@/lib/data/portal-payment';
+import type { PortalCheckoutCartItem, PortalCheckoutSessionPayload, PortalPaymentMethodOption } from '@/lib/data/portal-payment';
+import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
 import { portalOptionToPaymentMethod } from '@/lib/utils/payment-method-ui';
 import { formatRupiah } from '@/lib/utils/format';
 
@@ -13,10 +15,19 @@ type PaymentMethodPageClientProps = {
 };
 
 export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageClientProps) {
-  const { lang, cart, selectedPayment, setSelectedPayment } = usePortalState();
+  const router = useRouter();
+  const { lang, cart, selectedPayment, setSelectedPayment, setCart } = usePortalState();
   const total = cart.reduce((sum, i) => sum + i.amount, 0);
+  const [submitting, setSubmitting] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const methods = initialMethods.map(portalOptionToPaymentMethod);
+
+  useEffect(() => {
+    if (initialMethods.length !== 1) return;
+    const only = portalOptionToPaymentMethod(initialMethods[0]);
+    setSelectedPayment((cur) => (cur?.dbMethodId === only.dbMethodId ? cur : only));
+  }, [initialMethods, setSelectedPayment]);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
@@ -49,22 +60,31 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     ].join(' ')}
                   >
                     <div className="flex items-center min-w-0">
-                      <div
-                        className={['w-10 h-10 rounded-full flex items-center justify-center mr-3 shrink-0', active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'].join(' ')}
-                      >
-                        {m.type === 'va' ? (
-                          <Building2 size={18} />
-                        ) : m.type === 'qris' ? (
-                          <QrCode size={18} />
-                        ) : m.type === 'manual' ? (
-                          <ReceiptText size={18} />
-                        ) : (
-                          <Smartphone size={18} />
-                        )}
-                      </div>
+                      {m.logoUrl && /^https?:\/\//i.test(m.logoUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={m.logoUrl}
+                          alt=""
+                          className="w-10 h-10 rounded-xl object-contain mr-3 shrink-0 bg-white border border-slate-100"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div
+                          className={['w-10 h-10 rounded-full flex items-center justify-center mr-3 shrink-0', active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'].join(' ')}
+                        >
+                          {m.type === 'va' ? (
+                            <Building2 size={18} />
+                          ) : m.type === 'qris' ? (
+                            <QrCode size={18} />
+                          ) : m.type === 'manual' ? (
+                            <ReceiptText size={18} />
+                          ) : (
+                            <Smartphone size={18} />
+                          )}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="font-bold text-slate-700 truncate">{m.label}</p>
-                        {m.sublabel ? <p className="text-xs text-slate-500 mt-0.5 truncate">{m.sublabel}</p> : null}
                       </div>
                     </div>
                     <span className={['text-sm font-bold shrink-0 ml-2', active ? 'text-primary' : 'text-slate-400'].join(' ')}>{active ? '✅' : '○'}</span>
@@ -74,15 +94,89 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
             </div>
           )}
 
-          <Link
-            href="/instruction"
+          {checkoutError ? (
+            <p className="mt-3 text-sm text-red-600 font-medium" role="alert">
+              {checkoutError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            disabled={!selectedPayment || submitting}
+            onClick={() => {
+              void (async () => {
+                if (!selectedPayment || cart.length === 0) return;
+                setCheckoutError(null);
+                setSubmitting(true);
+                try {
+                  const res = await fetch('/api/portal/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      cart: cart as PortalCheckoutCartItem[],
+                      paymentMethodId: selectedPayment.dbMethodId,
+                    }),
+                  });
+                  const data = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    messageId?: string;
+                    messageEn?: string;
+                    referenceNo?: string;
+                    transactionId?: string;
+                    transactionCreatedAt?: string;
+                    totalAmount?: number;
+                    vaNo?: string | null;
+                    vaDisplay?: string | null;
+                    expiryAt?: string;
+                    isBmi?: boolean;
+                  };
+                  if (!res.ok) {
+                    const msg =
+                      res.status === 422
+                        ? lang === 'en'
+                          ? data.messageEn ?? data.error ?? 'Checkout failed.'
+                          : data.messageId ?? data.error ?? 'Checkout gagal.'
+                        : lang === 'en'
+                          ? 'Checkout failed. Try again.'
+                          : 'Checkout gagal. Coba lagi.';
+                    setCheckoutError(msg);
+                    return;
+                  }
+                  const payload: PortalCheckoutSessionPayload = {
+                    referenceNo: String(data.referenceNo ?? ''),
+                    transactionId: String(data.transactionId ?? ''),
+                    transactionCreatedAt: String(data.transactionCreatedAt ?? ''),
+                    totalAmount: typeof data.totalAmount === 'number' && Number.isFinite(data.totalAmount) ? data.totalAmount : undefined,
+                    vaNo: data.vaNo ?? null,
+                    vaDisplay: data.vaDisplay ?? null,
+                    expiryAt: String(data.expiryAt ?? ''),
+                    isBmi: Boolean(data.isBmi),
+                  };
+                  try {
+                    sessionStorage.setItem(PORTAL_CHECKOUT_SESSION_KEY, JSON.stringify(payload));
+                  } catch {
+                    /* ignore */
+                  }
+                  setCart([]);
+                  router.push('/instruction');
+                } catch {
+                  setCheckoutError(
+                    lang === 'en' ? 'Network error. Check connection and try again.' : 'Jaringan error. Periksa koneksi lalu coba lagi.',
+                  );
+                } finally {
+                  setSubmitting(false);
+                }
+              })();
+            }}
             className={[
               'mt-4 w-full inline-flex items-center justify-center font-bold px-6 py-3 rounded-full transition-colors',
-              selectedPayment ? 'bg-primary text-white hover:bg-primary-hover' : 'bg-slate-200 text-slate-500 pointer-events-none',
+              selectedPayment && !submitting
+                ? 'bg-primary text-white hover:bg-primary-hover'
+                : 'bg-slate-200 text-slate-500 cursor-not-allowed',
             ].join(' ')}
           >
-            {lang === 'en' ? 'Proceed Payment' : 'Lanjut'} <span className="ml-2">›</span>
-          </Link>
+            {submitting ? (lang === 'en' ? 'Processing…' : 'Memproses…') : lang === 'en' ? 'Proceed Payment' : 'Lanjut'}{' '}
+            <span className="ml-2">›</span>
+          </button>
         </div>
       </div>
     </div>

@@ -78,7 +78,8 @@ export function PortalProvider({ children, initialPortalChildren = [], initialLa
             typeof p.dbMethodId === 'number' &&
             Number.isFinite(p.dbMethodId) &&
             typeof p.label === 'string' &&
-            (p.type === 'va' || p.type === 'qris' || p.type === 'ewallet' || p.type === 'manual')
+            (p.type === 'va' || p.type === 'qris' || p.type === 'ewallet' || p.type === 'manual') &&
+            (p.logoUrl === undefined || p.logoUrl === null || typeof p.logoUrl === 'string')
           ) {
             setSelectedPayment(p as PaymentMethod);
           }

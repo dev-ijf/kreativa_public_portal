@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/portal/favicon'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/portal/favicon', '/api/internal/qstash'];
 
 const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 

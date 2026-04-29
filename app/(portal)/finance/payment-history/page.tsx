@@ -3,7 +3,10 @@ import { redirect } from 'next/navigation';
 import { PaymentHistoryPageClient } from '@/components/portal/pages/PaymentHistoryPageClient';
 import { authOptions } from '@/lib/auth';
 import { getPortalChildren } from '@/lib/data/server/children';
-import { getTuitionTransactionsForPortal } from '@/lib/data/server/finance-transactions';
+import {
+  getPendingCheckoutTransactionsForPortal,
+  getTuitionTransactionsForPortal,
+} from '@/lib/data/server/finance-transactions';
 import type { PortalTuitionTransaction } from '@/lib/data/server/finance-transactions';
 
 export const dynamic = 'force-dynamic';
@@ -15,11 +18,19 @@ export default async function Page() {
   }
 
   const children = await getPortalChildren(session.user.userId, session.user.role);
-  const initialByChildId: Record<number, PortalTuitionTransaction[]> = {};
+  const initialPaidByChildId: Record<number, PortalTuitionTransaction[]> = {};
+  const initialPendingByChildId: Record<number, PortalTuitionTransaction[]> = {};
   for (const c of children) {
-    const txs = await getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id);
-    initialByChildId[c.id] = txs ?? [];
+    const paid = await getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id);
+    const pending = await getPendingCheckoutTransactionsForPortal(session.user.userId, session.user.role, c.id);
+    initialPaidByChildId[c.id] = paid ?? [];
+    initialPendingByChildId[c.id] = pending ?? [];
   }
 
-  return <PaymentHistoryPageClient initialByChildId={initialByChildId} />;
+  return (
+    <PaymentHistoryPageClient
+      initialPaidByChildId={initialPaidByChildId}
+      initialPendingByChildId={initialPendingByChildId}
+    />
+  );
 }

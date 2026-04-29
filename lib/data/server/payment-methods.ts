@@ -5,7 +5,7 @@ import { sql } from '@/lib/db/client';
 
 function methodsCacheKey(schoolIds: number[]): string {
   const part = [...new Set(schoolIds)].sort((a, b) => a - b).join(',') || 'none';
-  return `portal:payment_methods:v1:${part}`;
+  return `portal:payment_methods:v2:${part}`;
 }
 
 function instructionsCacheKey(methodId: number): string {
@@ -24,6 +24,7 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
             code,
             category,
             vendor,
+            logo_url AS "logoUrl",
             sort_order AS "sortOrder"
           FROM tuition_payment_methods
           WHERE is_active IS TRUE
@@ -38,6 +39,7 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
             code,
             category,
             vendor,
+            logo_url AS "logoUrl",
             sort_order AS "sortOrder"
           FROM tuition_payment_methods
           WHERE is_active IS TRUE
@@ -46,14 +48,20 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
           ORDER BY sort_order ASC NULLS LAST, id ASC
         `) as unknown as PortalPaymentMethodOption[]);
 
-  return rows.map((r) => ({
-    dbMethodId: Number(r.dbMethodId),
-    name: String(r.name ?? ''),
-    code: String(r.code ?? ''),
-    category: String(r.category ?? ''),
-    vendor: r.vendor != null && String(r.vendor).trim() !== '' ? String(r.vendor) : null,
-    sortOrder: r.sortOrder != null ? Number(r.sortOrder) : null,
-  }));
+  return rows.map((r) => {
+    const logoRaw = (r as { logoUrl?: unknown }).logoUrl;
+    const logoUrl =
+      typeof logoRaw === 'string' && logoRaw.trim() !== '' ? logoRaw.trim() : null;
+    return {
+      dbMethodId: Number(r.dbMethodId),
+      name: String(r.name ?? ''),
+      code: String(r.code ?? ''),
+      category: String(r.category ?? ''),
+      vendor: r.vendor != null && String(r.vendor).trim() !== '' ? String(r.vendor) : null,
+      logoUrl,
+      sortOrder: r.sortOrder != null ? Number(r.sortOrder) : null,
+    };
+  });
 }
 
 /** Metode pembayaran yang dipublikasikan, difilter sekolah anak portal. Cache Upstash (TTL 10 menit). */
@@ -67,7 +75,7 @@ export async function getPublishedPaymentMethodsForSchools(schoolIds: number[]):
   return fresh;
 }
 
-async function fetchInstructionsFromDb(methodId: number): Promise<PortalPaymentInstructionRow[]> {
+export async function fetchInstructionsFromDb(methodId: number): Promise<PortalPaymentInstructionRow[]> {
   const rows = (await sql`
     SELECT
       id,
@@ -87,18 +95,16 @@ async function fetchInstructionsFromDb(methodId: number): Promise<PortalPaymentI
   }));
 }
 
-/**
- * Instruksi pembayaran per channel. Hanya jika metode itu boleh diakses viewer (publish + active + sekolah).
- */
-export async function getPaymentInstructionsForPortalViewer(
+/** True jika metode publish+active dan cocok dengan sekolah anak yang boleh diakses viewer. */
+export async function viewerCanUsePublishedPaymentMethod(
   viewerUserId: number,
   viewerRole: string,
   methodId: number,
-): Promise<PortalPaymentInstructionRow[] | null> {
-  if (!Number.isFinite(methodId) || methodId <= 0) return null;
+): Promise<boolean> {
+  if (!Number.isFinite(methodId) || methodId <= 0) return false;
 
   const allowedStudentIds = await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole);
-  if (allowedStudentIds.length === 0) return null;
+  if (allowedStudentIds.length === 0) return false;
 
   const schoolRows = (await sql`
     SELECT DISTINCT s.school_id AS "schoolId"
@@ -130,7 +136,21 @@ export async function getPaymentInstructionsForPortalViewer(
           LIMIT 1
         `) as unknown as { ok: number }[]);
 
-  if (allowedRows.length === 0) return null;
+  return allowedRows.length > 0;
+}
+
+/**
+ * Instruksi pembayaran per channel. Hanya jika metode itu boleh diakses viewer (publish + active + sekolah).
+ */
+export async function getPaymentInstructionsForPortalViewer(
+  viewerUserId: number,
+  viewerRole: string,
+  methodId: number,
+): Promise<PortalPaymentInstructionRow[] | null> {
+  if (!Number.isFinite(methodId) || methodId <= 0) return null;
+
+  const allowed = await viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId);
+  if (!allowed) return null;
 
   const key = instructionsCacheKey(methodId);
   const hit = await cacheGetJson<PortalPaymentInstructionRow[]>(key);

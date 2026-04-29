@@ -14,10 +14,10 @@ export function portalOptionToPaymentMethod(row: PortalPaymentMethodOption): Por
     id: `db-${row.dbMethodId}`,
     dbMethodId: row.dbMethodId,
     label: row.name,
-    sublabel: [row.vendor, row.code].filter(Boolean).join(' · ') || undefined,
     type: categoryToPaymentUiType(row.category, row.code),
     code: row.code,
     category: row.category,
     vendor: row.vendor,
+    logoUrl: row.logoUrl ?? null,
   };
 }

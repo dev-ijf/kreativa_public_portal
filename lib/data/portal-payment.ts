@@ -5,11 +5,13 @@ export type PortalSelectedPaymentState = {
   id: string;
   dbMethodId: number;
   label: string;
+  /** @deprecated Tidak dipakai di UI; logo dari `logoUrl`. */
   sublabel?: string;
   type: 'va' | 'qris' | 'ewallet' | 'manual';
   code?: string;
   category?: string;
   vendor?: string | null;
+  logoUrl?: string | null;
 };
 
 export type PortalPaymentMethodOption = {
@@ -18,6 +20,7 @@ export type PortalPaymentMethodOption = {
   code: string;
   category: string;
   vendor: string | null;
+  logoUrl?: string | null;
   sortOrder: number | null;
 };
 
@@ -26,4 +29,30 @@ export type PortalPaymentInstructionRow = {
   title: string;
   description: string;
   stepOrder: number | null;
+};
+
+/** Item keranjang untuk body POST `/api/portal/checkout` (mirror `CartItem` di PortalProvider). */
+export type PortalCheckoutCartItem = {
+  id: string;
+  childId: number;
+  childName: string;
+  type: 'tuition' | 'installment' | 'previous';
+  title: string;
+  amount: number;
+};
+
+export const PORTAL_CHECKOUT_SESSION_KEY = 'portal.checkout';
+
+/** Snapshot ringan setelah POST checkout (sessionStorage). */
+export type PortalCheckoutSessionPayload = {
+  referenceNo: string;
+  /** Diisi setelah checkout API; diperlukan untuk unduh PDF instruksi. */
+  transactionId?: string;
+  transactionCreatedAt?: string;
+  /** Total transaksi (agar UI instruksi tetap benar setelah cart dikosongkan). */
+  totalAmount?: number;
+  vaNo: string | null;
+  vaDisplay: string | null;
+  expiryAt: string;
+  isBmi: boolean;
 };

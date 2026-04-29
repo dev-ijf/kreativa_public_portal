@@ -1,5 +1,7 @@
 import type { FinanceInstallmentPaymentLine } from '@/lib/data/portal-finance-payload';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
+import { isBmiPaymentMethod } from '@/lib/utils/bmi-method';
+import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
 import { sql } from '@/lib/db/client';
 
 export type PortalTuitionTransactionLine = { label: string; amount: number };
@@ -14,6 +16,14 @@ export type PortalTuitionTransaction = {
   vaNo: string | null;
   paymentMethodName: string | null;
   lines: PortalTuitionTransactionLine[];
+  /** Tab checkout (pending): untuk hidrasi halaman instruksi. */
+  paymentMethodId?: number;
+  paymentMethodCode?: string;
+  paymentMethodCategory?: string;
+  paymentMethodVendor?: string | null;
+  paymentMethodLogoUrl?: string | null;
+  checkoutExpiryIso?: string;
+  isBmi?: boolean;
 };
 
 export type TuitionReceiptLine = { label: string; amount: number };
@@ -62,6 +72,11 @@ type TxFlatRow = {
   line_amount: number | null;
   line_label: string | null;
   detail_id: string | number | null;
+  payment_method_db_id?: number | null;
+  payment_method_code?: string | null;
+  payment_method_category?: string | null;
+  payment_method_vendor?: string | null;
+  payment_method_logo_url?: string | null;
 };
 
 export async function getTuitionTransactionsForPortal(
@@ -116,6 +131,90 @@ export async function getTuitionTransactionsForPortal(
         vaNo: r.va_no,
         paymentMethodName: r.payment_method_name,
         lines: [],
+      };
+      byKey.set(key, tx);
+      orderKeys.push(key);
+    }
+    if (r.detail_id != null && r.line_amount != null && r.line_label) {
+      tx.lines.push({ label: r.line_label, amount: num(r.line_amount) });
+    }
+  }
+
+  return orderKeys.map((k) => byKey.get(k)!);
+}
+
+/** Transaksi menunggu pembayaran (checkout) untuk riwayat portal. */
+export async function getPendingCheckoutTransactionsForPortal(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+): Promise<PortalTuitionTransaction[] | null> {
+  const allowed = new Set(await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole));
+  if (!allowed.has(studentId)) return null;
+
+  const rows = (await sql`
+    SELECT
+      t.id AS transaction_id,
+      t.created_at AS transaction_created_at,
+      t.reference_no,
+      (t.total_amount)::float8 AS total_amount,
+      t.status,
+      t.payment_date,
+      t.va_no,
+      pm.name AS payment_method_name,
+      (pm.id)::int4 AS payment_method_db_id,
+      pm.code AS payment_method_code,
+      pm.category AS payment_method_category,
+      pm.vendor AS payment_method_vendor,
+      pm.logo_url AS payment_method_logo_url,
+      (d.amount_paid)::float8 AS line_amount,
+      COALESCE(NULLIF(TRIM(b.title), ''), p.name, 'Pembayaran') AS line_label,
+      d.id AS detail_id
+    FROM tuition_transactions t
+    LEFT JOIN tuition_payment_methods pm ON pm.id = t.payment_method_id
+    LEFT JOIN tuition_transaction_details d
+      ON d.transaction_id = t.id AND d.transaction_created_at = t.created_at
+    LEFT JOIN tuition_bills b ON b.id = d.bill_id
+    LEFT JOIN tuition_products p ON p.id = d.product_id
+    WHERE t.student_id = ${studentId}
+      AND t.user_id = ${viewerUserId}
+      AND lower(trim(t.status)) = 'pending'
+    ORDER BY t.created_at DESC, d.id ASC NULLS LAST
+  `) as unknown as TxFlatRow[];
+
+  const orderKeys: string[] = [];
+  const byKey = new Map<string, PortalTuitionTransaction>();
+
+  for (const r of rows) {
+    const transactionId = String(r.transaction_id);
+    const transactionCreatedAt = ts(r.transaction_created_at);
+    if (!transactionId || !transactionCreatedAt) continue;
+    const key = `${transactionId}\0${transactionCreatedAt}`;
+    let tx = byKey.get(key);
+    if (!tx) {
+      const createdMs = epochMs(r.transaction_created_at);
+      const pmId = r.payment_method_db_id != null ? num(r.payment_method_db_id) : 0;
+      const code = String(r.payment_method_code ?? '');
+      const vendor = r.payment_method_vendor;
+      tx = {
+        transactionId,
+        transactionCreatedAt,
+        referenceNo: String(r.reference_no ?? ''),
+        totalAmount: num(r.total_amount),
+        status: String(r.status ?? 'pending'),
+        paymentDate: r.payment_date,
+        vaNo: r.va_no,
+        paymentMethodName: r.payment_method_name,
+        lines: [],
+        paymentMethodId: Number.isFinite(pmId) && pmId > 0 ? pmId : undefined,
+        paymentMethodCode: code || undefined,
+        paymentMethodCategory: r.payment_method_category ? String(r.payment_method_category) : undefined,
+        paymentMethodVendor: vendor != null ? String(vendor) : null,
+        paymentMethodLogoUrl: r.payment_method_logo_url ? String(r.payment_method_logo_url) : null,
+        checkoutExpiryIso: Number.isFinite(createdMs)
+          ? computePortalPaymentExpiryIso(createdMs)
+          : computePortalPaymentExpiryIso(Date.now()),
+        isBmi: isBmiPaymentMethod(vendor, code),
       };
       byKey.set(key, tx);
       orderKeys.push(key);
