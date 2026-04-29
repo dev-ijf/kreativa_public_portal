@@ -1,6 +1,9 @@
 import { Redis } from '@upstash/redis';
 
-const CACHE_TTL_SEC = 600;
+/**
+ * Cache JSON tanpa TTL (persist sampai dihapus).
+ * Penghapusan massal: `FLUSHALL` / `FLUSHDB` dari sistem lain, atau `DEL` per key.
+ */
 
 let client: Redis | null | undefined;
 
@@ -34,7 +37,7 @@ export async function cacheSetJson(key: string, value: unknown): Promise<void> {
   const r = getRedis();
   if (!r) return;
   try {
-    await r.set(key, JSON.stringify(value), { ex: CACHE_TTL_SEC });
+    await r.set(key, JSON.stringify(value));
   } catch {
     /* cache best-effort */
   }

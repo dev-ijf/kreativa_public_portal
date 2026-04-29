@@ -64,7 +64,7 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
   });
 }
 
-/** Metode pembayaran yang dipublikasikan, difilter sekolah anak portal. Cache Upstash (TTL 10 menit). */
+/** Metode pembayaran yang dipublikasikan, difilter sekolah anak portal. Cache Upstash tanpa TTL. */
 export async function getPublishedPaymentMethodsForSchools(schoolIds: number[]): Promise<PortalPaymentMethodOption[]> {
   const key = methodsCacheKey(schoolIds);
   const hit = await cacheGetJson<PortalPaymentMethodOption[]>(key);
