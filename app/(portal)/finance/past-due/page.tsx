@@ -1,14 +1,13 @@
-import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { FinancePastDuePageClient } from '@/components/portal/pages/FinancePastDuePageClient';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getPortalChildren } from '@/lib/data/server/children';
 import { getFinanceDashboardForPortal } from '@/lib/data/server/finance';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   if (session?.user?.userId == null) {
     redirect('/login');
   }

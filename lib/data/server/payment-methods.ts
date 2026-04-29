@@ -152,13 +152,17 @@ export async function viewerCanUsePublishedPaymentMethod(
 ): Promise<boolean> {
   if (!Number.isFinite(methodId) || methodId <= 0) return false;
 
+  const t0 = Date.now();
   const ckey = methodViewerAllowedCacheKey(viewerUserId, viewerRole, methodId);
   const hit = await cacheGetJson<boolean>(ckey);
-  if (hit === true) return true;
-  if (hit === false) return false;
+  if (hit === true || hit === false) {
+    console.info('viewer_method_cache_hit', { methodId, ms: Date.now() - t0, allowed: hit });
+    return hit;
+  }
 
   const ok = await viewerCanUsePublishedPaymentMethodFromDb(viewerUserId, viewerRole, methodId);
   await cacheSetJson(ckey, ok);
+  console.info('viewer_method_cache_miss', { methodId, ms: Date.now() - t0, allowed: ok });
   return ok;
 }
 
@@ -172,16 +176,26 @@ export async function getPaymentInstructionsForPortalViewer(
 ): Promise<PortalPaymentInstructionRow[] | null> {
   if (!Number.isFinite(methodId) || methodId <= 0) return null;
 
+  const t0 = Date.now();
   const instrKey = instructionsCacheKey(methodId);
   const [allowed, instrHit] = await Promise.all([
     viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId),
     cacheGetJson<PortalPaymentInstructionRow[]>(instrKey),
   ]);
+  const t1 = Date.now();
 
-  if (!allowed) return null;
-  if (instrHit && Array.isArray(instrHit)) return instrHit;
+  if (!allowed) {
+    console.info('payment_instr_denied', { methodId, ms: t1 - t0 });
+    return null;
+  }
+  if (instrHit && Array.isArray(instrHit)) {
+    console.info('payment_instr_cache_hit', { methodId, ms: t1 - t0, rows: instrHit.length });
+    return instrHit;
+  }
 
   const fresh = await fetchInstructionsFromDb(methodId);
   await cacheSetJson(instrKey, fresh);
+  const t2 = Date.now();
+  console.info('payment_instr_cache_miss', { methodId, cacheCheckMs: t1 - t0, dbMs: t2 - t1, rows: fresh.length });
   return fresh;
 }

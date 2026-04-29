@@ -1,8 +1,8 @@
 import { isBmiPaymentMethod } from '@/lib/utils/bmi-method';
 import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
 import { buildBmiVa16 } from '@/lib/va/bmi-va';
-import type { PortalCheckoutCartItem } from '@/lib/data/portal-payment';
-import { viewerCanUsePublishedPaymentMethod } from '@/lib/data/server/payment-methods';
+import type { PortalCheckoutCartItem, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
+import { fetchInstructionsFromDb, viewerCanUsePublishedPaymentMethod } from '@/lib/data/server/payment-methods';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { sql } from '@/lib/db/client';
 
@@ -38,6 +38,7 @@ export type PortalCheckoutDbResult = {
   billLines: { billId: number; title: string; amount: number }[];
   paymentMethodLabel: string;
   paymentMethodId: number;
+  instructionRows: PortalPaymentInstructionRow[];
 };
 
 type BillRow = {
@@ -373,10 +374,20 @@ export async function finalizePortalCheckout(params: {
           LIMIT 1
         )
     `) as unknown as { m: bigint | number }[];
-    let nextDetailId = Number(maxRow[0]?.m ?? 0) + 1;
+    const nextDetailId = Number(maxRow[0]?.m ?? 0) + 1;
 
-    for (const line of billLines) {
-      const row = byBillId.get(line.billId)!;
+    if (billLines.length > 0) {
+      const detailIds = billLines.map((_, i) => nextDetailId + i);
+      const billIdsArr = billLines.map((l) => l.billId);
+      const productIdsArr = billLines.map((l) => {
+        const r = byBillId.get(l.billId);
+        if (!r) {
+          throw new CheckoutValidationError('INTERNAL', 'Data tagihan tidak konsisten.', 'Inconsistent bill data.');
+        }
+        return Number(r.product_id);
+      });
+      const amountsArr = billLines.map((l) => l.amount);
+
       await sql`
         INSERT INTO tuition_transaction_details (
           id,
@@ -389,20 +400,28 @@ export async function finalizePortalCheckout(params: {
           created_at
         )
         SELECT
-          ${nextDetailId},
+          u.detail_id,
           t.id,
           t.created_at,
-          ${line.billId},
-          ${row.product_id},
-          ${line.amount},
+          u.bill_id,
+          u.product_id,
+          u.amount_paid,
           ${studentId},
           NOW()
-        FROM tuition_transactions t
-        WHERE t.id = ${transactionId}
-        ORDER BY t.created_at DESC
-        LIMIT 1
+        FROM unnest(
+          ${detailIds}::int8[],
+          ${billIdsArr}::int4[],
+          ${productIdsArr}::int4[],
+          ${amountsArr}::float8[]
+        ) AS u(detail_id, bill_id, product_id, amount_paid)
+        INNER JOIN LATERAL (
+          SELECT id, created_at
+          FROM tuition_transactions
+          WHERE id = ${transactionId}
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) t ON true
       `;
-      nextDetailId += 1;
     }
   } catch (e) {
     try {
@@ -456,6 +475,8 @@ export async function finalizePortalCheckout(params: {
   const createdMsForExpiry = new Date(tcat).getTime();
   const expiryAt = computePortalPaymentExpiryIso(Number.isFinite(createdMsForExpiry) ? createdMsForExpiry : Date.now());
 
+  const instructionRows = await fetchInstructionsFromDb(paymentMethodId);
+
   return {
     transactionId: tidStr,
     transactionCreatedAt: tcat,
@@ -473,5 +494,6 @@ export async function finalizePortalCheckout(params: {
     billLines,
     paymentMethodLabel: String(pm.name ?? ''),
     paymentMethodId: Number(pm.id),
+    instructionRows,
   };
 }

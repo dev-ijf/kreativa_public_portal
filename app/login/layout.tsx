@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react';
 import { cookies } from 'next/headers';
-import { getServerSession } from 'next-auth';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PortalProvider } from '@/components/portal/state/PortalProvider';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
 
 export default async function LoginLayout({ children }: { children: ReactNode }) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const cookieStore = await cookies();
   const initialLang = parsePortalLangCookie(cookieStore.get(PORTAL_LANG_COOKIE)?.value);
 

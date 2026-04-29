@@ -1,14 +1,13 @@
 import { createElement } from 'react';
 import { renderToBuffer } from '@react-pdf/renderer';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getPaymentInstructionsPdfPayloadForPortal } from '@/lib/data/server/payment-instructions-pdf';
 import { PaymentInstructionsPdfDoc } from '@/lib/pdf/payment-instructions-pdf';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
   if (userId == null) {

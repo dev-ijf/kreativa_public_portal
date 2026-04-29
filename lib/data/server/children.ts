@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { sql } from '@/lib/db/client';
 
 export type StudentChildRow = {
@@ -39,10 +40,7 @@ export type PortalChildRow = {
   schoolName: string;
 };
 
-export async function getPortalChildren(
-  userId: number,
-  role: string,
-): Promise<PortalChildRow[]> {
+async function loadPortalChildren(userId: number, role: string): Promise<PortalChildRow[]> {
   if (role === 'parent') {
     const rows = await sql`
       SELECT
@@ -103,4 +101,7 @@ export async function getPortalChildren(
   `;
   return rows as unknown as PortalChildRow[];
 }
+
+/** Satu query children per request (dedup layout + halaman). */
+export const getPortalChildren = cache(loadPortalChildren);
 

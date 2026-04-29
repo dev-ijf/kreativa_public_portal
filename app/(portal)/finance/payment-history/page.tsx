@@ -1,7 +1,6 @@
-import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { PaymentHistoryPageClient } from '@/components/portal/pages/PaymentHistoryPageClient';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getPortalChildren } from '@/lib/data/server/children';
 import {
   getPendingCheckoutTransactionsForPortal,
@@ -12,7 +11,7 @@ import type { PortalTuitionTransaction } from '@/lib/data/server/finance-transac
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   if (session?.user?.userId == null) {
     redirect('/login');
   }

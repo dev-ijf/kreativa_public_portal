@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import {
   HABIT_BOOLEAN_KEYS,
   type OnTimeArrivalValue,
@@ -40,7 +39,7 @@ function parsePayload(body: Record<string, unknown>): PortalHabitDayPayload | nu
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 
@@ -69,7 +68,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 

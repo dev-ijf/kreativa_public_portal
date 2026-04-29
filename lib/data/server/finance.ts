@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 /**
  * Portal finance (GET): data berasal dari view `v_portal_finance_bills` dan
  * `v_portal_tuition_payment_lines` (lihat sql/portal_finance_views.sql).
@@ -20,7 +22,7 @@ import { sql } from '@/lib/db/client';
 export type { FinanceChildPayload, FinanceInstallmentRow, FinanceMonthSlot, FinancePreviousBillRow } from '@/lib/data/portal-finance-payload';
 
 /** Hanya student_id yang boleh di-query tagihan (parent / student), tidak percaya array dari client semata. */
-export async function getStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
+async function loadStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
   if (role === 'parent') {
     const rows = await sql`
       SELECT s.id AS "studentId"
@@ -39,6 +41,9 @@ export async function getStudentIdsAccessibleToViewer(userId: number, role: stri
   `;
   return (rows as unknown as { studentId: number }[]).map((r) => r.studentId);
 }
+
+/** Satu query per request untuk user+role (dedup lintas finance + payment-methods). */
+export const getStudentIdsAccessibleToViewer = cache(loadStudentIdsAccessibleToViewer);
 
 type BillViewRow = {
   bill_id: number;
@@ -146,36 +151,34 @@ function rowIsInstallmentBillRow(r: BillViewRow): boolean {
 }
 
 async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[]> {
-  if (studentIds.length === 0) return [];
-  const chunks = await Promise.all(
-    studentIds.map((studentId) =>
-      sql`
-        SELECT
-          bill_id,
-          student_id,
-          academic_year_id,
-          academic_year_name,
-          product_id,
-          product_name,
-          payment_type,
-          title,
-          (total_amount)::float8 AS total_amount,
-          (paid_amount)::float8 AS paid_amount,
-          (min_payment)::float8 AS min_payment,
-          (balance_amount)::float8 AS balance_amount,
-          is_fully_paid,
-          bill_month,
-          bill_year,
-          related_month,
-          bill_created_at,
-          due_date,
-          is_installment
-        FROM v_portal_finance_bills
-        WHERE student_id = ${studentId}
-      `,
-    ),
-  );
-  return (chunks.flat() as unknown as Record<string, unknown>[]).map((raw) => {
+  const unique = [...new Set(studentIds)].filter((n) => Number.isFinite(n) && n > 0);
+  if (unique.length === 0) return [];
+  const rows = await sql`
+    SELECT
+      bill_id,
+      student_id,
+      academic_year_id,
+      academic_year_name,
+      product_id,
+      product_name,
+      payment_type,
+      title,
+      (total_amount)::float8 AS total_amount,
+      (paid_amount)::float8 AS paid_amount,
+      (min_payment)::float8 AS min_payment,
+      (balance_amount)::float8 AS balance_amount,
+      is_fully_paid,
+      bill_month,
+      bill_year,
+      related_month,
+      bill_created_at,
+      due_date,
+      is_installment
+    FROM v_portal_finance_bills
+    WHERE student_id = ANY(${unique}::int[])
+    ORDER BY student_id ASC, bill_id ASC
+  `;
+  return (rows as unknown as Record<string, unknown>[]).map((raw) => {
     const base = raw as BillViewRow;
     return {
       ...base,

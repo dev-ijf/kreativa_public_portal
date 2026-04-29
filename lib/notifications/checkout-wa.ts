@@ -65,7 +65,6 @@ async function resolveRecipientPhone(studentId: number, fallbackUserId: number):
   return null;
 }
 
-/** theme_id 1 → template EN (`PAYMENT_CHECKOUT_EN`), selain itu → ID (`PAYMENT_CHECKOUT`). */
 function checkoutTriggerForTheme(themeId: number | null | undefined): string {
   if (themeId === 1) return 'PAYMENT_CHECKOUT_EN';
   return 'PAYMENT_CHECKOUT';
@@ -92,7 +91,6 @@ function formatVaSpaced(va: string | null): string {
 
 export type ProcessCheckoutWaResult = {
   outcome: 'sent' | 'skipped' | 'failed';
-  /** True → QStash boleh retry (gagal kirim ke StarSender). */
   retryableFailure: boolean;
   error?: string;
 };
@@ -100,6 +98,9 @@ export type ProcessCheckoutWaResult = {
 /**
  * Proses satu job WA checkout: baca transaksi, kirim StarSender, `notif_logs`, set `is_whatsapp_checkout`.
  * Idempoten jika `is_whatsapp_checkout` sudah true.
+ *
+ * Query transaksi berdasarkan `id` + `user_id` lalu ambil `created_at` kanonik dari DB
+ * (bukan dari body.transactionCreatedAt yang formatnya bisa beda dengan Postgres).
  */
 export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody): Promise<ProcessCheckoutWaResult> {
   console.info('checkout_wa_start', body);
@@ -109,6 +110,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     return { outcome: 'failed', retryableFailure: false, error: 'bad_transaction_id' };
   }
 
+  // Ambil transaksi via id + user_id (BUKAN created_at dari JS — presisi beda → 0 rows).
   const head = (await sql`
     SELECT
       t.id,
@@ -123,7 +125,8 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     FROM tuition_transactions t
     LEFT JOIN tuition_payment_methods pm ON pm.id = t.payment_method_id
     WHERE t.id = ${idNum}
-      AND t.created_at = ${body.transactionCreatedAt}
+      AND t.user_id = ${body.userId}
+    ORDER BY t.created_at DESC
     LIMIT 1
   `) as unknown as {
     id: number;
@@ -138,13 +141,13 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   }[];
 
   if (head.length === 0) {
+    console.warn('checkout_wa_not_found', { transactionId: idNum, userId: body.userId });
     return { outcome: 'failed', retryableFailure: false, error: 'transaction_not_found' };
   }
 
   const h = head[0];
-  if (Number(h.user_id) !== Number(body.userId)) {
-    return { outcome: 'failed', retryableFailure: false, error: 'user_mismatch' };
-  }
+  // created_at kanonik dari DB — pakai ini untuk semua query detail selanjutnya
+  const dbCreatedAt = h.created_at;
 
   const waDoneRaw = h.waDone as boolean | string | null | undefined;
   const alreadySent =
@@ -152,6 +155,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     waDoneRaw === 't' ||
     String(waDoneRaw ?? '').toLowerCase() === 'true';
   if (alreadySent) {
+    console.info('checkout_wa_already_sent', { transactionId: idNum });
     return { outcome: 'sent', retryableFailure: false };
   }
 
@@ -167,7 +171,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     INNER JOIN core_students s ON s.id = b.student_id
     INNER JOIN core_schools sch ON sch.id = s.school_id
     WHERE d.transaction_id = ${idNum}
-      AND d.transaction_created_at = ${body.transactionCreatedAt}
+      AND d.transaction_created_at = ${dbCreatedAt}
     LIMIT 1
   `) as unknown as {
     studentId: number;
@@ -178,6 +182,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   }[];
 
   if (ctxRows.length === 0) {
+    console.warn('checkout_wa_no_context', { transactionId: idNum, dbCreatedAt });
     return { outcome: 'failed', retryableFailure: false, error: 'no_bill_context' };
   }
 
@@ -194,7 +199,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     LEFT JOIN tuition_bills b ON b.id = d.bill_id
     LEFT JOIN tuition_products p ON p.id = d.product_id
     WHERE d.transaction_id = ${idNum}
-      AND d.transaction_created_at = ${body.transactionCreatedAt}
+      AND d.transaction_created_at = ${dbCreatedAt}
     ORDER BY d.id ASC
   `) as unknown as { title: string; amount: number }[];
 
@@ -205,7 +210,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId) : '';
   const paymentInstructionsEn = paymentInstructions;
 
-  const createdMs = new Date(String(h.created_at)).getTime();
+  const createdMs = new Date(String(dbCreatedAt)).getTime();
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());
   const expiryDateStr =
     themeId === 1
@@ -247,7 +252,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
       UPDATE tuition_transactions
       SET is_whatsapp_checkout = true
       WHERE id = ${idNum}
-        AND created_at = ${body.transactionCreatedAt}
+        AND created_at = ${dbCreatedAt}
     `;
     return { outcome: 'skipped', retryableFailure: false };
   }
@@ -281,7 +286,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     UPDATE tuition_transactions
     SET is_whatsapp_checkout = true
     WHERE id = ${idNum}
-      AND created_at = ${body.transactionCreatedAt}
+      AND created_at = ${dbCreatedAt}
   `;
 
   return { outcome: 'sent', retryableFailure: false };

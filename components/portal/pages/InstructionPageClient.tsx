@@ -118,6 +118,28 @@ export function InstructionPageClient() {
     }
 
     let cancelled = false;
+
+    try {
+      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as PortalCheckoutSessionPayload;
+        if (
+          parsed.checkoutMethodId === methodId &&
+          Array.isArray(parsed.instructionRows) &&
+          parsed.instructionRows.length > 0
+        ) {
+          setRows(parsed.instructionRows);
+          setLoadError(null);
+          setLoading(false);
+          return () => {
+            cancelled = true;
+          };
+        }
+      }
+    } catch {
+      /* lanjut fetch */
+    }
+
     setLoading(true);
     setLoadError(null);
 

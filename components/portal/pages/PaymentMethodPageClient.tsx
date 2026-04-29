@@ -5,7 +5,12 @@ import { useEffect, useState } from 'react';
 import { Building2, QrCode, ReceiptText, Smartphone } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import type { PortalCheckoutCartItem, PortalCheckoutSessionPayload, PortalPaymentMethodOption } from '@/lib/data/portal-payment';
+import type {
+  PortalCheckoutCartItem,
+  PortalCheckoutSessionPayload,
+  PortalPaymentInstructionRow,
+  PortalPaymentMethodOption,
+} from '@/lib/data/portal-payment';
 import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
 import { portalOptionToPaymentMethod } from '@/lib/utils/payment-method-ui';
 import { formatRupiah } from '@/lib/utils/format';
@@ -128,6 +133,7 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     vaDisplay?: string | null;
                     expiryAt?: string;
                     isBmi?: boolean;
+                    instructionRows?: PortalPaymentInstructionRow[];
                   };
                   if (!res.ok) {
                     const msg =
@@ -150,6 +156,8 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     vaDisplay: data.vaDisplay ?? null,
                     expiryAt: String(data.expiryAt ?? ''),
                     isBmi: Boolean(data.isBmi),
+                    instructionRows: Array.isArray(data.instructionRows) ? data.instructionRows : undefined,
+                    checkoutMethodId: selectedPayment.dbMethodId,
                   };
                   try {
                     sessionStorage.setItem(PORTAL_CHECKOUT_SESSION_KEY, JSON.stringify(payload));

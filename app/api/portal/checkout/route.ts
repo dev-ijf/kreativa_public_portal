@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { CheckoutValidationError, finalizePortalCheckout } from '@/lib/data/server/checkout';
 import type { PortalCheckoutCartItem } from '@/lib/data/portal-payment';
 import { scheduleCheckoutWhatsAppJob } from '@/lib/qstash/schedule-checkout-whatsapp';
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
   if (userId == null) {
@@ -51,6 +50,7 @@ export async function POST(request: Request) {
       vaDisplay: checkout.vaDisplay,
       expiryAt: checkout.expiryAt,
       isBmi: checkout.isBmi,
+      instructionRows: checkout.instructionRows,
     });
   } catch (e) {
     if (e instanceof CheckoutValidationError) {

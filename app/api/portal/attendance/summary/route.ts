@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getAttendanceSummary } from '@/lib/data/server/attendance';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 

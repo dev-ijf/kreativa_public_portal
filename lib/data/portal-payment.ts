@@ -55,4 +55,8 @@ export type PortalCheckoutSessionPayload = {
   vaDisplay: string | null;
   expiryAt: string;
   isBmi: boolean;
+  /** Instruksi dari response checkout — menghindari round-trip GET ke API. */
+  instructionRows?: PortalPaymentInstructionRow[];
+  /** Metode pembayaran saat snapshot checkout (untuk cocokkan dengan `selectedPayment`). */
+  checkoutMethodId?: number;
 };

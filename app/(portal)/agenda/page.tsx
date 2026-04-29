@@ -1,12 +1,11 @@
-import { getServerSession } from 'next-auth';
 import { AgendaPageClient } from '@/components/portal/pages/AgendaPageClient';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getAgendasForPortal } from '@/lib/data/server/agendas';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 

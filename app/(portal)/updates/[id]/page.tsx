@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
-import { getServerSession } from 'next-auth';
 import { UpdateDetailPageClient } from '@/components/portal/pages/UpdateDetailPageClient';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getAnnouncementByIdForPortal } from '@/lib/data/server/announcements';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +11,7 @@ type PageProps = {
 
 export default async function Page({ params }: PageProps) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 

@@ -1,7 +1,6 @@
-import { getServerSession } from 'next-auth';
 import { notFound, redirect } from 'next/navigation';
 import { InstallmentHistoryPageClient } from '@/components/portal/pages/InstallmentHistoryPageClient';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getPaymentLinesForBillPortal } from '@/lib/data/server/finance-transactions';
 
 export const dynamic = 'force-dynamic';
@@ -9,7 +8,7 @@ export const dynamic = 'force-dynamic';
 type PageProps = { params: Promise<{ billId: string }> };
 
 export default async function Page({ params }: PageProps) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   if (session?.user?.userId == null) {
     redirect('/login');
   }

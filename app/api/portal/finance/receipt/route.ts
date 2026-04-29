@@ -1,14 +1,13 @@
 import { renderToBuffer } from '@react-pdf/renderer';
-import { getServerSession } from 'next-auth';
 import { createElement } from 'react';
-import { authOptions } from '@/lib/auth';
+import { getCachedServerSession } from '@/lib/auth-cached';
 import { getReceiptPayloadForPortal } from '@/lib/data/server/finance-transactions';
 import { TuitionReceiptPdfDoc } from '@/lib/pdf/tuition-receipt-pdf';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await getCachedServerSession();
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
   if (userId == null) {
