@@ -189,25 +189,21 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
 
 async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLineRow[]> {
   if (billIds.length === 0) return [];
-  const chunks = await Promise.all(
-    billIds.map((billId) =>
-      sql`
-        SELECT
-          bill_id,
-          amount_paid,
-          detail_created_at,
-          payment_date,
-          transaction_id,
-          transaction_created_at,
-          reference_no,
-          transaction_status
-        FROM v_portal_tuition_payment_lines
-        WHERE bill_id = ${billId}
-        ORDER BY detail_created_at ASC
-      `,
-    ),
-  );
-  return chunks.flat() as unknown as PaymentLineRow[];
+  const rows = await sql`
+    SELECT
+      bill_id,
+      amount_paid,
+      detail_created_at,
+      payment_date,
+      transaction_id,
+      transaction_created_at,
+      reference_no,
+      transaction_status
+    FROM v_portal_tuition_payment_lines
+    WHERE bill_id = ANY(${billIds}::int[])
+    ORDER BY bill_id, detail_created_at ASC
+  `;
+  return rows as unknown as PaymentLineRow[];
 }
 
 function buildChildPayload(
