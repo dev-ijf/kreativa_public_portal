@@ -102,8 +102,10 @@ export type ProcessCheckoutWaResult = {
  * Idempoten jika `is_whatsapp_checkout` sudah true.
  */
 export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody): Promise<ProcessCheckoutWaResult> {
+  console.info('checkout_wa_start', body);
   const idNum = Number(body.transactionId);
   if (!Number.isFinite(idNum) || idNum <= 0) {
+    console.warn('checkout_wa_bad_id', body);
     return { outcome: 'failed', retryableFailure: false, error: 'bad_transaction_id' };
   }
 
@@ -212,6 +214,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
 
   const vaDisplay = formatVaSpaced(h.va_no);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);
+  console.info('checkout_wa_resolve', { transactionId: idNum, trigger, templateId: template?.id ?? null, to: to ?? null });
 
   const vars: Record<string, string> = {
     school_name: String(ctx.schoolName ?? ''),
@@ -227,6 +230,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
 
   if (!template || !to) {
     const reason = !template ? 'no_template' : 'no_phone';
+    console.warn('checkout_wa_skip', { reason, transactionId: idNum, trigger, to: to ?? null });
     await sql`
       INSERT INTO notif_logs (user_id, template_id, type, recipient, request_payload, response_payload, status)
       VALUES (
@@ -251,8 +255,10 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   const bodyText = substituteTemplate(template.content, vars);
   const reqPayload = { messageType: 'text', to, bodyPreview: bodyText.slice(0, 200) };
 
+  console.info('checkout_wa_sending', { transactionId: idNum, to, bodyLen: bodyText.length });
   const star = await postStarSenderText({ to, body: bodyText });
   const status = star.ok ? 'success' : 'failed';
+  console.info('checkout_wa_result', { transactionId: idNum, ok: star.ok, httpStatus: star.status, responsePreview: star.responseText.slice(0, 200) });
 
   await sql`
     INSERT INTO notif_logs (user_id, template_id, type, recipient, request_payload, response_payload, status)
