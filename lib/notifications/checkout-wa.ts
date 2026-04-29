@@ -5,15 +5,76 @@ import { computePortalPaymentExpiryMs } from '@/lib/utils/payment-deadline';
 import { sql } from '@/lib/db/client';
 import { postStarSenderText } from '@/lib/notifications/starsender';
 
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
+function stripTags(html: string): string {
+  return decodeHtmlEntities(html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+/**
+ * Konversi HTML instruksi pembayaran ke plain text dengan numbering.
+ * <ol><li> → "1. ...\n2. ...", <ul><li> → "• ...", paragraf biasa.
+ */
+function htmlToWhatsAppText(html: string): string {
+  const lines: string[] = [];
+  let rest = String(html ?? '').replace(/\r\n/g, '\n');
+
+  while (rest.length) {
+    rest = rest.trimStart();
+    if (!rest) break;
+
+    const olMatch = rest.match(/^<ol\b[^>]*>([\s\S]*?)<\/ol>/i);
+    if (olMatch) {
+      const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+      let lm: RegExpExecArray | null;
+      let n = 1;
+      while ((lm = liRe.exec(olMatch[1]))) {
+        const t = stripTags(lm[1]);
+        if (t) { lines.push(`${n}. ${t}`); n += 1; }
+      }
+      rest = rest.slice(olMatch[0].length);
+      continue;
+    }
+
+    const ulMatch = rest.match(/^<ul\b[^>]*>([\s\S]*?)<\/ul>/i);
+    if (ulMatch) {
+      const liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+      let lm: RegExpExecArray | null;
+      while ((lm = liRe.exec(ulMatch[1]))) {
+        const t = stripTags(lm[1]);
+        if (t) lines.push(`• ${t}`);
+      }
+      rest = rest.slice(ulMatch[0].length);
+      continue;
+    }
+
+    const nextList = rest.search(/<(?:ol|ul)\b/i);
+    const chunk = nextList === -1 ? rest : rest.slice(0, nextList);
+    const plain = stripTags(chunk);
+    if (plain) lines.push(plain);
+    rest = nextList === -1 ? '' : rest.slice(nextList);
+  }
+
+  return lines.join('\n');
+}
+
 async function loadInstructionPlainText(methodId: number): Promise<string> {
   const rows = await fetchInstructionsFromDb(methodId);
   return rows
     .map((r) => {
-      const plain = String(r.description ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      return `${r.title}: ${plain}`;
+      const body = htmlToWhatsAppText(r.description ?? '');
+      return `*${r.title}*\n${body}`;
     })
-    .filter(Boolean)
-    .join('\n');
+    .filter((s) => s.trim().length > 0)
+    .join('\n\n');
 }
 
 function substituteTemplate(content: string, vars: Record<string, string>): string {
