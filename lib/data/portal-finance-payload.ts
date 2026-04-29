@@ -13,6 +13,15 @@ export type FinanceMonthSlot = {
   billId: string | null;
 };
 
+export type FinanceInstallmentPaymentLine = {
+  date: string;
+  amount: number;
+  transactionId: string;
+  transactionCreatedAt: string;
+  referenceNo: string | null;
+  transactionStatus: string | null;
+};
+
 export type FinanceInstallmentRow = {
   id: string;
   nameEn: string;
@@ -22,7 +31,7 @@ export type FinanceInstallmentRow = {
   minPayment: number;
   /** Dari tagihan DB: lunas → gauge 100%, tanpa input / add to cart. */
   isFullyPaid: boolean;
-  paymentHistory: { date: string; amount: number }[];
+  paymentHistory: FinanceInstallmentPaymentLine[];
 };
 
 export type FinancePreviousBillRow = {

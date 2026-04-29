@@ -2,6 +2,7 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { PortalSelectedPaymentState } from '@/lib/data/portal-payment';
 import type { PortalChildRow } from '@/lib/data/server/children';
 import type { Lang } from '@/lib/portal-lang-cookie';
 import { buildPortalLangCookieValue } from '@/lib/portal-lang-cookie';
@@ -17,12 +18,7 @@ export type CartItem = {
   amount: number;
 };
 
-export type PaymentMethod = {
-  id: string;
-  label: string;
-  sublabel?: string;
-  type: 'va' | 'qris' | 'ewallet' | 'manual';
-};
+export type PaymentMethod = PortalSelectedPaymentState;
 
 type PortalState = {
   lang: Lang;
@@ -74,7 +70,22 @@ export function PortalProvider({ children, initialPortalChildren = [], initialLa
 
       if (storedCart) setCart(JSON.parse(storedCart) as CartItem[]);
 
-      if (storedPayment) setSelectedPayment(JSON.parse(storedPayment) as PaymentMethod);
+      if (storedPayment) {
+        try {
+          const p = JSON.parse(storedPayment) as Partial<PaymentMethod>;
+          if (
+            typeof p.id === 'string' &&
+            typeof p.dbMethodId === 'number' &&
+            Number.isFinite(p.dbMethodId) &&
+            typeof p.label === 'string' &&
+            (p.type === 'va' || p.type === 'qris' || p.type === 'ewallet' || p.type === 'manual')
+          ) {
+            setSelectedPayment(p as PaymentMethod);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
     } catch {
       // ignore
     }

@@ -20,7 +20,7 @@ import { sql } from '@/lib/db/client';
 export type { FinanceChildPayload, FinanceInstallmentRow, FinanceMonthSlot, FinancePreviousBillRow } from '@/lib/data/portal-finance-payload';
 
 /** Hanya student_id yang boleh di-query tagihan (parent / student), tidak percaya array dari client semata. */
-async function getStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
+export async function getStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
   if (role === 'parent') {
     const rows = await sql`
       SELECT s.id AS "studentId"
@@ -58,6 +58,8 @@ type BillViewRow = {
   bill_month: number | null;
   bill_year: number | null;
   related_month: string | null;
+  bill_created_at: string | null;
+  due_date: string | null;
 };
 
 type PaymentLineRow = {
@@ -65,6 +67,10 @@ type PaymentLineRow = {
   amount_paid: string;
   detail_created_at: string;
   payment_date: string | null;
+  transaction_id: string | number;
+  transaction_created_at: string;
+  reference_no: string | null;
+  transaction_status: string | null;
 };
 
 function parseAcademicYearRange(name: string): { yStart: number; yEnd: number } | null {
@@ -161,6 +167,8 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
           bill_month,
           bill_year,
           related_month,
+          bill_created_at,
+          due_date,
           is_installment
         FROM v_portal_finance_bills
         WHERE student_id = ${studentId}
@@ -188,7 +196,11 @@ async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLi
           bill_id,
           amount_paid,
           detail_created_at,
-          payment_date
+          payment_date,
+          transaction_id,
+          transaction_created_at,
+          reference_no,
+          transaction_status
         FROM v_portal_tuition_payment_lines
         WHERE bill_id = ${billId}
         ORDER BY detail_created_at ASC
@@ -243,22 +255,30 @@ function buildChildPayload(
     }
   }
 
-  const previous: FinancePreviousBillRow[] = [];
+  const previousCandidates: { row: BillViewRow; amount: number }[] = [];
   if (activeAyId != null) {
     for (const r of rows) {
       if (r.student_id !== child.id) continue;
       if (r.academic_year_id === activeAyId) continue;
       const bal = num(r.balance_amount);
       if (bal <= 0) continue;
-      previous.push({
-        id: String(r.bill_id),
-        ay: r.academic_year_name,
-        titleEn: r.title,
-        titleId: r.title,
-        amount: bal,
-      });
+      previousCandidates.push({ row: r, amount: bal });
     }
   }
+  function pastDueSortKey(r: BillViewRow): number {
+    const raw = r.bill_created_at ?? r.due_date;
+    if (raw == null) return 0;
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  previousCandidates.sort((a, b) => pastDueSortKey(b.row) - pastDueSortKey(a.row));
+  const previous: FinancePreviousBillRow[] = previousCandidates.map(({ row: r, amount: bal }) => ({
+    id: String(r.bill_id),
+    ay: r.academic_year_name,
+    titleEn: r.title,
+    titleId: r.title,
+    amount: bal,
+  }));
 
   const installments: FinanceInstallmentRow[] = [];
   if (activeAyId != null) {
@@ -267,10 +287,22 @@ function buildChildPayload(
     );
     for (const r of instRows) {
       const lines = paymentLinesByBillId.get(r.bill_id) ?? [];
-      const paymentHistory = lines.map((ln) => ({
-        date: (ln.payment_date ?? ln.detail_created_at).slice(0, 10),
-        amount: num(ln.amount_paid),
-      }));
+      const paymentHistory = lines.map((ln) => {
+        const createdAt =
+          typeof ln.transaction_created_at === 'string'
+            ? ln.transaction_created_at
+            : ln.transaction_created_at != null
+              ? String(ln.transaction_created_at)
+              : '';
+        return {
+          date: (ln.payment_date ?? ln.detail_created_at).slice(0, 10),
+          amount: num(ln.amount_paid),
+          transactionId: String(ln.transaction_id),
+          transactionCreatedAt: createdAt,
+          referenceNo: ln.reference_no ?? null,
+          transactionStatus: ln.transaction_status ?? null,
+        };
+      });
       const minP = num(r.min_payment);
       const totalAmt = num(r.total_amount);
       const paidAmt = num(r.paid_amount);

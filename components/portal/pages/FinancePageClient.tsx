@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { AlertCircle, ShoppingCart, Wallet } from 'lucide-react';
+import { AlertCircle, ChevronRight, History, ShoppingCart, Wallet } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
@@ -91,14 +91,40 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
       </div>
 
       <div className="px-4 space-y-6">
+        <Link
+          href="/finance/payment-history"
+          className="flex items-center bg-white rounded-3xl p-4 shadow-sm border border-slate-100 hover:border-indigo-200 transition-colors"
+        >
+          <div className="w-11 h-11 rounded-full bg-primary-light flex items-center justify-center text-primary mr-3 shrink-0">
+            <History size={22} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-slate-800">{lang === 'en' ? 'Payment history' : 'Riwayat pembayaran'}</p>
+            <p className="text-xs text-slate-500">{lang === 'en' ? 'View past successful transactions' : 'Lihat transaksi berhasil sebelumnya'}</p>
+          </div>
+          <ChevronRight className="text-slate-400 shrink-0" size={20} />
+        </Link>
+
         {prevBills.length > 0 ? (
           <div className="bg-red-50 rounded-3xl p-5 shadow-sm border border-red-100">
-            <div className="flex items-center mb-4">
-              <AlertCircle size={18} className="text-red-500 mr-2" />
-              <h2 className="font-bold text-red-700 text-lg">{lang === 'en' ? 'Past Due (Previous AY)' : 'Tunggakan (Tahun Ajaran Lalu)'}</h2>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <div className="flex items-center min-w-0">
+                <AlertCircle size={18} className="text-red-500 mr-2 shrink-0" />
+                <h2 className="font-bold text-red-700 text-lg truncate">
+                  {lang === 'en' ? 'Past Due (Previous AY)' : 'Tunggakan (Tahun Ajaran Lalu)'}
+                </h2>
+              </div>
+              {prevBills.length > 3 ? (
+                <Link
+                  href="/finance/past-due"
+                  className="text-xs font-bold text-red-700 whitespace-nowrap shrink-0 hover:underline"
+                >
+                  {lang === 'en' ? 'View more' : 'Lihat semua'}
+                </Link>
+              ) : null}
             </div>
             <div className="space-y-3">
-              {prevBills.map((bill) => {
+              {prevBills.slice(0, 3).map((bill) => {
                 const id = `prev-${activeChildId}-${bill.id}`;
                 const isInCart = cart.some((i) => i.id === id);
                 const title = lang === 'en' ? bill.titleEn : bill.titleId;
@@ -195,11 +221,12 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                 <div key={inst.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
                   <div className="flex justify-between items-start mb-5">
                     <span className="font-bold text-slate-700 text-lg">{name}</span>
-                    {inst.paymentHistory.length > 0 ? (
-                      <button className="text-[10px] font-bold text-primary hover:bg-indigo-100 flex items-center bg-primary-light px-2.5 py-1.5 rounded-full transition-colors" disabled>
-                        {lang === 'en' ? 'Installment History' : 'Riwayat Cicilan'} <span className="ml-1">›</span>
-                      </button>
-                    ) : null}
+                    <Link
+                      href={`/finance/installments/${inst.id}/history`}
+                      className="text-[10px] font-bold text-primary hover:bg-indigo-100 flex items-center bg-primary-light px-2.5 py-1.5 rounded-full transition-colors"
+                    >
+                      {lang === 'en' ? 'Installment History' : 'Riwayat Cicilan'} <span className="ml-1">›</span>
+                    </Link>
                   </div>
 
                   <div className="flex items-center gap-4">

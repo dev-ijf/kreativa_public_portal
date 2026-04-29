@@ -1,9 +1,9 @@
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
-import { PaymentMethodPageClient } from '@/components/portal/pages/PaymentMethodPageClient';
+import { FinancePastDuePageClient } from '@/components/portal/pages/FinancePastDuePageClient';
 import { authOptions } from '@/lib/auth';
 import { getPortalChildren } from '@/lib/data/server/children';
-import { getPublishedPaymentMethodsForSchools } from '@/lib/data/server/payment-methods';
+import { getFinanceDashboardForPortal } from '@/lib/data/server/finance';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +14,10 @@ export default async function Page() {
   }
 
   const children = await getPortalChildren(session.user.userId, session.user.role);
-  const schoolIds = [...new Set(children.map((c) => c.schoolId).filter((id) => Number.isFinite(id) && id > 0))];
-  const initialMethods = await getPublishedPaymentMethodsForSchools(schoolIds);
+  const financeByChildId =
+    children.length > 0
+      ? await getFinanceDashboardForPortal(session.user.userId, session.user.role, children)
+      : {};
 
-  return <PaymentMethodPageClient initialMethods={initialMethods} />;
+  return <FinancePastDuePageClient financeByChildId={financeByChildId} />;
 }
