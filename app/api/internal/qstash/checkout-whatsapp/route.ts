@@ -15,6 +15,17 @@ function internalBypassOk(request: Request): boolean {
   return raw === internalSecret;
 }
 
+function decodeJwtPayloadUnsafe(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = Buffer.from(parts[1], 'base64url').toString('utf-8');
+    return JSON.parse(payload);
+  } catch {
+    return null;
+  }
+}
+
 async function runJob(body: unknown): Promise<Response> {
   const b = body as { transactionId?: string; transactionCreatedAt?: string; userId?: number };
   const transactionId = b.transactionId;
@@ -38,7 +49,6 @@ async function runJob(body: unknown): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  // 1. Bypass internal via header secret (Postman / worker internal)
   if (internalBypassOk(request)) {
     try {
       return runJob(await request.json());
@@ -47,8 +57,8 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  // 2. Tanpa signing key → dev / belum konfigurasi → terima langsung
   if (!qk || !qn) {
+    console.warn('qstash_no_signing_keys — accepting without verification');
     try {
       return runJob(await request.json());
     } catch {
@@ -56,13 +66,11 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  // 3. Produksi: verifikasi QStash signature
   const sig = request.headers.get('upstash-signature');
   if (!sig) {
     return Response.json({ error: 'missing_upstash_signature' }, { status: 401 });
   }
 
-  // Baca body SEKALI sebagai text mentah (jangan .json() dulu — hash SHA-256 harus dari raw string)
   let bodyText: string;
   try {
     bodyText = await request.text();
@@ -80,15 +88,32 @@ export async function POST(request: Request): Promise<Response> {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+
+    const jwtClaims = decodeJwtPayloadUnsafe(sig);
+
     console.error('qstash_signature_verify_failed', {
       message: msg,
       bodyLength: bodyText.length,
+      bodyPreview: bodyText.slice(0, 120),
       sigLength: sig.length,
+      keyCurrentPrefix: qk.slice(0, 8) + '…',
+      keyNextPrefix: qn.slice(0, 8) + '…',
+      jwtIss: jwtClaims?.iss ?? '(no iss)',
+      jwtSub: jwtClaims?.sub ?? '(no sub)',
+      jwtIat: jwtClaims?.iat ?? '(no iat)',
+      jwtExp: jwtClaims?.exp ?? '(no exp)',
     });
+
     return Response.json(
       {
         error: 'signature_verification_failed',
-        hint: 'Pastikan QSTASH_CURRENT_SIGNING_KEY dan QSTASH_NEXT_SIGNING_KEY dari proyek QStash yang sama dengan QSTASH_TOKEN. Pastikan middleware tidak consume body sebelum handler.',
+        debug: {
+          message: msg,
+          keyCurrentPrefix: qk.slice(0, 8) + '…',
+          keyNextPrefix: qn.slice(0, 8) + '…',
+          jwtIss: jwtClaims?.iss,
+          jwtSub: jwtClaims?.sub,
+        },
       },
       { status: 401 },
     );
