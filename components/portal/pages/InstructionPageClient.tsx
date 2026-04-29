@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FileDown } from 'lucide-react';
+import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import type { PortalCheckoutSessionPayload, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
@@ -175,6 +176,16 @@ export function InstructionPageClient() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
+      {selectedPayment && loading ? (
+        <FullPageBlockingLoader
+          title={lang === 'en' ? 'Loading payment instructions…' : 'Memuat instruksi pembayaran…'}
+          subtitle={
+            lang === 'en'
+              ? 'Please wait. Do not close this page.'
+              : 'Mohon tunggu. Jangan tutup halaman ini.'
+          }
+        />
+      ) : null}
       <Header title={lang === 'en' ? 'Payment Instruction' : 'Instruksi Pembayaran'} backHref="/payment-method" />
 
       <div className="px-4 pt-4 space-y-4">
@@ -259,7 +270,7 @@ export function InstructionPageClient() {
               )}
             </p>
           ) : loading ? (
-            <p className="text-sm text-slate-500">{lang === 'en' ? 'Loading…' : 'Memuat…'}</p>
+            <p className="text-sm text-slate-500 sr-only">{lang === 'en' ? 'Loading…' : 'Memuat…'}</p>
           ) : loadError === 'forbidden' ? (
             <p className="text-sm text-red-600">{lang === 'en' ? 'You cannot use this payment method.' : 'Metode pembayaran ini tidak tersedia.'}</p>
           ) : loadError ? (

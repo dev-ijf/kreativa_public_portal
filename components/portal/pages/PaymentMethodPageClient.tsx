@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Building2, QrCode, ReceiptText, Smartphone } from 'lucide-react';
+import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import type {
@@ -36,6 +37,16 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
+      {submitting ? (
+        <FullPageBlockingLoader
+          title={lang === 'en' ? 'Processing checkout…' : 'Memproses checkout…'}
+          subtitle={
+            lang === 'en'
+              ? 'Please wait. Do not close or refresh this page until finished.'
+              : 'Mohon tunggu. Jangan tutup atau segarkan halaman ini sampai selesai.'
+          }
+        />
+      ) : null}
       <Header title={lang === 'en' ? 'Payment Method' : 'Metode Pembayaran'} backHref="/cart" />
 
       <div className="px-4 pt-4 space-y-4">
@@ -145,6 +156,7 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                           ? 'Checkout failed. Try again.'
                           : 'Checkout gagal. Coba lagi.';
                     setCheckoutError(msg);
+                    setSubmitting(false);
                     return;
                   }
                   const payload: PortalCheckoutSessionPayload = {
@@ -166,11 +178,11 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                   }
                   setCart([]);
                   router.push('/instruction');
+                  /* Spinner tetap sampai halaman /instruction menggantikan view ini. */
                 } catch {
                   setCheckoutError(
                     lang === 'en' ? 'Network error. Check connection and try again.' : 'Jaringan error. Periksa koneksi lalu coba lagi.',
                   );
-                } finally {
                   setSubmitting(false);
                 }
               })();

@@ -146,8 +146,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   }
 
   const h = head[0];
-  // created_at kanonik dari DB — pakai ini untuk semua query detail selanjutnya
-  const dbCreatedAt = h.created_at;
+  const dbCreatedAt = String(h.created_at);
 
   const waDoneRaw = h.waDone as boolean | string | null | undefined;
   const alreadySent =
@@ -159,6 +158,26 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     return { outcome: 'sent', retryableFailure: false };
   }
 
+  // Debug: cek jumlah detail rows untuk transaksi ini (tanpa filter created_at)
+  const detailCount = (await sql`
+    SELECT count(*)::int AS cnt,
+           min(d.transaction_created_at)::text AS "minCa",
+           max(d.transaction_created_at)::text AS "maxCa"
+    FROM tuition_transaction_details d
+    WHERE d.transaction_id = ${idNum}
+  `) as unknown as { cnt: number; minCa: string | null; maxCa: string | null }[];
+  console.info('checkout_wa_detail_count', {
+    transactionId: idNum,
+    dbCreatedAt,
+    dbCreatedAtType: typeof h.created_at,
+    detailCount: detailCount[0]?.cnt ?? 0,
+    detailMinCa: detailCount[0]?.minCa ?? null,
+    detailMaxCa: detailCount[0]?.maxCa ?? null,
+  });
+
+  // Query context via transaction_id saja — tidak filter d.transaction_created_at
+  // karena transaction_id sudah unik per checkout dan filter created_at
+  // rawan gagal akibat mismatch tipe/presisi timestamp antara JS ↔ Postgres.
   const ctxRows = (await sql`
     SELECT DISTINCT
       b.student_id AS "studentId",
@@ -171,7 +190,6 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     INNER JOIN core_students s ON s.id = b.student_id
     INNER JOIN core_schools sch ON sch.id = s.school_id
     WHERE d.transaction_id = ${idNum}
-      AND d.transaction_created_at = ${dbCreatedAt}
     LIMIT 1
   `) as unknown as {
     studentId: number;
@@ -199,7 +217,6 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     LEFT JOIN tuition_bills b ON b.id = d.bill_id
     LEFT JOIN tuition_products p ON p.id = d.product_id
     WHERE d.transaction_id = ${idNum}
-      AND d.transaction_created_at = ${dbCreatedAt}
     ORDER BY d.id ASC
   `) as unknown as { title: string; amount: number }[];
 
@@ -251,8 +268,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     await sql`
       UPDATE tuition_transactions
       SET is_whatsapp_checkout = true
-      WHERE id = ${idNum}
-        AND created_at = ${dbCreatedAt}
+      WHERE id = ${idNum} AND user_id = ${body.userId}
     `;
     return { outcome: 'skipped', retryableFailure: false };
   }
@@ -285,8 +301,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   await sql`
     UPDATE tuition_transactions
     SET is_whatsapp_checkout = true
-    WHERE id = ${idNum}
-      AND created_at = ${dbCreatedAt}
+    WHERE id = ${idNum} AND user_id = ${body.userId}
   `;
 
   return { outcome: 'sent', retryableFailure: false };

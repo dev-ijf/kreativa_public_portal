@@ -1,15 +1,15 @@
-import { Header } from '@/components/portal/Header';
+import { cookies } from 'next/headers';
+import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
+import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
 
-export default function PaymentMethodLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 pb-12">
-      <Header title="Payment" />
-      <div className="px-4 pt-4 space-y-3 animate-pulse" aria-busy="true" aria-label="Loading">
-        <div className="h-24 rounded-3xl bg-white border border-slate-100 shadow-sm" />
-        <div className="h-24 rounded-3xl bg-white border border-slate-100 shadow-sm" />
-        <div className="h-24 rounded-3xl bg-white border border-slate-100 shadow-sm" />
-        <div className="h-12 rounded-full bg-slate-200/90 mt-6" />
-      </div>
-    </div>
-  );
+export default async function PaymentMethodLoading() {
+  const cookieStore = await cookies();
+  const lang = parsePortalLangCookie(cookieStore.get(PORTAL_LANG_COOKIE)?.value) ?? 'id';
+  const title = lang === 'en' ? 'Loading payment methods…' : 'Memuat metode pembayaran…';
+  const subtitle =
+    lang === 'en'
+      ? 'Please wait. Do not close or refresh this page.'
+      : 'Mohon tunggu. Jangan tutup atau segarkan halaman ini.';
+
+  return <FullPageBlockingLoader title={title} subtitle={subtitle} />;
 }

@@ -2,10 +2,10 @@ import { cookies } from 'next/headers';
 import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
 
-export default async function FinanceLoading() {
+export default async function InstructionLoading() {
   const cookieStore = await cookies();
   const lang = parsePortalLangCookie(cookieStore.get(PORTAL_LANG_COOKIE)?.value) ?? 'id';
-  const title = lang === 'en' ? 'Loading tuition…' : 'Memuat halaman tuition…';
+  const title = lang === 'en' ? 'Opening instructions…' : 'Membuka halaman instruksi…';
   const subtitle =
     lang === 'en'
       ? 'Please wait. Do not close or refresh this page.'
