@@ -12,6 +12,12 @@ function instructionsCacheKey(methodId: number): string {
   return `portal:payment_instructions:v1:${methodId}`;
 }
 
+/** Cache hasil cek akses viewer → metode (tanpa TTL). */
+function methodViewerAllowedCacheKey(viewerUserId: number, viewerRole: string, methodId: number): string {
+  const roleSafe = String(viewerRole || 'none').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
+  return `portal:viewer_can_method:v1:${viewerUserId}:${roleSafe}:${methodId}`;
+}
+
 async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalPaymentMethodOption[]> {
   const unique = [...new Set(schoolIds)].filter((n) => Number.isFinite(n) && n > 0);
 
@@ -95,8 +101,7 @@ export async function fetchInstructionsFromDb(methodId: number): Promise<PortalP
   }));
 }
 
-/** True jika metode publish+active dan cocok dengan sekolah anak yang boleh diakses viewer. */
-export async function viewerCanUsePublishedPaymentMethod(
+async function viewerCanUsePublishedPaymentMethodFromDb(
   viewerUserId: number,
   viewerRole: string,
   methodId: number,
@@ -139,6 +144,24 @@ export async function viewerCanUsePublishedPaymentMethod(
   return allowedRows.length > 0;
 }
 
+/** True jika metode publish+active dan cocok dengan sekolah anak yang boleh diakses viewer. Cache Redis tanpa TTL. */
+export async function viewerCanUsePublishedPaymentMethod(
+  viewerUserId: number,
+  viewerRole: string,
+  methodId: number,
+): Promise<boolean> {
+  if (!Number.isFinite(methodId) || methodId <= 0) return false;
+
+  const ckey = methodViewerAllowedCacheKey(viewerUserId, viewerRole, methodId);
+  const hit = await cacheGetJson<boolean>(ckey);
+  if (hit === true) return true;
+  if (hit === false) return false;
+
+  const ok = await viewerCanUsePublishedPaymentMethodFromDb(viewerUserId, viewerRole, methodId);
+  await cacheSetJson(ckey, ok);
+  return ok;
+}
+
 /**
  * Instruksi pembayaran per channel. Hanya jika metode itu boleh diakses viewer (publish + active + sekolah).
  */
@@ -149,14 +172,16 @@ export async function getPaymentInstructionsForPortalViewer(
 ): Promise<PortalPaymentInstructionRow[] | null> {
   if (!Number.isFinite(methodId) || methodId <= 0) return null;
 
-  const allowed = await viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId);
-  if (!allowed) return null;
+  const instrKey = instructionsCacheKey(methodId);
+  const [allowed, instrHit] = await Promise.all([
+    viewerCanUsePublishedPaymentMethod(viewerUserId, viewerRole, methodId),
+    cacheGetJson<PortalPaymentInstructionRow[]>(instrKey),
+  ]);
 
-  const key = instructionsCacheKey(methodId);
-  const hit = await cacheGetJson<PortalPaymentInstructionRow[]>(key);
-  if (hit && Array.isArray(hit)) return hit;
+  if (!allowed) return null;
+  if (instrHit && Array.isArray(instrHit)) return instrHit;
 
   const fresh = await fetchInstructionsFromDb(methodId);
-  await cacheSetJson(key, fresh);
+  await cacheSetJson(instrKey, fresh);
   return fresh;
 }

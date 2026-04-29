@@ -1,6 +1,5 @@
 import { Receiver } from '@upstash/qstash';
 import { processCheckoutWhatsAppJob } from '@/lib/notifications/checkout-wa';
-import { getCheckoutWhatsAppWebhookUrl } from '@/lib/qstash/checkout-webhook-url';
 
 export const runtime = 'nodejs';
 
@@ -71,18 +70,6 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const canonicalUrl = getCheckoutWhatsAppWebhookUrl();
-  if (!canonicalUrl) {
-    return Response.json(
-      {
-        error: 'missing_public_webhook_url',
-        hint:
-          'Verifikasi QStash membutuhkan URL yang sama dengan saat publish. Set QSTASH_WEBHOOK_BASE_URL atau APP_BASE_URL (domain publik, https, tanpa trailing slash).',
-      },
-      { status: 503 },
-    );
-  }
-
   const sig = request.headers.get('upstash-signature') ?? request.headers.get('Upstash-Signature');
   if (!sig) {
     return Response.json({ error: 'missing_upstash_signature' }, { status: 401 });
@@ -101,21 +88,21 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   try {
+    // Tanpa `url`: JWT `sub` tidak dibandingkan string ke URL server (sering beda dengan
+    // `request.url` / proxy). Tetap aman: tanda tangan + issuer Upstash + hash SHA-256 body.
     await receiver.verify({
       signature: sig,
       body: bodyText,
-      url: canonicalUrl,
       clockTolerance: 120,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error('qstash_signature_verify_failed', { canonicalUrl, message: msg });
+    console.error('qstash_signature_verify_failed', { message: msg });
     return Response.json(
       {
         error: 'signature_verification_failed',
         hint:
-          'URL untuk verify harus sama persis dengan URL di publishJSON. Set QSTASH_WEBHOOK_BASE_URL ke origin publik (mis. https://parents.sekolah.id) jika berbeda dari VERCEL_URL. Pastikan signing key dari proyek QStash yang sama dengan QSTASH_TOKEN.',
-        canonicalUrlUsed: canonicalUrl,
+          'Periksa QSTASH_CURRENT_SIGNING_KEY / QSTASH_NEXT_SIGNING_KEY dan QSTASH_TOKEN dari proyek yang sama. Body POST harus persis JSON yang dikirim QStash (jangan ubah di middleware).',
       },
       { status: 401 },
     );
