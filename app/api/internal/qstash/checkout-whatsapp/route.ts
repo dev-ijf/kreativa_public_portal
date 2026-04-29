@@ -1,7 +1,20 @@
-import { verifySignatureAppRouter } from '@upstash/qstash/nextjs';
+import { Receiver } from '@upstash/qstash';
 import { processCheckoutWhatsAppJob } from '@/lib/notifications/checkout-wa';
+import { getCheckoutWhatsAppWebhookUrl } from '@/lib/qstash/checkout-webhook-url';
 
 export const runtime = 'nodejs';
+
+const qk = process.env.QSTASH_CURRENT_SIGNING_KEY?.trim();
+const qn = process.env.QSTASH_NEXT_SIGNING_KEY?.trim();
+const internalSecret = process.env.QSTASH_INTERNAL_WEBHOOK_SECRET?.trim();
+
+function internalBypassOk(request: Request): boolean {
+  if (!internalSecret) return false;
+  const auth = request.headers.get('authorization');
+  const bearer = auth?.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+  const raw = request.headers.get('x-internal-webhook-secret') ?? bearer;
+  return raw === internalSecret;
+}
 
 async function checkoutWhatsAppHandler(request: Request): Promise<Response> {
   let body: { transactionId?: string; transactionCreatedAt?: string; userId?: number };
@@ -10,7 +23,14 @@ async function checkoutWhatsAppHandler(request: Request): Promise<Response> {
   } catch {
     return Response.json({ error: 'bad_json' }, { status: 400 });
   }
+  return runCheckoutWhatsappFromBody(body);
+}
 
+async function runCheckoutWhatsappFromBody(body: {
+  transactionId?: string;
+  transactionCreatedAt?: string;
+  userId?: number;
+}): Promise<Response> {
   const transactionId = body.transactionId;
   const transactionCreatedAt = body.transactionCreatedAt;
   const userId = body.userId;
@@ -36,46 +56,77 @@ async function checkoutWhatsAppHandler(request: Request): Promise<Response> {
   return Response.json({ ok: true, outcome: result.outcome });
 }
 
-const qk = process.env.QSTASH_CURRENT_SIGNING_KEY?.trim();
-const qn = process.env.QSTASH_NEXT_SIGNING_KEY?.trim();
-
-/**
- * Panggilan dari Upstash QStash membawa header tanda tangan; POST manual tanpa itu → 401.
- * Untuk uji lokal/Postman: set `QSTASH_INTERNAL_WEBHOOK_SECRET` lalu kirim header
- * `x-internal-webhook-secret: <nilai yang sama>` (jangan set secret lemah di production).
- */
-const internalSecret = process.env.QSTASH_INTERNAL_WEBHOOK_SECRET?.trim();
-
-const qstashSignedPost =
-  qk && qn
-    ? verifySignatureAppRouter(checkoutWhatsAppHandler, {
-        currentSigningKey: qk,
-        nextSigningKey: qn,
-      })
-    : null;
-
 export async function POST(request: Request): Promise<Response> {
-  if (internalSecret) {
-    const raw =
-      request.headers.get('x-internal-webhook-secret') ??
-      (request.headers.get('authorization')?.startsWith('Bearer ')
-        ? request.headers.get('authorization')!.slice(7).trim()
-        : null);
-    if (raw === internalSecret) {
-      return checkoutWhatsAppHandler(request);
-    }
+  if (internalBypassOk(request)) {
+    return checkoutWhatsAppHandler(request);
   }
 
-  if (qstashSignedPost) {
-    return qstashSignedPost(request);
+  if (!qk || !qn) {
+    return Response.json(
+      {
+        error: 'qstash_signing_keys_not_configured',
+        hint: 'Set QSTASH_CURRENT_SIGNING_KEY dan QSTASH_NEXT_SIGNING_KEY dari Upstash Console.',
+      },
+      { status: 503 },
+    );
   }
 
-  return Response.json(
-    {
-      error: 'qstash_not_configured',
-      hint:
-        '401 pada POST manual: endpoint memverifikasi tanda tangan Upstash. Pasang QSTASH_CURRENT_SIGNING_KEY + QSTASH_NEXT_SIGNING_KEY dari dashboard QStash, atau untuk uji set QSTASH_INTERNAL_WEBHOOK_SECRET dan header x-internal-webhook-secret.',
-    },
-    { status: 503 },
-  );
+  const canonicalUrl = getCheckoutWhatsAppWebhookUrl();
+  if (!canonicalUrl) {
+    return Response.json(
+      {
+        error: 'missing_public_webhook_url',
+        hint:
+          'Verifikasi QStash membutuhkan URL yang sama dengan saat publish. Set QSTASH_WEBHOOK_BASE_URL atau APP_BASE_URL (domain publik, https, tanpa trailing slash).',
+      },
+      { status: 503 },
+    );
+  }
+
+  const sig = request.headers.get('upstash-signature') ?? request.headers.get('Upstash-Signature');
+  if (!sig) {
+    return Response.json({ error: 'missing_upstash_signature' }, { status: 401 });
+  }
+
+  let bodyText: string;
+  try {
+    bodyText = await request.text();
+  } catch {
+    return Response.json({ error: 'bad_body_read' }, { status: 400 });
+  }
+
+  const receiver = new Receiver({
+    currentSigningKey: qk,
+    nextSigningKey: qn,
+  });
+
+  try {
+    await receiver.verify({
+      signature: sig,
+      body: bodyText,
+      url: canonicalUrl,
+      clockTolerance: 120,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('qstash_signature_verify_failed', { canonicalUrl, message: msg });
+    return Response.json(
+      {
+        error: 'signature_verification_failed',
+        hint:
+          'URL untuk verify harus sama persis dengan URL di publishJSON. Set QSTASH_WEBHOOK_BASE_URL ke origin publik (mis. https://parents.sekolah.id) jika berbeda dari VERCEL_URL. Pastikan signing key dari proyek QStash yang sama dengan QSTASH_TOKEN.',
+        canonicalUrlUsed: canonicalUrl,
+      },
+      { status: 401 },
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText) as unknown;
+  } catch {
+    return Response.json({ error: 'bad_json' }, { status: 400 });
+  }
+
+  return runCheckoutWhatsappFromBody(parsed as { transactionId?: string; transactionCreatedAt?: string; userId?: number });
 }
