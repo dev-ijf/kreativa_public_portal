@@ -1,6 +1,5 @@
-import { InstructionPageClient } from '@/components/portal/pages/InstructionPageClient';
+import { redirect } from 'next/navigation';
 
 export default function Page() {
-  return <InstructionPageClient />;
+  redirect('/finance');
 }
-

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Clock, FileDown } from 'lucide-react';
+import { CheckCircle2, Clock, FileDown, FileText } from 'lucide-react';
 import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import type { PortalCheckoutSessionPayload, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
 import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
+import { openTuitionReceiptPdf } from '@/lib/portal/tuition-receipt-url';
 import { formatRupiah } from '@/lib/utils/format';
 
 function useCountdown(targetIso: string | undefined | null) {
@@ -42,53 +43,136 @@ function useCountdown(targetIso: string | undefined | null) {
   return state;
 }
 
-export function InstructionPageClient() {
-  const { lang, cart, selectedPayment, setCart } = usePortalState();
-  const [copied, setCopied] = useState(false);
-  /** `null` = belum pilih metode; `[]` = sudah fetch, tidak ada baris */
-  const [rows, setRows] = useState<PortalPaymentInstructionRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [checkoutSnap, setCheckoutSnap] = useState<PortalCheckoutSessionPayload | null>(null);
+type InstructionData = {
+  transactionId: string;
+  transactionCreatedAt: string;
+  referenceNo: string;
+  totalAmount: number;
+  status: string;
+  paymentDate: string | null;
+  vaNo: string;
+  vaDisplay: string;
+  expiryAt: string;
+  isBmi: boolean;
+  studentId: number | null;
+  paymentMethodId: number | null;
+  paymentMethodName: string | null;
+  paymentMethodCode: string | null;
+  paymentMethodCategory: string | null;
+  instructionRows: PortalPaymentInstructionRow[];
+};
 
-  const total = useMemo(() => {
-    const fromCart = cart.reduce((sum, i) => sum + i.amount, 0);
-    if (fromCart > 0) return fromCart;
-    const fromState = checkoutSnap?.totalAmount;
-    if (typeof fromState === 'number' && Number.isFinite(fromState) && fromState > 0) return fromState;
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as PortalCheckoutSessionPayload;
-          const t = parsed?.totalAmount;
-          if (typeof t === 'number' && Number.isFinite(t) && t > 0) return t;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return 0;
-  }, [cart, checkoutSnap]);
+type Props = { vaNo: string };
+
+export function InstructionPageClient({ vaNo }: Props) {
+  const { lang, selectedPayment } = usePortalState();
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [data, setData] = useState<InstructionData | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const vaClean = (vaNo ?? '').replace(/\D/g, '');
+    if (!vaClean) {
+      setLoading(false);
+      setLoadError('invalid_va');
+      return;
+    }
+
     try {
       const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY) : null;
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as PortalCheckoutSessionPayload;
-      if (parsed && typeof parsed.referenceNo === 'string') {
-        setCheckoutSnap(parsed);
+      if (raw) {
+        const snap = JSON.parse(raw) as PortalCheckoutSessionPayload;
+        const snapVa = (snap.vaNo ?? '').replace(/\D/g, '');
+        if (snapVa === vaClean && snap.referenceNo) {
+          setData({
+            transactionId: snap.transactionId ?? '',
+            transactionCreatedAt: snap.transactionCreatedAt ?? '',
+            referenceNo: snap.referenceNo,
+            totalAmount: snap.totalAmount ?? 0,
+            status: 'pending',
+            paymentDate: null,
+            vaNo: vaClean,
+            vaDisplay: snap.vaDisplay ?? vaClean.replace(/(\d{4})(?=\d)/g, '$1 ').trim(),
+            expiryAt: snap.expiryAt,
+            isBmi: snap.isBmi,
+            studentId: snap.studentId ?? null,
+            paymentMethodId: snap.checkoutMethodId ?? selectedPayment?.dbMethodId ?? null,
+            paymentMethodName: selectedPayment?.label ?? null,
+            paymentMethodCode: selectedPayment?.code ?? null,
+            paymentMethodCategory: selectedPayment?.category ?? null,
+            instructionRows: snap.instructionRows ?? [],
+          });
+          setLoading(false);
+          return () => { cancelled = true; };
+        }
       }
     } catch {
-      /* ignore */
+      /* fallback to API */
     }
-  }, []);
 
-  const vaNumber = useMemo(() => {
-    if (checkoutSnap?.vaDisplay) return checkoutSnap.vaDisplay;
-    if (checkoutSnap?.vaNo) return checkoutSnap.vaNo.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-    return '';
-  }, [checkoutSnap]);
+    setLoading(true);
+    setLoadError(null);
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/portal/instruction/${encodeURIComponent(vaClean)}`);
+        if (!res.ok) {
+          if (!cancelled) {
+            setLoadError(res.status === 404 ? 'not_found' : res.status === 403 ? 'forbidden' : 'error');
+            setLoading(false);
+          }
+          return;
+        }
+        const json = await res.json();
+        if (!cancelled) {
+          setData({
+            transactionId: String(json.transactionId ?? ''),
+            transactionCreatedAt: String(json.transactionCreatedAt ?? ''),
+            referenceNo: String(json.referenceNo ?? ''),
+            totalAmount: Number(json.totalAmount ?? 0),
+            status: String(json.status ?? 'pending'),
+            paymentDate: json.paymentDate ?? null,
+            vaNo: String(json.vaNo ?? vaClean),
+            vaDisplay: String(json.vaDisplay ?? vaClean),
+            expiryAt: String(json.expiryAt ?? ''),
+            isBmi: Boolean(json.isBmi),
+            studentId: json.studentId ?? null,
+            paymentMethodId: json.paymentMethodId ?? null,
+            paymentMethodName: json.paymentMethodName ?? null,
+            paymentMethodCode: json.paymentMethodCode ?? null,
+            paymentMethodCategory: json.paymentMethodCategory ?? null,
+            instructionRows: Array.isArray(json.instructionRows) ? json.instructionRows : [],
+          });
+          setLoadError(null);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoadError('error');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [vaNo, selectedPayment?.dbMethodId, selectedPayment?.label, selectedPayment?.code, selectedPayment?.category]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const id = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(id);
+  }, [copied]);
+
+  const isSuccess = data?.status?.toLowerCase().trim() === 'success';
+  const countdown = useCountdown(isSuccess ? null : data?.expiryAt);
+
+  const vaDisplay = data?.vaDisplay ?? '';
+
+  const total = data?.totalAmount ?? 0;
+  const methodLabel = data?.paymentMethodName ?? selectedPayment?.label ?? '—';
 
   const deadline = useMemo(() => {
     const tz = 'Asia/Jakarta';
@@ -101,29 +185,34 @@ export function InstructionPageClient() {
       minute: '2-digit',
       hour12: false,
     };
-    if (checkoutSnap?.expiryAt) {
-      const d = new Date(checkoutSnap.expiryAt);
+    if (data?.expiryAt) {
+      const d = new Date(data.expiryAt);
       if (!Number.isNaN(d.getTime())) {
         return d.toLocaleString(lang === 'en' ? 'en-GB' : 'id-ID', opts);
       }
     }
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
+    return '—';
+  }, [lang, data?.expiryAt]);
+
+  const paymentDateStr = useMemo(() => {
+    if (!data?.paymentDate) return '—';
+    const d = new Date(data.paymentDate);
+    if (Number.isNaN(d.getTime())) return data.paymentDate;
     return d.toLocaleString(lang === 'en' ? 'en-GB' : 'id-ID', {
-      timeZone: tz,
-      weekday: 'short',
+      timeZone: 'Asia/Jakarta',
       day: 'numeric',
       month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
     });
-  }, [lang, checkoutSnap?.expiryAt]);
-
-  const countdown = useCountdown(checkoutSnap?.expiryAt);
-  const showVaBlock = selectedPayment?.type === 'va';
+  }, [lang, data?.paymentDate]);
 
   const instructionPdfHref = useMemo(() => {
-    const mid = selectedPayment?.dbMethodId;
-    const tid = checkoutSnap?.transactionId?.trim();
-    const tcat = checkoutSnap?.transactionCreatedAt?.trim();
+    const mid = data?.paymentMethodId ?? selectedPayment?.dbMethodId;
+    const tid = data?.transactionId?.trim();
+    const tcat = data?.transactionCreatedAt?.trim();
     if (mid == null || !Number.isFinite(mid) || !tid || !tcat) return null;
     const sp = new URLSearchParams({
       methodId: String(mid),
@@ -131,119 +220,117 @@ export function InstructionPageClient() {
       transactionCreatedAt: tcat,
       lang,
     });
-    if (checkoutSnap?.expiryAt) sp.set('expiryAt', checkoutSnap.expiryAt);
+    if (data?.expiryAt) sp.set('expiryAt', data.expiryAt);
     sp.set('preview', '1');
     return `/api/portal/payment-instructions/pdf?${sp.toString()}`;
-  }, [selectedPayment?.dbMethodId, checkoutSnap?.transactionId, checkoutSnap?.transactionCreatedAt, checkoutSnap?.expiryAt, lang]);
+  }, [data?.paymentMethodId, selectedPayment?.dbMethodId, data?.transactionId, data?.transactionCreatedAt, data?.expiryAt, lang]);
 
-  useEffect(() => {
-    if (!copied) return;
-    const id = window.setTimeout(() => setCopied(false), 2000);
-    return () => window.clearTimeout(id);
-  }, [copied]);
+  const rows = data?.instructionRows ?? [];
 
-  useEffect(() => {
-    const methodId = selectedPayment?.dbMethodId;
-    if (methodId == null || !Number.isFinite(methodId)) {
-      setRows(null);
-      setLoading(false);
-      setLoadError(null);
-      return;
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <FullPageBlockingLoader
+          title={lang === 'en' ? 'Loading payment instructions…' : 'Memuat instruksi pembayaran…'}
+          subtitle={lang === 'en' ? 'Please wait. Do not close this page.' : 'Mohon tunggu. Jangan tutup halaman ini.'}
+        />
+      </div>
+    );
+  }
 
-    let cancelled = false;
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <Header title={lang === 'en' ? 'Payment Instruction' : 'Instruksi Pembayaran'} backHref="/finance" />
+        <div className="px-4 pt-8 text-center">
+          <p className="text-sm text-red-600 font-medium">
+            {loadError === 'not_found'
+              ? (lang === 'en' ? 'Transaction not found for this VA number.' : 'Transaksi tidak ditemukan untuk nomor VA ini.')
+              : loadError === 'forbidden'
+                ? (lang === 'en' ? 'You do not have access to this transaction.' : 'Anda tidak memiliki akses ke transaksi ini.')
+                : (lang === 'en' ? 'Failed to load transaction data.' : 'Gagal memuat data transaksi.')}
+          </p>
+          <Link href="/finance" className="inline-block mt-4 text-sm font-bold text-primary">
+            {lang === 'en' ? 'Back to tuition' : 'Kembali ke keuangan'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-    try {
-      const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw) as PortalCheckoutSessionPayload;
-        if (
-          parsed.checkoutMethodId === methodId &&
-          Array.isArray(parsed.instructionRows) &&
-          parsed.instructionRows.length > 0
-        ) {
-          setRows(parsed.instructionRows);
-          setLoadError(null);
-          setLoading(false);
-          return () => {
-            cancelled = true;
-          };
-        }
-      }
-    } catch {
-      /* lanjut fetch */
-    }
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-8">
+        <Header title={lang === 'en' ? 'Payment Successful' : 'Pembayaran Berhasil'} backHref="/finance" />
+        <div className="px-4 pt-6 space-y-4">
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto">
+              <CheckCircle2 size={36} className="text-emerald-500" />
+            </div>
+            <h1 className="text-xl font-bold text-slate-800 mt-4">
+              {lang === 'en' ? 'Payment Successful!' : 'Pembayaran Berhasil!'}
+            </h1>
+            <p className="text-sm text-slate-600 mt-2">
+              {lang === 'en'
+                ? 'Thank you, your payment has been received and recorded in our system.'
+                : 'Terima kasih, pembayaran kamu sudah kami terima dan tercatat di sistem.'}
+            </p>
+          </div>
 
-    setLoading(true);
-    setLoadError(null);
+          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
+            <p className="text-xs text-slate-500 font-semibold mb-3">
+              {lang === 'en' ? 'Transaction Details' : 'Detail Transaksi'}
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">{lang === 'en' ? 'Total' : 'Total'}</span>
+                <span className="text-sm font-bold text-primary">{formatRupiah(total)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">{lang === 'en' ? 'Payment Method' : 'Metode'}</span>
+                <span className="text-sm font-bold text-slate-700">{methodLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">{lang === 'en' ? 'Payment Date' : 'Tanggal Bayar'}</span>
+                <span className="text-sm font-bold text-slate-700">{paymentDateStr}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">{lang === 'en' ? 'Reference' : 'Referensi'}</span>
+                <span className="text-xs font-mono text-slate-500">{data?.referenceNo ?? '—'}</span>
+              </div>
+            </div>
+          </div>
 
-    void (async () => {
-      try {
-        let sidFromSession: number | null = checkoutSnap?.studentId ?? null;
-        if (sidFromSession == null && typeof window !== 'undefined') {
-          try {
-            const raw = sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY);
-            if (raw) {
-              const p = JSON.parse(raw) as PortalCheckoutSessionPayload;
-              if (typeof p.studentId === 'number' && Number.isFinite(p.studentId) && p.studentId > 0) {
-                sidFromSession = Math.trunc(p.studentId);
-              }
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-        const sidRaw = sidFromSession ?? cart[0]?.childId;
-        const sid =
-          sidRaw != null && Number.isFinite(Number(sidRaw)) && Number(sidRaw) > 0 ? Math.trunc(Number(sidRaw)) : null;
-        const qs = new URLSearchParams({ methodId: String(methodId) });
-        if (sid != null) qs.set('studentId', String(sid));
-        const res = await fetch(`/api/portal/payment-instructions?${qs.toString()}`);
-        if (!res.ok) {
-          if (!cancelled) {
-            setLoadError(res.status === 403 ? 'forbidden' : 'error');
-            setRows([]);
-          }
-          return;
-        }
-        const data = (await res.json()) as { rows?: PortalPaymentInstructionRow[] };
-        if (!cancelled) {
-          setRows(Array.isArray(data.rows) ? data.rows : []);
-          setLoadError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setLoadError('error');
-          setRows([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+          {data?.transactionId && data?.transactionCreatedAt ? (
+            <button
+              type="button"
+              onClick={() => openTuitionReceiptPdf(data.transactionId, data.transactionCreatedAt)}
+              className="w-full inline-flex items-center justify-center gap-2 font-bold px-6 py-3 rounded-full border-2 border-primary text-primary bg-white hover:bg-primary-light transition-colors"
+            >
+              <FileText size={18} />
+              {lang === 'en' ? 'Download Receipt (PDF)' : 'Unduh Kuitansi (PDF)'}
+            </button>
+          ) : null}
 
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedPayment?.dbMethodId, checkoutSnap?.studentId, cart]);
+          <Link
+            href="/finance"
+            className="w-full inline-flex items-center justify-center font-bold px-6 py-3 rounded-full bg-primary text-white hover:bg-primary-hover transition-colors"
+          >
+            {lang === 'en' ? 'Back to Tuition' : 'Kembali ke Keuangan'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
-      {selectedPayment && loading ? (
-        <FullPageBlockingLoader
-          title={lang === 'en' ? 'Loading payment instructions…' : 'Memuat instruksi pembayaran…'}
-          subtitle={
-            lang === 'en'
-              ? 'Please wait. Do not close this page.'
-              : 'Mohon tunggu. Jangan tutup halaman ini.'
-          }
-        />
-      ) : null}
-      <Header title={lang === 'en' ? 'Payment Instruction' : 'Instruksi Pembayaran'} backHref="/payment-method" />
+      <Header title={lang === 'en' ? 'Payment Instruction' : 'Instruksi Pembayaran'} backHref="/finance" />
 
       <div className="px-4 pt-4 space-y-4">
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
           <p className="text-xs text-slate-500 font-semibold">{lang === 'en' ? 'Payment Method' : 'Metode'}</p>
-          <p className="text-sm font-bold text-slate-700 mt-1">{selectedPayment?.label ?? (lang === 'en' ? 'Not selected' : 'Belum dipilih')}</p>
+          <p className="text-sm font-bold text-slate-700 mt-1">{methodLabel}</p>
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-slate-500 font-semibold">{lang === 'en' ? 'Total Payment' : 'Total'}</p>
             <p className="text-lg font-bold text-primary">{formatRupiah(total)}</p>
@@ -254,7 +341,7 @@ export function InstructionPageClient() {
           </div>
         </div>
 
-        {checkoutSnap?.expiryAt && (
+        {data?.expiryAt && (
           <div className={`rounded-3xl p-5 shadow-sm border ${
             countdown.expired
               ? 'bg-red-50 border-red-200'
@@ -284,114 +371,59 @@ export function InstructionPageClient() {
                   <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
                     {String(countdown.h).padStart(2, '0')}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium mt-1">
-                    {lang === 'en' ? 'HOURS' : 'JAM'}
-                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">{lang === 'en' ? 'HOURS' : 'JAM'}</span>
                 </div>
                 <span className="text-2xl font-bold text-slate-300 -mt-4">:</span>
                 <div className="flex flex-col items-center">
                   <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
                     {String(countdown.m).padStart(2, '0')}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium mt-1">
-                    {lang === 'en' ? 'MIN' : 'MENIT'}
-                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">{lang === 'en' ? 'MIN' : 'MENIT'}</span>
                 </div>
                 <span className="text-2xl font-bold text-slate-300 -mt-4">:</span>
                 <div className="flex flex-col items-center">
                   <span className={`text-3xl font-bold tabular-nums ${countdown.h < 1 ? 'text-amber-600' : 'text-slate-800'}`}>
                     {String(countdown.s).padStart(2, '0')}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium mt-1">
-                    {lang === 'en' ? 'SEC' : 'DETIK'}
-                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-1">{lang === 'en' ? 'SEC' : 'DETIK'}</span>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {showVaBlock ? (
+        {vaDisplay ? (
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
             <p className="font-bold text-slate-700 mb-2">{lang === 'en' ? 'VA Number' : 'Nomor VA'}</p>
-            {vaNumber ? (
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="font-bold text-slate-700 tracking-wider">{vaNumber}</p>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(vaNumber.replaceAll(' ', ''));
-                      setCopied(true);
-                    } catch {
-                      setCopied(false);
-                    }
-                  }}
-                  className="text-xs font-bold text-primary bg-white border border-slate-200 px-3 py-2 rounded-full hover:bg-slate-50"
-                >
-                  {copied ? (lang === 'en' ? 'Copied' : 'Tersalin') : lang === 'en' ? 'Copy' : 'Salin'}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-600">
-                {lang === 'en' ? (
-                  <>
-                    Complete checkout on the{' '}
-                    <Link href="/payment-method" className="font-bold text-primary underline">
-                      payment method
-                    </Link>{' '}
-                    page to get your VA number.
-                  </>
-                ) : (
-                  <>
-                    Selesaikan checkout di halaman{' '}
-                    <Link href="/payment-method" className="font-bold text-primary underline">
-                      metode pembayaran
-                    </Link>{' '}
-                    untuk mendapat nomor VA.
-                  </>
-                )}
-              </p>
-            )}
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <p className="font-bold text-slate-700 tracking-wider">{vaDisplay}</p>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(vaDisplay.replaceAll(' ', ''));
+                    setCopied(true);
+                  } catch {
+                    setCopied(false);
+                  }
+                }}
+                className="text-xs font-bold text-primary bg-white border border-slate-200 px-3 py-2 rounded-full hover:bg-slate-50"
+              >
+                {copied ? (lang === 'en' ? 'Copied' : 'Tersalin') : lang === 'en' ? 'Copy' : 'Salin'}
+              </button>
+            </div>
           </div>
         ) : null}
 
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
           <p className="font-bold text-slate-700 mb-3">{lang === 'en' ? 'How to pay' : 'Cara pembayaran'}</p>
-          {!selectedPayment ? (
-            <p className="text-sm text-slate-600">
-              {lang === 'en' ? (
-                <>
-                  Choose a method on the{' '}
-                  <Link href="/payment-method" className="font-bold text-primary underline">
-                    payment method
-                  </Link>{' '}
-                  page first.
-                </>
-              ) : (
-                <>
-                  Pilih metode di halaman{' '}
-                  <Link href="/payment-method" className="font-bold text-primary underline">
-                    metode pembayaran
-                  </Link>{' '}
-                  terlebih dahulu.
-                </>
-              )}
-            </p>
-          ) : loading ? (
-            <p className="text-sm text-slate-500 sr-only">{lang === 'en' ? 'Loading…' : 'Memuat…'}</p>
-          ) : loadError === 'forbidden' ? (
-            <p className="text-sm text-red-600">{lang === 'en' ? 'You cannot use this payment method.' : 'Metode pembayaran ini tidak tersedia.'}</p>
-          ) : loadError ? (
-            <p className="text-sm text-red-600">{lang === 'en' ? 'Failed to load instructions.' : 'Gagal memuat instruksi.'}</p>
-          ) : rows && rows.length > 0 ? (
+          {rows.length > 0 ? (
             <div className="space-y-6">
               {rows.map((row) => (
                 <section key={row.id}>
                   <h3 className="font-bold text-slate-800 text-sm mb-2">{row.title}</h3>
                   <div
                     className="text-sm text-slate-600 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-1 [&_b]:font-bold [&_a]:text-primary [&_a]:underline"
-                    // HTML dari admin DB (instruksi pembayaran)
                     dangerouslySetInnerHTML={{ __html: row.description }}
                   />
                 </section>
@@ -412,21 +444,14 @@ export function InstructionPageClient() {
               <FileDown size={18} />
               {lang === 'en' ? 'Download payment instructions (PDF)' : 'Unduh instruksi bayar (PDF)'}
             </a>
-          ) : selectedPayment && rows && rows.length > 0 ? (
-            <p className="mt-4 text-xs text-slate-500">
-              {lang === 'en'
-                ? 'Complete checkout first to download instructions as PDF (same layout as the school app).'
-                : 'Selesaikan checkout terlebih dahulu untuk mengunduh PDF instruksi (tampilan sama seperti di aplikasi sekolah).'}
-            </p>
           ) : null}
         </div>
 
         <Link
           href="/finance"
           className="block text-center text-sm font-semibold text-primary py-3"
-          onClick={() => setCart([])}
         >
-          {lang === 'en' ? 'Back to tuition' : 'Kembali ke tuition'}
+          {lang === 'en' ? 'Back to tuition' : 'Kembali ke keuangan'}
         </Link>
       </div>
     </div>

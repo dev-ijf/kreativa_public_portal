@@ -55,7 +55,8 @@ export function PaymentHistoryPageClient({
     (tx: PortalTuitionTransaction) => {
       const pm = persistPortalSessionForPendingInstruction(tx);
       setSelectedPayment(pm);
-      router.push('/instruction');
+      const vaTarget = tx.vaNo ? String(tx.vaNo).replace(/\D/g, '') : '';
+      router.push(vaTarget ? `/instruction/${vaTarget}` : '/finance');
     },
     [router, setSelectedPayment],
   );

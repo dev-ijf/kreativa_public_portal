@@ -182,7 +182,8 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
                     /* ignore */
                   }
                   setCart([]);
-                  router.push('/instruction');
+                  const vaTarget = data.vaNo ? String(data.vaNo).replace(/\D/g, '') : '';
+                  router.push(vaTarget ? `/instruction/${vaTarget}` : '/finance');
                   /* Spinner tetap sampai halaman /instruction menggantikan view ini. */
                 } catch {
                   setCheckoutError(

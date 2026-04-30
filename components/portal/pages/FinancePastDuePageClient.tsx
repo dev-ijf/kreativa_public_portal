@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AlertCircle, ShoppingCart } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
+import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
 import { emptyFinanceChildPayload, type FinanceChildPayload } from '@/lib/data/portal-finance-payload';
@@ -28,7 +29,20 @@ export function FinancePastDuePageClient({ financeByChildId = {} }: FinancePastD
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      <Header title={lang === 'en' ? 'Past due (previous AY)' : 'Tunggakan (AY lalu)'} backHref="/finance" />
+      <Header
+        title={lang === 'en' ? 'Past due (previous AY)' : 'Tunggakan (AY lalu)'}
+        backHref="/finance"
+        rightSlot={
+          <Link href="/cart" className="relative p-2 rounded-full hover:bg-slate-100 text-slate-700" aria-label="Cart">
+            <ShoppingCart size={20} />
+            {cart.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center px-1">
+                {cart.length}
+              </span>
+            )}
+          </Link>
+        }
+      />
       <ChildSelector />
 
       <div className="px-4 mt-4">
@@ -78,6 +92,8 @@ export function FinancePastDuePageClient({ financeByChildId = {} }: FinancePastD
           {lang === 'en' ? 'Back to tuition' : 'Kembali ke keuangan'}
         </Link>
       </div>
+
+      <FloatingCartBar />
     </div>
   );
 }

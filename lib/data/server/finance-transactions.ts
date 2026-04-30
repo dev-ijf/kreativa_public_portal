@@ -45,6 +45,8 @@ export type TuitionReceiptPayload = {
   rombelLabel: string | null;
   lines: TuitionReceiptLine[];
   total: number;
+  /** theme_id sekolah — 1 = Kreativa (EN), 2 = Talenta (ID). */
+  themeId?: number | null;
 };
 
 function num(v: unknown): number {
@@ -295,7 +297,8 @@ export async function getReceiptPayloadForPortal(
       lg.name AS level_grade_name,
       sch.name AS school_name,
       sch.address AS school_address,
-      sch.school_logo_url
+      sch.school_logo_url,
+      sch.theme_id
     FROM tuition_transactions t
     INNER JOIN core_students s ON s.id = t.student_id
     LEFT JOIN core_schools sch ON sch.id = s.school_id
@@ -368,6 +371,9 @@ export async function getReceiptPayloadForPortal(
   const schoolAddress =
     typeof addrRaw === 'string' && addrRaw.trim() !== '' ? addrRaw.trim() : null;
 
+  const themeIdRaw = h.theme_id;
+  const themeId = themeIdRaw != null ? Number(themeIdRaw) : null;
+
   return {
     schoolName: String(h.school_name ?? 'Sekolah'),
     schoolAddress,
@@ -382,6 +388,7 @@ export async function getReceiptPayloadForPortal(
     rombelLabel: [levelGrade, className].filter(Boolean).join(' · ') || null,
     lines,
     total: num(h.total_amount),
+    themeId,
   };
 }
 
@@ -417,6 +424,7 @@ export async function getPaymentLinesForBillPortal(
       transaction_status
     FROM v_portal_tuition_payment_lines
     WHERE bill_id = ${billId}
+      AND transaction_status = 'success'
     ORDER BY detail_created_at ASC
   `) as unknown as Record<string, unknown>[];
 
