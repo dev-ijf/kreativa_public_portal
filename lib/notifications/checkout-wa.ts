@@ -1,9 +1,6 @@
 import type { CheckoutWhatsAppJobBody } from '@/lib/qstash/checkout-whatsapp-job';
 import { fetchInstructionsFromDb } from '@/lib/data/server/payment-methods';
-import {
-  paymentInstructionDbLangFromThemeId,
-  type PaymentInstructionDbLang,
-} from '@/lib/utils/payment-instruction-lang';
+import type { PaymentInstructionDbLang } from '@/lib/utils/payment-instruction-lang';
 import { formatRupiah } from '@/lib/utils/format';
 import { computePortalPaymentExpiryMs } from '@/lib/utils/payment-deadline';
 import { sql } from '@/lib/db/client';
@@ -288,12 +285,20 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   const billDetails = lineRows.map((l) => `${l.title}: ${formatRupiah(Number(l.amount))}`).join('\n');
   const totalAmount = Number(h.total_amount);
   const methodId = Number(h.payment_method_id);
-  const primaryInstrLang = paymentInstructionDbLangFromThemeId(themeId);
-  const secondaryInstrLang: PaymentInstructionDbLang = primaryInstrLang === 'EN' ? 'ID' : 'EN';
-  const paymentInstructions =
-    Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId, primaryInstrLang) : '';
-  const paymentInstructionsEn =
-    Number.isFinite(methodId) && methodId > 0 ? await loadInstructionPlainText(methodId, secondaryInstrLang) : '';
+
+  // Template {payment_instructions} → ID, {payment_instructions_en} → EN.
+  // Masing-masing diambil dari DB sesuai kolom `lang`.
+  const [instrIdText, instrEnText] = await Promise.all([
+    Number.isFinite(methodId) && methodId > 0 ? loadInstructionPlainText(methodId, 'ID') : Promise.resolve(''),
+    Number.isFinite(methodId) && methodId > 0 ? loadInstructionPlainText(methodId, 'EN') : Promise.resolve(''),
+  ]);
+  console.info('checkout_wa_instr_loaded', {
+    transactionId: idNum,
+    themeId,
+    methodId,
+    instrIdLen: instrIdText.length,
+    instrEnLen: instrEnText.length,
+  });
 
   const createdMs = new Date(String(dbCreatedAt)).getTime();
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());
@@ -314,8 +319,8 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     payment_methods: String(h.pm_name ?? '—'),
     va_number: vaDisplay || h.va_no || '-',
     expiry_date: expiryDateStr,
-    payment_instructions: paymentInstructions || '-',
-    payment_instructions_en: paymentInstructionsEn || '-',
+    payment_instructions: instrIdText || '-',
+    payment_instructions_en: instrEnText || '-',
   };
 
   if (!template || !to) {
