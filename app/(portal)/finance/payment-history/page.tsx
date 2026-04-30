@@ -10,6 +10,8 @@ import type { PortalTuitionTransaction } from '@/lib/data/server/finance-transac
 
 export const dynamic = 'force-dynamic';
 
+const PAGE_SIZE = 5;
+
 export default async function Page() {
   const session = await getCachedServerSession();
   if (session?.user?.userId == null) {
@@ -23,8 +25,8 @@ export default async function Page() {
   await Promise.all(
     children.map(async (c) => {
       const [paid, pending] = await Promise.all([
-        getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id),
-        getPendingCheckoutTransactionsForPortal(session.user.userId, session.user.role, c.id),
+        getTuitionTransactionsForPortal(session.user.userId, session.user.role, c.id, { limit: PAGE_SIZE, offset: 0 }),
+        getPendingCheckoutTransactionsForPortal(session.user.userId, session.user.role, c.id, { limit: PAGE_SIZE, offset: 0 }),
       ]);
       initialPaidByChildId[c.id] = paid ?? [];
       initialPendingByChildId[c.id] = pending ?? [];
@@ -35,6 +37,7 @@ export default async function Page() {
     <PaymentHistoryPageClient
       initialPaidByChildId={initialPaidByChildId}
       initialPendingByChildId={initialPendingByChildId}
+      pageSize={PAGE_SIZE}
     />
   );
 }

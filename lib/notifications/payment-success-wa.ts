@@ -1,6 +1,7 @@
 import type { PaymentSuccessWhatsAppJobBody } from '@/lib/qstash/payment-success-whatsapp-job';
 import { sql } from '@/lib/db/client';
 import { formatRupiah } from '@/lib/utils/format';
+import { formatDateTimeAsiaJakarta, parsePortalDbTimestamp } from '@/lib/utils/datetime-jakarta';
 import { normalizeIdWhatsApp } from '@/lib/notifications/checkout-wa';
 import { postStarSenderText } from '@/lib/notifications/starsender';
 
@@ -100,7 +101,7 @@ export async function processPaymentSuccessWhatsAppJob(
       t.reference_no,
       (t.total_amount)::float8 AS total_amount,
       t.payment_method_id,
-      t.payment_date,
+      (t.payment_date AT TIME ZONE 'UTC') AS payment_date,
       pm.name AS pm_name
     FROM tuition_transactions t
     LEFT JOIN tuition_payment_methods pm ON pm.id = t.payment_method_id
@@ -179,10 +180,10 @@ export async function processPaymentSuccessWhatsAppJob(
   const template = await loadPaymentSuccessTemplate(trigger);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);
 
-  const payMs = h.payment_date ? new Date(String(h.payment_date)).getTime() : Date.now();
-  const paymentDateStr = new Date(Number.isFinite(payMs) ? payMs : Date.now()).toLocaleString(
-    themeId === 1 ? 'en-GB' : 'id-ID',
-    { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' },
+  const payMs = h.payment_date ? parsePortalDbTimestamp(h.payment_date).getTime() : Date.now();
+  const paymentDateStr = formatDateTimeAsiaJakarta(
+    new Date(Number.isFinite(payMs) ? payMs : Date.now()).toISOString(),
+    themeId === 1 ? 'en' : 'id',
   );
 
   const methodsLabel = `${String(h.pm_name ?? 'Virtual Account')} (${channelLabel(body.channelId)})`;

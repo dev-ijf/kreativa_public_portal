@@ -10,11 +10,13 @@ import type { PortalCheckoutSessionPayload, PortalPaymentInstructionRow } from '
 import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
 import { openTuitionReceiptPdf } from '@/lib/portal/tuition-receipt-url';
 import { formatRupiah } from '@/lib/utils/format';
+import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
+import { formatDateTimeAsiaJakarta, parsePortalDbTimestamp } from '@/lib/utils/datetime-jakarta';
 
 function useCountdown(targetIso: string | undefined | null) {
   const targetMs = useMemo(() => {
     if (!targetIso) return 0;
-    const t = new Date(targetIso).getTime();
+    const t = parsePortalDbTimestamp(targetIso).getTime();
     return Number.isFinite(t) ? t : 0;
   }, [targetIso]);
 
@@ -81,6 +83,7 @@ export function InstructionPageClient({ vaNo }: Props) {
       return;
     }
 
+    let hadSnap = false;
     try {
       const raw = typeof window !== 'undefined' ? sessionStorage.getItem(PORTAL_CHECKOUT_SESSION_KEY) : null;
       if (raw) {
@@ -106,14 +109,16 @@ export function InstructionPageClient({ vaNo }: Props) {
             instructionRows: snap.instructionRows ?? [],
           });
           setLoading(false);
-          return () => { cancelled = true; };
+          hadSnap = true;
         }
       }
     } catch {
       /* fallback to API */
     }
 
-    setLoading(true);
+    if (!hadSnap) {
+      setLoading(true);
+    }
     setLoadError(null);
 
     void (async () => {
@@ -121,7 +126,9 @@ export function InstructionPageClient({ vaNo }: Props) {
         const res = await fetch(`/api/portal/instruction/${encodeURIComponent(vaClean)}`);
         if (!res.ok) {
           if (!cancelled) {
-            setLoadError(res.status === 404 ? 'not_found' : res.status === 403 ? 'forbidden' : 'error');
+            if (!hadSnap) {
+              setLoadError(res.status === 404 ? 'not_found' : res.status === 403 ? 'forbidden' : 'error');
+            }
             setLoading(false);
           }
           return;
@@ -151,7 +158,9 @@ export function InstructionPageClient({ vaNo }: Props) {
         }
       } catch {
         if (!cancelled) {
-          setLoadError('error');
+          if (!hadSnap) {
+            setLoadError('error');
+          }
           setLoading(false);
         }
       }
@@ -167,7 +176,28 @@ export function InstructionPageClient({ vaNo }: Props) {
   }, [copied]);
 
   const isSuccess = data?.status?.toLowerCase().trim() === 'success';
-  const countdown = useCountdown(isSuccess ? null : data?.expiryAt);
+
+  /** Utamakan `expiryAt` dari API (sudah dihitung server); recompute dari `transactionCreatedAt` hanya cadangan. */
+  const effectiveExpiryIso = useMemo(() => {
+    if (isSuccess || !data) return null;
+    const serverExpiry = data.expiryAt?.trim();
+    if (serverExpiry) {
+      const probe = parsePortalDbTimestamp(serverExpiry);
+      if (Number.isFinite(probe.getTime())) {
+        return serverExpiry;
+      }
+    }
+    const tcat = data.transactionCreatedAt?.trim();
+    if (tcat) {
+      const ms = parsePortalDbTimestamp(tcat).getTime();
+      if (Number.isFinite(ms)) {
+        return computePortalPaymentExpiryIso(ms);
+      }
+    }
+    return null;
+  }, [data, isSuccess]);
+
+  const countdown = useCountdown(isSuccess ? null : effectiveExpiryIso);
 
   const vaDisplay = data?.vaDisplay ?? '';
 
@@ -185,28 +215,18 @@ export function InstructionPageClient({ vaNo }: Props) {
       minute: '2-digit',
       hour12: false,
     };
-    if (data?.expiryAt) {
-      const d = new Date(data.expiryAt);
+    if (effectiveExpiryIso) {
+      const d = parsePortalDbTimestamp(effectiveExpiryIso);
       if (!Number.isNaN(d.getTime())) {
         return d.toLocaleString(lang === 'en' ? 'en-GB' : 'id-ID', opts);
       }
     }
     return '—';
-  }, [lang, data?.expiryAt]);
+  }, [lang, effectiveExpiryIso]);
 
   const paymentDateStr = useMemo(() => {
     if (!data?.paymentDate) return '—';
-    const d = new Date(data.paymentDate);
-    if (Number.isNaN(d.getTime())) return data.paymentDate;
-    return d.toLocaleString(lang === 'en' ? 'en-GB' : 'id-ID', {
-      timeZone: 'Asia/Jakarta',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
+    return formatDateTimeAsiaJakarta(data.paymentDate, lang);
   }, [lang, data?.paymentDate]);
 
   const instructionPdfHref = useMemo(() => {
@@ -220,10 +240,10 @@ export function InstructionPageClient({ vaNo }: Props) {
       transactionCreatedAt: tcat,
       lang,
     });
-    if (data?.expiryAt) sp.set('expiryAt', data.expiryAt);
+    if (effectiveExpiryIso) sp.set('expiryAt', effectiveExpiryIso);
     sp.set('preview', '1');
     return `/api/portal/payment-instructions/pdf?${sp.toString()}`;
-  }, [data?.paymentMethodId, selectedPayment?.dbMethodId, data?.transactionId, data?.transactionCreatedAt, data?.expiryAt, lang]);
+  }, [data?.paymentMethodId, selectedPayment?.dbMethodId, data?.transactionId, data?.transactionCreatedAt, effectiveExpiryIso, lang]);
 
   const rows = data?.instructionRows ?? [];
 
@@ -341,7 +361,7 @@ export function InstructionPageClient({ vaNo }: Props) {
           </div>
         </div>
 
-        {data?.expiryAt && (
+        {effectiveExpiryIso ? (
           <div className={`rounded-3xl p-5 shadow-sm border ${
             countdown.expired
               ? 'bg-red-50 border-red-200'
@@ -390,7 +410,7 @@ export function InstructionPageClient({ vaNo }: Props) {
               </div>
             )}
           </div>
-        )}
+        ) : null}
 
         {vaDisplay ? (
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">

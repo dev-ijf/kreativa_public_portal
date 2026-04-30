@@ -1,5 +1,6 @@
 import { isBmiPaymentMethod } from '@/lib/utils/bmi-method';
 import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
+import { parsePortalDbTimestamp, portalDbTimestampToIsoUtc } from '@/lib/utils/datetime-jakarta';
 import { buildBmiVa16 } from '@/lib/va/bmi-va';
 import type { PortalCheckoutCartItem, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
 import { fetchInstructionsFromDb, viewerCanUsePublishedPaymentMethod } from '@/lib/data/server/payment-methods';
@@ -457,23 +458,17 @@ export async function finalizePortalCheckout(params: {
   }
 
   const tailRows = (await sql`
-    SELECT created_at AS "transactionCreatedAt"
+    SELECT (created_at AT TIME ZONE 'UTC') AS "transactionCreatedAt"
     FROM tuition_transactions
     WHERE id = ${transactionId}
     ORDER BY created_at DESC
     LIMIT 1
   `) as unknown as { transactionCreatedAt: Date | string }[];
   const tailCa = tailRows[0]?.transactionCreatedAt;
-  const tcat =
-    tailCa == null
-      ? new Date().toISOString()
-      : typeof tailCa === 'string'
-        ? tailCa
-        : tailCa instanceof Date
-          ? tailCa.toISOString()
-          : String(tailCa);
+  const transactionCreatedAtIso =
+    tailCa == null ? new Date().toISOString() : portalDbTimestampToIsoUtc(tailCa) || new Date().toISOString();
 
-  const createdMsForExpiry = new Date(tcat).getTime();
+  const createdMsForExpiry = parsePortalDbTimestamp(transactionCreatedAtIso).getTime();
   const expiryAt = computePortalPaymentExpiryIso(Number.isFinite(createdMsForExpiry) ? createdMsForExpiry : Date.now());
 
   const themeIdForInstr = num(schoolRow.theme_id);
@@ -484,7 +479,7 @@ export async function finalizePortalCheckout(params: {
 
   return {
     transactionId: tidStr,
-    transactionCreatedAt: tcat,
+    transactionCreatedAt: transactionCreatedAtIso,
     referenceNo,
     totalAmount,
     studentId,

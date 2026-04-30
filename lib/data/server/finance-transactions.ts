@@ -2,6 +2,7 @@ import type { FinanceInstallmentPaymentLine } from '@/lib/data/portal-finance-pa
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { isBmiPaymentMethod } from '@/lib/utils/bmi-method';
 import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
+import { parsePortalDbTimestamp, portalDbTimestampToIsoUtc } from '@/lib/utils/datetime-jakarta';
 import { sql } from '@/lib/db/client';
 
 export type PortalTuitionTransactionLine = { label: string; amount: number };
@@ -57,11 +58,15 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Samakan semua `created_at` / `payment_date` ke string ISO UTC untuk RSC + klien (hindari string naif + bug driver `Date`). */
 function ts(v: unknown): string {
-  if (v == null) return '';
-  if (typeof v === 'string') return v;
-  if (v instanceof Date) return v.toISOString();
-  return String(v);
+  return portalDbTimestampToIsoUtc(v);
+}
+
+function paymentTs(v: unknown): string | null {
+  if (v == null) return null;
+  const s = portalDbTimestampToIsoUtc(v);
+  return s || null;
 }
 
 type TxFlatRow = {
@@ -87,14 +92,26 @@ export async function getTuitionTransactionsForPortal(
   viewerUserId: number,
   viewerRole: string,
   studentId: number,
+  opts?: { limit?: number; offset?: number },
 ): Promise<PortalTuitionTransaction[] | null> {
   const allowed = new Set(await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole));
   if (!allowed.has(studentId)) return null;
 
+  const pageLimit = opts?.limit ?? 500;
+  const pageOffset = opts?.offset ?? 0;
+
   const rows = (await sql`
+    WITH paged_tx AS (
+      SELECT id, created_at
+      FROM tuition_transactions
+      WHERE student_id = ${studentId}
+        AND lower(trim(status)) = 'success'
+      ORDER BY payment_date DESC NULLS LAST, created_at DESC
+      LIMIT ${pageLimit} OFFSET ${pageOffset}
+    )
     SELECT
       t.id AS transaction_id,
-      t.created_at AS transaction_created_at,
+      (t.created_at AT TIME ZONE 'UTC') AS transaction_created_at,
       t.reference_no,
       (t.total_amount)::float8 AS total_amount,
       t.status,
@@ -104,14 +121,13 @@ export async function getTuitionTransactionsForPortal(
       (d.amount_paid)::float8 AS line_amount,
       COALESCE(NULLIF(TRIM(b.title), ''), p.name, 'Pembayaran') AS line_label,
       d.id AS detail_id
-    FROM tuition_transactions t
+    FROM paged_tx pt
+    JOIN tuition_transactions t ON t.id = pt.id AND t.created_at = pt.created_at
     LEFT JOIN tuition_payment_methods pm ON pm.id = t.payment_method_id
     LEFT JOIN tuition_transaction_details d
       ON d.transaction_id = t.id AND d.transaction_created_at = t.created_at
     LEFT JOIN tuition_bills b ON b.id = d.bill_id
     LEFT JOIN tuition_products p ON p.id = d.product_id
-    WHERE t.student_id = ${studentId}
-      AND lower(trim(t.status)) = 'success'
     ORDER BY t.payment_date DESC NULLS LAST, t.created_at DESC, d.id ASC NULLS LAST
   `) as unknown as TxFlatRow[];
 
@@ -131,7 +147,7 @@ export async function getTuitionTransactionsForPortal(
         referenceNo: String(r.reference_no ?? ''),
         totalAmount: num(r.total_amount),
         status: String(r.status ?? ''),
-        paymentDate: r.payment_date,
+        paymentDate: paymentTs(r.payment_date),
         vaNo: r.va_no,
         paymentMethodName: r.payment_method_name,
         lines: [],
@@ -153,14 +169,27 @@ export async function getPendingCheckoutTransactionsForPortal(
   viewerUserId: number,
   viewerRole: string,
   studentId: number,
+  opts?: { limit?: number; offset?: number },
 ): Promise<PortalTuitionTransaction[] | null> {
   const allowed = new Set(await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole));
   if (!allowed.has(studentId)) return null;
 
+  const pageLimit = opts?.limit ?? 500;
+  const pageOffset = opts?.offset ?? 0;
+
   const rows = (await sql`
+    WITH paged_tx AS (
+      SELECT id, created_at
+      FROM tuition_transactions
+      WHERE student_id = ${studentId}
+        AND user_id = ${viewerUserId}
+        AND lower(trim(status)) = 'pending'
+      ORDER BY created_at DESC
+      LIMIT ${pageLimit} OFFSET ${pageOffset}
+    )
     SELECT
       t.id AS transaction_id,
-      t.created_at AS transaction_created_at,
+      (t.created_at AT TIME ZONE 'UTC') AS transaction_created_at,
       t.reference_no,
       (t.total_amount)::float8 AS total_amount,
       t.status,
@@ -175,15 +204,13 @@ export async function getPendingCheckoutTransactionsForPortal(
       (d.amount_paid)::float8 AS line_amount,
       COALESCE(NULLIF(TRIM(b.title), ''), p.name, 'Pembayaran') AS line_label,
       d.id AS detail_id
-    FROM tuition_transactions t
+    FROM paged_tx pt
+    JOIN tuition_transactions t ON t.id = pt.id AND t.created_at = pt.created_at
     LEFT JOIN tuition_payment_methods pm ON pm.id = t.payment_method_id
     LEFT JOIN tuition_transaction_details d
       ON d.transaction_id = t.id AND d.transaction_created_at = t.created_at
     LEFT JOIN tuition_bills b ON b.id = d.bill_id
     LEFT JOIN tuition_products p ON p.id = d.product_id
-    WHERE t.student_id = ${studentId}
-      AND t.user_id = ${viewerUserId}
-      AND lower(trim(t.status)) = 'pending'
     ORDER BY t.created_at DESC, d.id ASC NULLS LAST
   `) as unknown as TxFlatRow[];
 
@@ -207,7 +234,7 @@ export async function getPendingCheckoutTransactionsForPortal(
         referenceNo: String(r.reference_no ?? ''),
         totalAmount: num(r.total_amount),
         status: String(r.status ?? 'pending'),
-        paymentDate: r.payment_date,
+        paymentDate: paymentTs(r.payment_date),
         vaNo: r.va_no,
         paymentMethodName: r.payment_method_name,
         lines: [],
@@ -234,7 +261,7 @@ export async function getPendingCheckoutTransactionsForPortal(
 }
 
 function epochMs(v: unknown): number {
-  return Date.parse(ts(v));
+  return parsePortalDbTimestamp(v).getTime();
 }
 
 /**
@@ -255,9 +282,13 @@ function pickTransactionHeadRow(
     return candidates[0] ?? null;
   }
 
-  const byString = candidates.find(
-    (r) => ts(r.created_at) === urlTrim || String(r.created_at ?? '').trim() === urlTrim,
-  );
+  const byString = candidates.find((r) => {
+    const dbRaw = r.created_at;
+    const dbIso = portalDbTimestampToIsoUtc(dbRaw);
+    const urlIso = portalDbTimestampToIsoUtc(urlTrim);
+    if (dbIso && urlIso && dbIso === urlIso) return true;
+    return String(dbRaw ?? '').trim() === urlTrim || dbIso === urlTrim;
+  });
   if (byString) return byString;
 
   if (Number.isFinite(urlMs)) {
@@ -327,8 +358,6 @@ export async function getReceiptPayloadForPortal(
   const statusNorm = String(h.status_norm ?? '');
   if (statusNorm !== 'success') return null;
 
-  const resolvedCreatedAt = h.created_at;
-
   const lineRows = (await sql`
     SELECT
       (d.amount_paid)::float8 AS amount_paid,
@@ -337,7 +366,6 @@ export async function getReceiptPayloadForPortal(
     LEFT JOIN tuition_bills b ON b.id = d.bill_id
     LEFT JOIN tuition_products p ON p.id = d.product_id
     WHERE d.transaction_id = ${idNum}
-      AND d.transaction_created_at = ${resolvedCreatedAt}
     ORDER BY d.id ASC
   `) as unknown as Record<string, unknown>[];
 
@@ -379,7 +407,7 @@ export async function getReceiptPayloadForPortal(
     schoolAddress,
     schoolLogoDataUrl,
     referenceNo: String(h.reference_no ?? ''),
-    paymentDate: h.payment_date as string | null,
+    paymentDate: paymentTs(h.payment_date),
     paymentMethodLabel: String(h.payment_method_name ?? '—'),
     vaNo: h.va_no as string | null,
     studentNis: h.student_nis as string | null,

@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useState } from 'react';
-import { Calendar, FileText } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Calendar, FileText, Loader2 } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
@@ -11,24 +11,13 @@ import { persistPortalSessionForPendingInstruction } from '@/lib/portal/instruct
 import type { PortalTuitionTransaction } from '@/lib/data/server/finance-transactions';
 import { openTuitionReceiptPdf } from '@/lib/portal/tuition-receipt-url';
 import { formatRupiah } from '@/lib/utils/format';
+import { formatDateTimeAsiaJakarta } from '@/lib/utils/datetime-jakarta';
 
 type PaymentHistoryPageClientProps = {
   initialPaidByChildId: Record<number, PortalTuitionTransaction[]>;
   initialPendingByChildId: Record<number, PortalTuitionTransaction[]>;
+  pageSize?: number;
 };
-
-function formatDateTime(iso: string | null, lang: 'en' | 'id'): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 16);
-  return d.toLocaleString(lang === 'en' ? 'en-GB' : 'id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function buildTitle(tx: PortalTuitionTransaction, lang: 'en' | 'id'): string {
   const titleParts = tx.lines.map((l) => l.label);
@@ -40,16 +29,77 @@ function buildTitle(tx: PortalTuitionTransaction, lang: 'en' | 'id'): string {
   );
 }
 
+const DEFAULT_PAGE_SIZE = 5;
+
 export function PaymentHistoryPageClient({
   initialPaidByChildId,
   initialPendingByChildId,
+  pageSize = DEFAULT_PAGE_SIZE,
 }: PaymentHistoryPageClientProps) {
   const router = useRouter();
   const { lang, activeChildId, setSelectedPayment } = usePortalState();
   const [tab, setTab] = useState<'checkout' | 'paid'>('paid');
 
-  const paidList = initialPaidByChildId[activeChildId] ?? [];
-  const pendingList = initialPendingByChildId[activeChildId] ?? [];
+  const [paidByChild, setPaidByChild] = useState(initialPaidByChildId);
+  const [pendingByChild, setPendingByChild] = useState(initialPendingByChildId);
+
+  const [paidHasMore, setPaidHasMore] = useState<Record<number, boolean>>(() => {
+    const m: Record<number, boolean> = {};
+    for (const [k, v] of Object.entries(initialPaidByChildId)) m[Number(k)] = v.length >= pageSize;
+    return m;
+  });
+  const [pendingHasMore, setPendingHasMore] = useState<Record<number, boolean>>(() => {
+    const m: Record<number, boolean> = {};
+    for (const [k, v] of Object.entries(initialPendingByChildId)) m[Number(k)] = v.length >= pageSize;
+    return m;
+  });
+
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const prevChildRef = useRef(activeChildId);
+  useEffect(() => {
+    if (prevChildRef.current !== activeChildId) {
+      prevChildRef.current = activeChildId;
+    }
+  }, [activeChildId]);
+
+  const paidList = paidByChild[activeChildId] ?? [];
+  const pendingList = pendingByChild[activeChildId] ?? [];
+
+  const currentHasMore = tab === 'paid'
+    ? (paidHasMore[activeChildId] ?? false)
+    : (pendingHasMore[activeChildId] ?? false);
+
+  const currentList = tab === 'paid' ? paidList : pendingList;
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !currentHasMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = currentList.length;
+      const res = await fetch(
+        `/api/portal/payment-history?studentId=${activeChildId}&tab=${tab}&limit=${pageSize}&offset=${offset}`,
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { items: PortalTuitionTransaction[]; hasMore: boolean };
+
+      if (tab === 'paid') {
+        setPaidByChild((prev) => ({
+          ...prev,
+          [activeChildId]: [...(prev[activeChildId] ?? []), ...data.items],
+        }));
+        setPaidHasMore((prev) => ({ ...prev, [activeChildId]: data.hasMore }));
+      } else {
+        setPendingByChild((prev) => ({
+          ...prev,
+          [activeChildId]: [...(prev[activeChildId] ?? []), ...data.items],
+        }));
+        setPendingHasMore((prev) => ({ ...prev, [activeChildId]: data.hasMore }));
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, currentHasMore, currentList.length, activeChildId, tab, pageSize]);
 
   const goToInstruction = useCallback(
     (tx: PortalTuitionTransaction) => {
@@ -75,12 +125,12 @@ export function PaymentHistoryPageClient({
     </button>
   );
 
-  const showCheckoutTabInfo = pendingList.length === 0;
-
   const pendingStatusLabel = lang === 'en' ? 'Pending' : 'Menunggu';
 
   const dateForTx = (tx: PortalTuitionTransaction) =>
-    tab === 'checkout' ? formatDateTime(tx.transactionCreatedAt, lang) : formatDateTime(tx.paymentDate ?? tx.transactionCreatedAt, lang);
+    tab === 'checkout'
+      ? formatDateTimeAsiaJakarta(tx.transactionCreatedAt, lang)
+      : formatDateTimeAsiaJakarta(tx.paymentDate ?? tx.transactionCreatedAt, lang);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -93,7 +143,7 @@ export function PaymentHistoryPageClient({
           {tabBtn('paid', 'Paid', 'Berhasil')}
         </div>
 
-        {tab === 'checkout' && showCheckoutTabInfo ? (
+        {tab === 'checkout' && pendingList.length === 0 ? (
           <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center text-sm text-slate-600">
             {lang === 'en'
               ? 'You have no payments waiting to be completed. New checkouts will appear here after you choose a payment method.'
@@ -101,7 +151,7 @@ export function PaymentHistoryPageClient({
           </div>
         ) : null}
 
-        {tab === 'checkout' && !showCheckoutTabInfo
+        {tab === 'checkout' && pendingList.length > 0
           ? pendingList.map((tx) => (
               <button
                 key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
@@ -210,6 +260,24 @@ export function PaymentHistoryPageClient({
               </div>
             ))
           )
+        ) : null}
+
+        {currentHasMore ? (
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={loadMore}
+            className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold text-primary bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-primary-light/30 transition-colors disabled:opacity-60"
+          >
+            {loadingMore ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                {lang === 'en' ? 'Loading…' : 'Memuat…'}
+              </>
+            ) : (
+              lang === 'en' ? 'Load more' : 'Muat lebih banyak'
+            )}
+          </button>
         ) : null}
 
         <Link href="/finance" className="block text-center text-sm font-semibold text-primary py-2">

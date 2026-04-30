@@ -2,6 +2,7 @@ import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/render
 import type { TuitionReceiptPayload } from '@/lib/data/server/finance-transactions';
 import { terbilangRupiahUpper } from '@/lib/utils/terbilang-id';
 import { amountInWordsEnUpper } from '@/lib/utils/amount-in-words-en';
+import { parsePortalDbTimestamp } from '@/lib/utils/datetime-jakarta';
 
 function formatRupiahPdf(n: number): string {
   const x = Math.round(n);
@@ -10,9 +11,9 @@ function formatRupiahPdf(n: number): string {
 
 function formatDateHeader(iso: string | null, en: boolean): string {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = parsePortalDbTimestamp(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
-  return d.toLocaleDateString(en ? 'en-GB' : 'id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+  return d.toLocaleDateString(en ? 'en-GB' : 'id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
 }
 
 type Labels = {

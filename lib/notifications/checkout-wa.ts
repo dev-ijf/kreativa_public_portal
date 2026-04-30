@@ -3,6 +3,7 @@ import { fetchInstructionsFromDb } from '@/lib/data/server/payment-methods';
 import type { PaymentInstructionDbLang } from '@/lib/utils/payment-instruction-lang';
 import { formatRupiah } from '@/lib/utils/format';
 import { computePortalPaymentExpiryMs } from '@/lib/utils/payment-deadline';
+import { formatDateTimeAsiaJakarta, parsePortalDbTimestamp } from '@/lib/utils/datetime-jakarta';
 import { sql } from '@/lib/db/client';
 import { postStarSenderText } from '@/lib/notifications/starsender';
 
@@ -176,7 +177,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   const head = (await sql`
     SELECT
       t.id,
-      t.created_at,
+      (t.created_at AT TIME ZONE 'UTC') AS created_at,
       t.user_id,
       t.is_whatsapp_checkout AS "waDone",
       t.reference_no,
@@ -208,7 +209,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   }
 
   const h = head[0];
-  const dbCreatedAt = String(h.created_at);
+  const dbCreatedAt = String(h.created_at ?? '');
 
   const waDoneRaw = h.waDone as boolean | string | null | undefined;
   const alreadySent =
@@ -300,12 +301,9 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     instrEnLen: instrEnText.length,
   });
 
-  const createdMs = new Date(String(dbCreatedAt)).getTime();
+  const createdMs = parsePortalDbTimestamp(h.created_at).getTime();
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());
-  const expiryDateStr = new Date(expiryMs).toLocaleString(
-    themeId === 1 ? 'en-GB' : 'id-ID',
-    { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' },
-  );
+  const expiryDateStr = formatDateTimeAsiaJakarta(new Date(expiryMs).toISOString(), themeId === 1 ? 'en' : 'id');
 
   const vaDisplay = formatVaSpaced(h.va_no);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);

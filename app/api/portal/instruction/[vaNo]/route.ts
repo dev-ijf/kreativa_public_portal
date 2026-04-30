@@ -4,6 +4,7 @@ import { getPaymentInstructionsForPortalViewer } from '@/lib/data/server/payment
 import { sql } from '@/lib/db/client';
 import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
 import { isBmiPaymentMethod } from '@/lib/utils/bmi-method';
+import { parsePortalDbTimestamp, portalDbTimestampToIsoUtc } from '@/lib/utils/datetime-jakarta';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 
 export const dynamic = 'force-dynamic';
@@ -24,12 +25,12 @@ export async function GET(_request: Request, ctx: Ctx) {
     return NextResponse.json({ error: 'Invalid VA number' }, { status: 400 });
   }
 
-  const allowed = await getStudentIdsAccessibleToViewer(userId, role);
+  const allowedIds = await getStudentIdsAccessibleToViewer(userId, role);
 
   const txRows = (await sql`
     SELECT
       t.id,
-      t.created_at,
+      (t.created_at AT TIME ZONE 'UTC') AS created_at,
       t.reference_no,
       (t.total_amount)::float8 AS total_amount,
       t.status,
@@ -71,13 +72,17 @@ export async function GET(_request: Request, ctx: Ctx) {
 
   const tx = txRows[0];
 
-  if (tx.student_id != null && !allowed.has(tx.student_id)) {
+  if (tx.student_id != null && !allowedIds.includes(tx.student_id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const methodId = tx.payment_method_id;
-  const isBmi = methodId != null ? isBmiPaymentMethod(String(tx.pm_code ?? ''), String(tx.pm_category ?? '')) : false;
-  const expiryAt = computePortalPaymentExpiryIso(String(tx.created_at), isBmi);
+  const isBmi = methodId != null ? isBmiPaymentMethod(tx.pm_vendor, tx.pm_code) : false;
+  const createdAtMs = parsePortalDbTimestamp(tx.created_at).getTime();
+  const expiryAt = computePortalPaymentExpiryIso(Number.isFinite(createdAtMs) ? createdAtMs : Date.now());
+  const transactionCreatedAtIso = Number.isFinite(createdAtMs)
+    ? new Date(createdAtMs).toISOString()
+    : '';
 
   let instructionRows: { id: number; title: string; description: string; stepOrder: number | null }[] = [];
   if (methodId != null && methodId > 0) {
@@ -96,11 +101,11 @@ export async function GET(_request: Request, ctx: Ctx) {
 
   return NextResponse.json({
     transactionId: String(tx.id),
-    transactionCreatedAt: String(tx.created_at),
+    transactionCreatedAt: transactionCreatedAtIso,
     referenceNo: tx.reference_no,
     totalAmount: tx.total_amount,
     status: tx.status,
-    paymentDate: tx.payment_date,
+    paymentDate: tx.payment_date == null ? null : portalDbTimestampToIsoUtc(tx.payment_date) || null,
     vaNo: vaClean,
     vaDisplay,
     expiryAt,

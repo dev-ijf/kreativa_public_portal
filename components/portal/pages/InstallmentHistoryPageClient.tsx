@@ -7,6 +7,7 @@ import type { FinanceInstallmentPaymentLine } from '@/lib/data/portal-finance-pa
 import { openTuitionReceiptPdf } from '@/lib/portal/tuition-receipt-url';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { formatRupiah } from '@/lib/utils/format';
+import { formatDateAsiaJakarta } from '@/lib/utils/datetime-jakarta';
 
 type InstallmentHistoryPageClientProps = {
   productName: string;
@@ -14,13 +15,7 @@ type InstallmentHistoryPageClientProps = {
 };
 
 function formatShortDate(iso: string, lang: 'en' | 'id'): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateAsiaJakarta(iso, lang);
 }
 
 export function InstallmentHistoryPageClient({ productName, lines }: InstallmentHistoryPageClientProps) {
