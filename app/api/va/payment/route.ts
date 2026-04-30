@@ -105,6 +105,15 @@ function nextBillStatus(params: { billTotal: number; newPaid: number }): string 
   return 'unpaid';
 }
 
+/** ERR 30 — di `?debug=1` tambah `_debug` supaya mudah dilacak (tidak dikirim BMI produksi). */
+async function pay30(debug: boolean, reason: string): Promise<Response> {
+  return buildResponse(
+    debug ? { ERR: '30', METHOD: 'PAYMENT', _debug: reason } : { ERR: '30', METHOD: 'PAYMENT' },
+    200,
+    debug,
+  );
+}
+
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
@@ -125,13 +134,13 @@ export async function POST(req: NextRequest) {
     return buildResponse({ ERR: '55', METHOD: 'PAYMENT' }, 200, debug);
   }
 
-  if (METHOD !== 'PAYMENT') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+  if (String(METHOD ?? '').trim() !== 'PAYMENT') {
+    return pay30(debug, 'method_not_payment');
   }
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, 'vano_invalid_not_16_digits');
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -139,13 +148,13 @@ export async function POST(req: NextRequest) {
   const trxDate = String(TRXDATE ?? '').trim();
 
   if (!refNo || !trxDate) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, 'refno_or_trxdate_empty');
   }
 
   const billScaled = parseScaledAmount(BILL);
   const paymentScaled = parseScaledAmount(PAYMENT);
   if (billScaled == null || paymentScaled == null) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, 'bill_or_payment_unparseable');
   }
 
   const headRows = (await sql`
@@ -180,7 +189,7 @@ export async function POST(req: NextRequest) {
   }[];
 
   if (headRows.length === 0) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, 'transaction_not_found_for_va');
   }
 
   const head = headRows[0];
@@ -191,29 +200,33 @@ export async function POST(req: NextRequest) {
   }
 
   if (st !== 'pending') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, `transaction_status_not_pending:${st}`);
   }
 
-  if (head.student_id == null || !head.student_name) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+  if (head.student_id == null) {
+    return pay30(debug, 'student_id_null_on_transaction');
+  }
+  const nameGate = String(head.student_name ?? CUSTNAME ?? '').trim();
+  if (!nameGate || !formatCustomerName(nameGate)) {
+    return pay30(debug, 'customer_name_missing_join_core_students_or_invalid_custname');
   }
 
   const totalDb = num(head.total_amount);
   if (Math.abs(billScaled - totalDb) > 0.02) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, `bill_amount_mismatch_db_${totalDb}_payload_${billScaled}`);
   }
 
   const claim = await tryClaimBmiPaymentKey(vanoNorm, refNo, trxDate);
   if (claim === 'duplicate') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(debug, 'duplicate_vano_refno_trxdate');
   }
   if (claim === 'error') {
     return buildResponse({ ERR: '12', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const tid = Number(head.id);
-  const tcat = String(head.created_at);
 
+  /** Jangan kirim `String(Date)` ke Postgres (format `GMT+0700` ditolak). Pakai subquery `created_at` kanonik dari baris terbaru. */
   const detailRows = (await sql`
     SELECT
       d.bill_id AS "bill_id",
@@ -227,13 +240,22 @@ export async function POST(req: NextRequest) {
     INNER JOIN tuition_bills b ON b.id = d.bill_id
     INNER JOIN tuition_products p ON p.id = d.product_id
     WHERE d.transaction_id = ${tid}
-      AND d.transaction_created_at = ${tcat}
+      AND d.transaction_created_at = (
+        SELECT created_at
+        FROM tuition_transactions
+        WHERE id = ${tid}
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
     ORDER BY d.id ASC
   `) as unknown as DetailRow[];
 
   if (detailRows.length === 0) {
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(
+      debug,
+      'no_transaction_details_or_bill_product_join_failed_check_bill_id_product_id',
+    );
   }
 
   const mode = classifyPaymentMode(detailRows);
@@ -267,7 +289,10 @@ export async function POST(req: NextRequest) {
 
   if (effectivePayment <= 0) {
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
+    return pay30(
+      debug,
+      `effective_payment_zero_or_negative_mode_${mode}_maxApply_${maxApply}_paymentScaled_${paymentScaled}`,
+    );
   }
 
   const byBill = allocateByBill(detailRows, effectivePayment, remMap);
@@ -313,7 +338,13 @@ export async function POST(req: NextRequest) {
         status = 'success',
         payment_date = now()
       WHERE id = ${tid}
-        AND created_at = ${tcat}
+        AND created_at = (
+          SELECT created_at
+          FROM tuition_transactions
+          WHERE id = ${tid}
+          ORDER BY created_at DESC
+          LIMIT 1
+        )
     `;
   } catch (e) {
     console.error('bmi_va_payment_db', e);

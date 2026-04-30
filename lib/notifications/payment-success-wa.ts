@@ -43,11 +43,16 @@ async function resolveRecipientPhone(studentId: number, fallbackUserId: number):
   return null;
 }
 
-async function loadPaymentSuccessTemplate(): Promise<{ id: number; content: string } | null> {
+function paymentSuccessTriggerForTheme(themeId: number | null | undefined): string {
+  if (themeId === 1) return 'PAYMENT_SUCCESS_EN';
+  return 'PAYMENT_SUCCESS';
+}
+
+async function loadPaymentSuccessTemplate(trigger: string): Promise<{ id: number; content: string } | null> {
   const rows = (await sql`
     SELECT id, content
     FROM notif_templates
-    WHERE trigger_event = 'PAYMENT_SUCCESS'
+    WHERE trigger_event = ${trigger}
       AND is_active IS TRUE
       AND school_id IS NULL
     ORDER BY id ASC
@@ -76,7 +81,7 @@ export type ProcessPaymentSuccessWaResult = {
 };
 
 /**
- * Kirim WA PAYMENT_SUCCESS (StarSender), `notif_logs`, set `is_whatsapp_payment_success`.
+ * Kirim WA PAYMENT_SUCCESS (StarSender), `notif_logs`, set `is_whatsapp_paid`.
  */
 export async function processPaymentSuccessWhatsAppJob(
   body: PaymentSuccessWhatsAppJobBody,
@@ -170,7 +175,8 @@ export async function processPaymentSuccessWhatsAppJob(
   const billTitle =
     lineRows.length === 0 ? 'Pembayaran' : lineRows.map((r) => r.title).join(', ').slice(0, 200);
 
-  const template = await loadPaymentSuccessTemplate();
+  const trigger = paymentSuccessTriggerForTheme(themeId);
+  const template = await loadPaymentSuccessTemplate(trigger);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);
 
   const payMs = h.payment_date ? new Date(String(h.payment_date)).getTime() : Date.now();
@@ -208,17 +214,16 @@ export async function processPaymentSuccessWhatsAppJob(
         'skipped'
       )
     `;
+    await sql`
+      UPDATE tuition_transactions
+      SET is_whatsapp_paid = 't'
+      WHERE id = ${idNum} AND user_id = ${body.userId}
+    `;
     return { outcome: 'skipped', retryableFailure: false };
   }
 
   const bodyText = substituteTemplate(template.content, vars);
-  const reqPayload = {
-    job: 'payment_success' as const,
-    transactionId: idNum,
-    messageType: 'text' as const,
-    to,
-    bodyPreview: bodyText.slice(0, 200),
-  };
+  const starSenderPayload = { messageType: 'text', to, body: bodyText };
 
   const star = await postStarSenderText({ to, body: bodyText, themeId });
   const status = star.ok ? 'success' : 'failed';
@@ -230,7 +235,7 @@ export async function processPaymentSuccessWhatsAppJob(
       ${template.id},
       'whatsapp',
       ${to},
-      ${JSON.stringify(reqPayload).slice(0, 5000)},
+      ${JSON.stringify({ job: 'payment_success', transactionId: idNum, ...starSenderPayload }).slice(0, 5000)},
       ${JSON.stringify({ httpStatus: star.status, body: star.responseText }).slice(0, 5000)},
       ${status}
     )
@@ -239,6 +244,12 @@ export async function processPaymentSuccessWhatsAppJob(
   if (!star.ok) {
     return { outcome: 'failed', retryableFailure: true, error: 'starsender_failed' };
   }
+
+  await sql`
+    UPDATE tuition_transactions
+    SET is_whatsapp_paid = 't'
+    WHERE id = ${idNum} AND user_id = ${body.userId}
+  `;
 
   return { outcome: 'sent', retryableFailure: false };
 }

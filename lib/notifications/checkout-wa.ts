@@ -347,7 +347,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   }
 
   const bodyText = substituteTemplate(template.content, vars);
-  const reqPayload = { messageType: 'text', to, bodyPreview: bodyText.slice(0, 200) };
+  const starSenderPayload = { messageType: 'text', to, body: bodyText };
 
   console.info('checkout_wa_sending', { transactionId: idNum, to, themeId, bodyLen: bodyText.length });
   const star = await postStarSenderText({ to, body: bodyText, themeId });
@@ -361,7 +361,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
       ${template.id},
       'whatsapp',
       ${to},
-      ${JSON.stringify(reqPayload).slice(0, 5000)},
+      ${JSON.stringify({ job: 'checkout', transactionId: idNum, ...starSenderPayload }).slice(0, 5000)},
       ${JSON.stringify({ httpStatus: star.status, body: star.responseText }).slice(0, 5000)},
       ${status}
     )
