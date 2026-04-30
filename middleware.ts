@@ -18,7 +18,7 @@ export async function middleware(request: NextRequest) {
 
   // Internal API (QStash webhook, diag, dll): skip auth middleware.
   // Penting untuk QStash: getToken() bisa consume body stream → signature failed.
-  if (pathname.startsWith('/api/internal')) {
+  if (pathname.startsWith('/api/internal') || pathname.startsWith('/api/va')) {
     return NextResponse.next();
   }
 

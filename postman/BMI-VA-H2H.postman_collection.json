@@ -1,0 +1,235 @@
+{
+  "info": {
+    "name": "Bank Muamalat — VA H2H (Mitra)",
+    "description": "5 endpoint POST VA H2H. Body = JWT HS256 (text/plain). Set `BASE_URL`, `JWT_SECRET` (sama dengan `BMI_JWT_SECRET` di server), `USERNAME_BMI`, `PASSWORD_BMI`, `MITRA_NAME`, dan contoh `VANO`/`REFNO`/nominal.\n\n**Catatan:** Postman Desktop menyediakan `crypto-js` via `require('crypto-js')`. Jalankan juga SQL `sql/add_bmi_va_h2h_payment_keys.sql` di Neon untuk deduplikasi Payment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "BASE_URL", "value": "http://localhost:3000" },
+    { "key": "JWT_SECRET", "value": "ganti-dengan-BMI_JWT_SECRET" },
+    { "key": "USERNAME_BMI", "value": "BMI" },
+    { "key": "PASSWORD_BMI", "value": "bankmuamalatindonesia" },
+    { "key": "MITRA_NAME", "value": "KreativaPortal" },
+    { "key": "VANO", "value": "7383010123456789" },
+    { "key": "REFNO", "value": "513484621652" },
+    { "key": "TRXDATE", "value": "20240612103000" },
+    { "key": "BILL_AMOUNT", "value": "2765000000" },
+    { "key": "PAYMENT_AMOUNT", "value": "2765000000" },
+    { "key": "BMI_JWT_BODY", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Sign On",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "function b64urlObj(o) {",
+              "  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(o)))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "}",
+              "function signJwt(payload, secret) {",
+              "  const h = b64urlObj({ alg: 'HS256', typ: 'JWT' });",
+              "  const p = b64urlObj(payload);",
+              "  const data = h + '.' + p;",
+              "  const sig = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(data, secret))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "  return data + '.' + sig;",
+              "}",
+              "const secret = pm.collectionVariables.get('JWT_SECRET');",
+              "const trx = pm.collectionVariables.get('TRXDATE');",
+              "const payload = {",
+              "  SIGNONINFO: trx + ';bankmuamalatindonesia',",
+              "  METHOD: 'SIGNON',",
+              "  USERNAME: pm.collectionVariables.get('USERNAME_BMI'),",
+              "  PASSWORD: pm.collectionVariables.get('PASSWORD_BMI')",
+              "};",
+              "pm.collectionVariables.set('BMI_JWT_BODY', signJwt(payload, secret));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+        "body": { "mode": "raw", "raw": "{{BMI_JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+        "url": "{{BASE_URL}}/api/va/signon"
+      }
+    },
+    {
+      "name": "2. Inquiry",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "function b64urlObj(o) {",
+              "  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(o)))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "}",
+              "function signJwt(payload, secret) {",
+              "  const h = b64urlObj({ alg: 'HS256', typ: 'JWT' });",
+              "  const p = b64urlObj(payload);",
+              "  const data = h + '.' + p;",
+              "  const sig = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(data, secret))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "  return data + '.' + sig;",
+              "}",
+              "const secret = pm.collectionVariables.get('JWT_SECRET');",
+              "const payload = {",
+              "  CCY: '360',",
+              "  VANO: pm.collectionVariables.get('VANO'),",
+              "  TRXDATE: pm.collectionVariables.get('TRXDATE'),",
+              "  METHOD: 'INQUIRY',",
+              "  USERNAME: pm.collectionVariables.get('USERNAME_BMI'),",
+              "  PASSWORD: pm.collectionVariables.get('PASSWORD_BMI'),",
+              "  CHANNELID: '1',",
+              "  REFNO: pm.collectionVariables.get('REFNO')",
+              "};",
+              "pm.collectionVariables.set('BMI_JWT_BODY', signJwt(payload, secret));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+        "body": { "mode": "raw", "raw": "{{BMI_JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+        "url": "{{BASE_URL}}/api/va/inquiry"
+      }
+    },
+    {
+      "name": "3. Payment",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "function b64urlObj(o) {",
+              "  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(o)))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "}",
+              "function signJwt(payload, secret) {",
+              "  const h = b64urlObj({ alg: 'HS256', typ: 'JWT' });",
+              "  const p = b64urlObj(payload);",
+              "  const data = h + '.' + p;",
+              "  const sig = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(data, secret))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "  return data + '.' + sig;",
+              "}",
+              "const secret = pm.collectionVariables.get('JWT_SECRET');",
+              "const payload = {",
+              "  TRXDATE: pm.collectionVariables.get('TRXDATE'),",
+              "  CCY: '360',",
+              "  REFNO: pm.collectionVariables.get('REFNO'),",
+              "  BILL: pm.collectionVariables.get('BILL_AMOUNT'),",
+              "  PAYMENT: pm.collectionVariables.get('PAYMENT_AMOUNT'),",
+              "  CHANNELID: '1',",
+              "  METHOD: 'PAYMENT',",
+              "  VANO: pm.collectionVariables.get('VANO'),",
+              "  CUSTNAME: 'BUDI SANTOSO',",
+              "  USERNAME: pm.collectionVariables.get('USERNAME_BMI'),",
+              "  PASSWORD: pm.collectionVariables.get('PASSWORD_BMI')",
+              "};",
+              "pm.collectionVariables.set('BMI_JWT_BODY', signJwt(payload, secret));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+        "body": { "mode": "raw", "raw": "{{BMI_JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+        "url": "{{BASE_URL}}/api/va/payment"
+      }
+    },
+    {
+      "name": "4. Sign Off",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "function b64urlObj(o) {",
+              "  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(o)))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "}",
+              "function signJwt(payload, secret) {",
+              "  const h = b64urlObj({ alg: 'HS256', typ: 'JWT' });",
+              "  const p = b64urlObj(payload);",
+              "  const data = h + '.' + p;",
+              "  const sig = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(data, secret))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "  return data + '.' + sig;",
+              "}",
+              "const secret = pm.collectionVariables.get('JWT_SECRET');",
+              "const trx = pm.collectionVariables.get('TRXDATE');",
+              "const payload = {",
+              "  METHOD: 'SIGNOFF',",
+              "  SIGNOFFINFO: trx + ';bankmuamalatindonesia',",
+              "  USERNAME: pm.collectionVariables.get('USERNAME_BMI'),",
+              "  PASSWORD: pm.collectionVariables.get('PASSWORD_BMI')",
+              "};",
+              "pm.collectionVariables.set('BMI_JWT_BODY', signJwt(payload, secret));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+        "body": { "mode": "raw", "raw": "{{BMI_JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+        "url": "{{BASE_URL}}/api/va/signoff"
+      }
+    },
+    {
+      "name": "5. Echo",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = require('crypto-js');",
+              "function b64urlObj(o) {",
+              "  return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(JSON.stringify(o)))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "}",
+              "function signJwt(payload, secret) {",
+              "  const h = b64urlObj({ alg: 'HS256', typ: 'JWT' });",
+              "  const p = b64urlObj(payload);",
+              "  const data = h + '.' + p;",
+              "  const sig = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA256(data, secret))",
+              "    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');",
+              "  return data + '.' + sig;",
+              "}",
+              "const secret = pm.collectionVariables.get('JWT_SECRET');",
+              "const payload = {",
+              "  ECHODATE: pm.collectionVariables.get('TRXDATE'),",
+              "  METHOD: 'ECHO',",
+              "  USERNAME: pm.collectionVariables.get('USERNAME_BMI'),",
+              "  PASSWORD: pm.collectionVariables.get('PASSWORD_BMI')",
+              "};",
+              "pm.collectionVariables.set('BMI_JWT_BODY', signJwt(payload, secret));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+        "body": { "mode": "raw", "raw": "{{BMI_JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+        "url": "{{BASE_URL}}/api/va/echo"
+      }
+    }
+  ]
+}
