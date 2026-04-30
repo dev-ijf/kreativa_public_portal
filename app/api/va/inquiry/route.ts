@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
-import { decodeToken } from '@/lib/va/jwt';
+import { parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
 import { formatCustomerName, parseVANO, validateCredentials } from '@/lib/va/validate';
 
@@ -17,7 +17,6 @@ function num(v: unknown): number {
   return 0;
 }
 
-/** Nominal tagihan untuk BMI: kali 100, bulatkan, tidak boleh negatif. */
 function billToBmiString(amount: number): string {
   const cents = Math.round(amount * 100);
   const safe = cents < 0 ? 0 : cents;
@@ -25,27 +24,29 @@ function billToBmiString(amount: number): string {
 }
 
 export async function POST(req: NextRequest) {
+  const debug = req.nextUrl.searchParams.get('debug') === '1';
+
   let payload: Record<string, unknown>;
   try {
     const body = await req.text();
-    payload = await decodeToken(body);
+    payload = await parseRequestBody(body, debug);
   } catch {
-    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const { CCY, VANO, METHOD, USERNAME, PASSWORD } = payload as Record<string, string>;
 
   if (!validateCredentials(USERNAME, PASSWORD)) {
-    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   if (METHOD !== 'INQUIRY') {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -74,25 +75,25 @@ export async function POST(req: NextRequest) {
   }[];
 
   if (rows.length === 0) {
-    return buildResponse({ ERR: '15', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '15', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const row = rows[0];
   const st = String(row.status ?? '').toLowerCase();
 
   if (st === 'success') {
-    return buildResponse({ ERR: '88', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '88', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   if (st !== 'pending') {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const total = num(row.total_amount);
   const custRaw = row.student_name ?? '';
   const cust = formatCustomerName(custRaw);
   if (!cust) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' });
+    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
   }
 
   const desc2 = String(row.academic_year_name ?? '').slice(0, 256);
@@ -100,10 +101,10 @@ export async function POST(req: NextRequest) {
   return buildResponse({
     CCY: CCY ?? '360',
     BILL: billToBmiString(total),
-    DESCRIPTION: 'TUITION'.slice(0, 40),
+    DESCRIPTION: 'TUITION',
     DESCRIPTION2: desc2,
     CUSTNAME: cust,
     ERR: '00',
     METHOD: 'INQUIRY',
-  });
+  }, 200, debug);
 }

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
 import { releaseBmiPaymentKey, tryClaimBmiPaymentKey } from '@/lib/va/bmi-payment-idempotency';
-import { decodeToken } from '@/lib/va/jwt';
+import { parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
 import { formatCustomerName, parseVANO, validateCredentials } from '@/lib/va/validate';
 
@@ -23,7 +23,6 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Nilai dari BMI (string integer) sudah ×100 — bagi 100. */
 function parseScaledAmount(raw: unknown): number | null {
   const s = String(raw ?? '').trim().replace(/\s/g, '');
   if (!s) return null;
@@ -68,7 +67,6 @@ function sumRemaining(m: Map<number, number>): number {
   return round2(s);
 }
 
-/** Alokasi nominal ke tiap baris detail (proporsional `amount_paid`), lalu agregasi per `bill_id`. */
 function allocateByBill(
   details: DetailRow[],
   effectivePayment: number,
@@ -108,39 +106,32 @@ function nextBillStatus(params: { billTotal: number; newPaid: number }): string 
 }
 
 export async function POST(req: NextRequest) {
+  const debug = req.nextUrl.searchParams.get('debug') === '1';
+
   let payload: Record<string, unknown>;
   try {
     const body = await req.text();
-    payload = await decodeToken(body);
+    payload = await parseRequestBody(body, debug);
   } catch {
-    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const {
-    TRXDATE,
-    CCY,
-    REFNO,
-    BILL,
-    PAYMENT,
-    CHANNELID,
-    VANO,
-    CUSTNAME,
-    USERNAME,
-    PASSWORD,
-    METHOD,
+    TRXDATE, CCY, REFNO, BILL, PAYMENT, CHANNELID,
+    VANO, CUSTNAME, USERNAME, PASSWORD, METHOD,
   } = payload as Record<string, string>;
 
   if (!validateCredentials(USERNAME, PASSWORD)) {
-    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   if (METHOD !== 'PAYMENT') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -148,13 +139,13 @@ export async function POST(req: NextRequest) {
   const trxDate = String(TRXDATE ?? '').trim();
 
   if (!refNo || !trxDate) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const billScaled = parseScaledAmount(BILL);
   const paymentScaled = parseScaledAmount(PAYMENT);
   if (billScaled == null || paymentScaled == null) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const headRows = (await sql`
@@ -189,35 +180,35 @@ export async function POST(req: NextRequest) {
   }[];
 
   if (headRows.length === 0) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const head = headRows[0];
   const st = String(head.status ?? '').toLowerCase();
 
   if (st === 'success') {
-    return buildResponse({ ERR: '88', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '88', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   if (st !== 'pending') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   if (head.student_id == null || !head.student_name) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const totalDb = num(head.total_amount);
   if (Math.abs(billScaled - totalDb) > 0.02) {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const claim = await tryClaimBmiPaymentKey(vanoNorm, refNo, trxDate);
   if (claim === 'duplicate') {
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
   if (claim === 'error') {
-    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const tid = Number(head.id);
@@ -242,7 +233,7 @@ export async function POST(req: NextRequest) {
 
   if (detailRows.length === 0) {
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const mode = classifyPaymentMode(detailRows);
@@ -255,7 +246,7 @@ export async function POST(req: NextRequest) {
   } else if (mode === 'PARTIAL') {
     if (paymentScaled - totalDb > 0.005) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' });
+      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' }, 200, debug);
     }
     let floor = 0;
     for (const d of detailRows) {
@@ -263,20 +254,20 @@ export async function POST(req: NextRequest) {
     }
     if (floor > 0 && paymentScaled + 0.005 < floor) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' });
+      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' }, 200, debug);
     }
     effectivePayment = round2(Math.min(paymentScaled, maxApply));
   } else {
     if (Math.abs(paymentScaled - totalDb) > 0.02) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '16', METHOD: 'PAYMENT' });
+      return buildResponse({ ERR: '16', METHOD: 'PAYMENT' }, 200, debug);
     }
     effectivePayment = round2(Math.min(paymentScaled, maxApply));
   }
 
   if (effectivePayment <= 0) {
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '30', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   const byBill = allocateByBill(detailRows, effectivePayment, remMap);
@@ -297,9 +288,8 @@ export async function POST(req: NextRequest) {
         LIMIT 1
       `) as unknown as { total_amount: number; paid_amount: number; is_installment: boolean }[];
 
-      if (br.length === 0) {
-        throw new Error('bill_missing');
-      }
+      if (br.length === 0) throw new Error('bill_missing');
+
       const b = br[0];
       const newPaid = round2(num(b.paid_amount) + add);
       const status = nextBillStatus({
@@ -328,7 +318,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error('bmi_va_payment_db', e);
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' });
+    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' }, 200, debug);
   }
 
   void schedulePaymentSuccessWhatsAppJob({
@@ -347,9 +337,9 @@ export async function POST(req: NextRequest) {
     CCY: CCY ?? '360',
     BILL: billOut,
     CUSTNAME: cust || formatCustomerName('SISWA'),
-    DESCRIPTION: 'TUITION'.slice(0, 40),
+    DESCRIPTION: 'TUITION',
     DESCRIPTION2: desc2,
     ERR: '00',
     METHOD: 'PAYMENT',
-  });
+  }, 200, debug);
 }
