@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Source_Sans_3 } from 'next/font/google';
 import { getPortalThemeForRequest, portalThemeToHtmlStyle } from '@/lib/data/server/portal-theme';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 
 const sourceSans = Source_Sans_3({
   subsets: ['latin'],
