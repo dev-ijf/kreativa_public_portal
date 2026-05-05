@@ -193,6 +193,39 @@ export function computeNewMastery(theta: number, difficulty: number, isCorrect: 
 }
 
 // ────────────────────────────────────────────────────────────────
+// Enrollment snapshot (sumber kebenaran: DB, bukan cookie session)
+// ────────────────────────────────────────────────────────────────
+
+export type AdaptiveTestEnrollmentContext = {
+  classId: number | null;
+  academicYearId: number | null;
+  levelGradeId: number | null;
+};
+
+/** Kelas / tahun ajaran / jenjang dari riwayat kelas aktif — sama dengan pola portal children. */
+export async function getActiveEnrollmentContextForStudent(
+  studentId: number,
+): Promise<AdaptiveTestEnrollmentContext | null> {
+  const rows = await sql`
+    SELECT
+      ch.class_id AS "classId",
+      ch.academic_year_id AS "academicYearId",
+      ch.level_grade_id AS "levelGradeId"
+    FROM core_student_class_histories ch
+    WHERE ch.student_id = ${studentId} AND ch.status = 'active'
+    ORDER BY ch.id DESC
+    LIMIT 1
+  `;
+  if (!rows.length) return null;
+  const r = rows[0] as Record<string, unknown>;
+  return {
+    classId: r.classId != null ? Number(r.classId) : null,
+    academicYearId: r.academicYearId != null ? Number(r.academicYearId) : null,
+    levelGradeId: r.levelGradeId != null ? Number(r.levelGradeId) : null,
+  };
+}
+
+// ────────────────────────────────────────────────────────────────
 // Create Test Row
 // ────────────────────────────────────────────────────────────────
 
@@ -200,10 +233,27 @@ export async function createAdaptiveTest(
   studentId: number,
   subjectId: number,
   initialMastery: number,
+  enrollment?: AdaptiveTestEnrollmentContext | null,
 ): Promise<number> {
   const rows = await sql`
-    INSERT INTO academic_adaptive_tests (student_id, subject_id, score, mastery_level)
-    VALUES (${studentId}, ${subjectId}, 0, ${initialMastery})
+    INSERT INTO academic_adaptive_tests (
+      student_id,
+      subject_id,
+      score,
+      mastery_level,
+      class_id,
+      academic_year_id,
+      level_grade_id
+    )
+    VALUES (
+      ${studentId},
+      ${subjectId},
+      0,
+      ${initialMastery},
+      ${enrollment?.classId ?? null},
+      ${enrollment?.academicYearId ?? null},
+      ${enrollment?.levelGradeId ?? null}
+    )
     RETURNING id
   `;
   return Number((rows[0] as { id: number }).id);
@@ -346,10 +396,32 @@ export async function getAdaptiveHistoryStats(studentId: number): Promise<{
 // History: Detail (test + questions)
 // ────────────────────────────────────────────────────────────────
 
+function mapAdaptiveHistoryQuestionRow(q: Record<string, unknown>): AdaptiveHistoryQuestionRow {
+  return {
+    id: Number(q.id),
+    gradeBand: String(q.gradeBand),
+    difficulty: Number(q.difficulty),
+    questionText: String(q.questionText),
+    optionsJson: q.optionsJson as string[],
+    correctAnswer: String(q.correctAnswer),
+    studentAnswer: q.studentAnswer ? String(q.studentAnswer) : null,
+    explanation: q.explanation ? String(q.explanation) : null,
+    hintsJson: q.hintsJson as string[] | null,
+  };
+}
+
+export type AdaptiveTestDetailResult = {
+  test: AdaptiveHistoryDetailRow;
+  questions: AdaptiveHistoryQuestionRow[];
+  questionsTotal: number;
+};
+
 export async function getAdaptiveTestDetail(
   testId: number,
   viewerStudentId: number,
-): Promise<{ test: AdaptiveHistoryDetailRow; questions: AdaptiveHistoryQuestionRow[] } | null> {
+  questionsOffset = 0,
+  questionsLimit = 2,
+): Promise<AdaptiveTestDetailResult | null> {
   const testRows = await sql`
     SELECT
       t.id                AS "testId",
@@ -371,6 +443,16 @@ export async function getAdaptiveTestDetail(
     ? test.testDate.toISOString()
     : String(test.testDate);
 
+  const countRows = await sql`
+    SELECT COUNT(*)::int AS "total"
+    FROM academic_adaptive_questions q
+    WHERE q.adaptive_test_id = ${testId}
+  `;
+  const questionsTotal = Number((countRows[0] as { total: number }).total ?? 0);
+
+  const offset = Math.max(0, questionsOffset);
+  const limit = Math.min(50, Math.max(1, questionsLimit));
+
   const qRows = await sql`
     SELECT
       q.id,
@@ -386,6 +468,7 @@ export async function getAdaptiveTestDetail(
     LEFT JOIN academic_adaptive_questions_bank b ON b.id = q.bank_question_id
     WHERE q.adaptive_test_id = ${testId}
     ORDER BY q.id ASC
+    LIMIT ${limit} OFFSET ${offset}
   `;
 
   return {
@@ -398,17 +481,8 @@ export async function getAdaptiveTestDetail(
       masteryLevel: Number(test.masteryLevel),
       testDate,
     },
-    questions: (qRows as Record<string, unknown>[]).map((q) => ({
-      id: Number(q.id),
-      gradeBand: String(q.gradeBand),
-      difficulty: Number(q.difficulty),
-      questionText: String(q.questionText),
-      optionsJson: q.optionsJson as string[],
-      correctAnswer: String(q.correctAnswer),
-      studentAnswer: q.studentAnswer ? String(q.studentAnswer) : null,
-      explanation: q.explanation ? String(q.explanation) : null,
-      hintsJson: q.hintsJson as string[] | null,
-    })),
+    questions: (qRows as Record<string, unknown>[]).map(mapAdaptiveHistoryQuestionRow),
+    questionsTotal,
   };
 }
 

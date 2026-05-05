@@ -718,6 +718,12 @@ CREATE TABLE "public"."academic_adaptive_tests" (
     PRIMARY KEY ("id")
 );
 
+-- Konteks kelas / tahun ajaran / jenjang saat tes adaptif (diisi dari riwayat kelas aktif siswa)
+ALTER TABLE "public"."academic_adaptive_tests"
+  ADD COLUMN IF NOT EXISTS "class_id" int4,
+  ADD COLUMN IF NOT EXISTS "academic_year_id" int4,
+  ADD COLUMN IF NOT EXISTS "level_grade_id" int4;
+
 DROP TABLE IF EXISTS "public"."academic_adaptive_questions";
 -- Sequence and defined type
 CREATE SEQUENCE IF NOT EXISTS academic_adaptive_questions_id_seq;

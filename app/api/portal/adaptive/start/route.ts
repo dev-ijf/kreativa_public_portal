@@ -5,10 +5,11 @@ import {
   getGradeBandForStudent,
   getLastMastery,
   getLifetimeCorrectIds,
+  getActiveEnrollmentContextForStudent,
   createAdaptiveTest,
   fetchNextIRTQuestion,
 } from '@/lib/data/server/adaptive';
-import { createAdaptiveSession, updateAdaptiveSession } from '@/lib/cache/adaptive-session';
+import { createAdaptiveSession } from '@/lib/cache/adaptive-session';
 
 const DEFAULT_QUESTION_COUNT = 10;
 
@@ -38,25 +39,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const gradeBand = await getGradeBandForStudent(studentId);
-  const initialMastery = await getLastMastery(studentId, subjectId);
-  const correctQuestionIds = await getLifetimeCorrectIds(studentId, subjectId);
+  const [gradeBand, initialMastery, correctQuestionIds, enrollment] = await Promise.all([
+    getGradeBandForStudent(studentId),
+    getLastMastery(studentId, subjectId),
+    getLifetimeCorrectIds(studentId, subjectId),
+    getActiveEnrollmentContextForStudent(studentId),
+  ]);
 
-  const testId = await createAdaptiveTest(studentId, subjectId, initialMastery);
-
-  await createAdaptiveSession({
-    studentId,
-    testId,
-    subjectId,
-    gradeBand,
-    currentMastery: initialMastery,
-    correctQuestionIds,
-    sessionQuestionIds: [],
-    answers: [],
-    questionCount: DEFAULT_QUESTION_COUNT,
-    answeredCount: 0,
-  });
-
+  // Hanya persist baris tes setelah ada soal — hindari baris "kosong" yang ikut
+  // mastery per mapel, riwayat, dan statistik (total/avg score).
   const question = await fetchNextIRTQuestion(
     subjectId,
     gradeBand,
@@ -65,11 +56,30 @@ export async function POST(request: Request) {
     [],
   );
 
-  if (question) {
-    await updateAdaptiveSession(studentId, testId, {
-      sessionQuestionIds: [question.id],
-    });
+  if (!question) {
+    return NextResponse.json(
+      {
+        error: 'No questions available for your level.',
+        code: 'NO_QUESTIONS',
+      },
+      { status: 404 },
+    );
   }
+
+  const testId = await createAdaptiveTest(studentId, subjectId, initialMastery, enrollment);
+
+  await createAdaptiveSession({
+    studentId,
+    testId,
+    subjectId,
+    gradeBand,
+    currentMastery: initialMastery,
+    correctQuestionIds,
+    sessionQuestionIds: [question.id],
+    answers: [],
+    questionCount: DEFAULT_QUESTION_COUNT,
+    answeredCount: 0,
+  });
 
   return NextResponse.json({
     testId,

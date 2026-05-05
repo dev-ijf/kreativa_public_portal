@@ -24,7 +24,7 @@ export function ChildSelector() {
               aria-label={label}
               onClick={() => setActiveChildId(child.id)}
               className={[
-                'shrink-0 flex flex-col items-stretch text-left w-[min(100%,10.5rem)] px-2.5 py-1.5 rounded-xl border transition-colors',
+                'shrink-0 flex flex-col items-stretch text-left w-[min(100%,9.25rem)] px-2 py-1.5 rounded-xl border transition-colors',
                 isActive
                   ? 'border-primary bg-primary-light ring-1 ring-primary/15'
                   : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/80',

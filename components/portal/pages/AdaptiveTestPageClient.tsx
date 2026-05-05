@@ -70,7 +70,10 @@ export function AdaptiveTestPageClient() {
         body: JSON.stringify({ studentId: activeChildId, subjectId }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = (await res.json()) as { error?: string; code?: string };
+        if (err.code === 'NO_QUESTIONS') {
+          return;
+        }
         setError(err.error || 'Failed to start session');
         return;
       }

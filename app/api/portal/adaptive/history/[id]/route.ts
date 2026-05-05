@@ -26,12 +26,15 @@ export async function GET(
     return NextResponse.json({ error: 'studentId is required' }, { status: 400 });
   }
 
+  const questionsOffset = Math.max(0, Number(searchParams.get('questionsOffset')) || 0);
+  const questionsLimit = Math.min(50, Math.max(1, Number(searchParams.get('questionsLimit')) || 2));
+
   const visible = await isStudentVisibleToViewer(userId, role, studentId);
   if (!visible) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const detail = await getAdaptiveTestDetail(testId, studentId);
+  const detail = await getAdaptiveTestDetail(testId, studentId, questionsOffset, questionsLimit);
   if (!detail) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }

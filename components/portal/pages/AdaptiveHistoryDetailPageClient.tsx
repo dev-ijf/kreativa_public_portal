@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Check, X, Loader2 } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { RichText } from '@/components/ui/RichText';
+
+const QUESTIONS_PAGE_SIZE = 2;
 
 type QuestionRow = {
   id: number;
@@ -32,6 +34,7 @@ type TestDetail = {
 type DetailData = {
   test: TestDetail;
   questions: QuestionRow[];
+  questionsTotal: number;
 };
 
 export function AdaptiveHistoryDetailPageClient() {
@@ -43,33 +46,103 @@ export function AdaptiveHistoryDetailPageClient() {
 
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const fetchingMoreRef = useRef(false);
 
   const title = useMemo(() => (lang === 'en' ? 'Adaptive Test Detail' : 'Detail Tes Adaptif'), [lang]);
 
-  const fetchDetail = useCallback(async () => {
+  const fetchDetailPage = useCallback(
+    async (questionsOffset: number) => {
+      if (!id || !studentId) return null;
+      const qs = new URLSearchParams({
+        studentId: String(studentId),
+        questionsOffset: String(questionsOffset),
+        questionsLimit: String(QUESTIONS_PAGE_SIZE),
+      });
+      const res = await fetch(`/api/portal/adaptive/history/${id}?${qs.toString()}`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to load');
+      }
+      return (await res.json()) as DetailData;
+    },
+    [id, studentId],
+  );
+
+  const fetchInitial = useCallback(async () => {
     if (!id || !studentId) return;
     setLoading(true);
     setError(null);
+    fetchingMoreRef.current = false;
     try {
-      const res = await fetch(`/api/portal/adaptive/history/${id}?studentId=${studentId}`);
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.error || 'Failed to load');
-        return;
-      }
-      const json = await res.json() as DetailData;
-      setData(json);
-    } catch {
-      setError('Network error');
+      const json = await fetchDetailPage(0);
+      if (json) setData(json);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Network error');
+      setData(null);
     } finally {
       setLoading(false);
     }
-  }, [id, studentId]);
+  }, [id, studentId, fetchDetailPage]);
+
+  const loadMoreQuestions = useCallback(async () => {
+    if (!data || loadingMore || fetchingMoreRef.current) return;
+    const nextOffset = data.questions.length;
+    if (nextOffset >= data.questionsTotal) return;
+
+    fetchingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const json = await fetchDetailPage(nextOffset);
+      if (!json) return;
+      setData((prev) => {
+        if (!prev) return json;
+        const seen = new Set(prev.questions.map((q) => q.id));
+        const merged = [...prev.questions];
+        for (const q of json.questions) {
+          if (!seen.has(q.id)) {
+            seen.add(q.id);
+            merged.push(q);
+          }
+        }
+        return {
+          test: prev.test,
+          questionsTotal: json.questionsTotal,
+          questions: merged,
+        };
+      });
+    } catch {
+      /* best effort */
+    } finally {
+      fetchingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [data, loadingMore, fetchDetailPage]);
 
   useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+    void fetchInitial();
+  }, [fetchInitial]);
+
+  const hasMoreQuestions = data != null && data.questions.length < data.questionsTotal;
+
+  useEffect(() => {
+    if (!hasMoreQuestions || loading) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const [e] = entries;
+        if (e?.isIntersecting) void loadMoreQuestions();
+      },
+      { root: null, rootMargin: '160px', threshold: 0 },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [hasMoreQuestions, loadMoreQuestions, loading, data?.questions.length]);
 
   if (loading) {
     return (
@@ -95,7 +168,7 @@ export function AdaptiveHistoryDetailPageClient() {
     );
   }
 
-  const { test, questions } = data;
+  const { test, questions, questionsTotal } = data;
   const subjectName = lang === 'en' ? test.subjectNameEn : test.subjectNameId;
 
   return (
@@ -113,7 +186,9 @@ export function AdaptiveHistoryDetailPageClient() {
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100">
             <p className="text-xs font-semibold tracking-wider text-slate-500 uppercase">
-              {lang === 'en' ? `Related Questions (${questions.length})` : `Soal terkait tes (${questions.length})`}
+              {lang === 'en'
+                ? `Related Questions (${questionsTotal})`
+                : `Soal terkait tes (${questionsTotal})`}
             </p>
           </div>
 
@@ -218,6 +293,18 @@ export function AdaptiveHistoryDetailPageClient() {
               );
             })}
           </div>
+
+          {hasMoreQuestions && (
+            <div ref={sentinelRef} className="flex justify-center py-4 border-t border-slate-100">
+              {loadingMore ? (
+                <Loader2 size={22} className="animate-spin text-slate-400" aria-hidden />
+              ) : (
+                <span className="text-[10px] text-slate-400">
+                  {lang === 'en' ? 'Scroll for more' : 'Gulir untuk memuat lagi'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
