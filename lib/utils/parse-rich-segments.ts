@@ -1,20 +1,24 @@
 export type RichSegment =
   | { type: 'latex'; value: string }
-  | { type: 'mermaid'; value: string };
+  | { type: 'mermaid'; value: string }
+  | { type: 'mathplot'; value: string };
 
-const OPEN_FENCE = /^\s*```\s*mermaid\s*$/i;
+const OPEN_MERMAID = /^\s*```\s*mermaid\s*$/i;
+const OPEN_MATHPLOT = /^\s*```\s*mathplot\s*$/i;
 const CLOSE_FENCE = /^\s*```\s*$/;
 
+type FenceMode = 'latex' | 'mermaid' | 'mathplot';
+
 /**
- * Memecah string menjadi fragmen LaTeX/teks biasa dan blok diagram Mermaid.
- * Hanya blok fenced Markdown ` ```mermaid ... ``` ` yang dikenali (case-insensitive).
+ * Memecah string menjadi fragmen LaTeX/teks, blok Mermaid, dan blok mathplot (JSON).
  */
 export function parseRichSegments(input: string): RichSegment[] {
   const lines = input.split('\n');
   const out: RichSegment[] = [];
   let buf: string[] = [];
-  let inMermaid = false;
+  let mode: FenceMode = 'latex';
   let mermaidBuf: string[] = [];
+  let mathplotBuf: string[] = [];
 
   const flushLatex = () => {
     if (buf.length === 0) return;
@@ -29,32 +33,62 @@ export function parseRichSegments(input: string): RichSegment[] {
     mermaidBuf = [];
   };
 
+  const flushMathplot = () => {
+    const s = mathplotBuf.join('\n').trim();
+    if (s.length > 0) out.push({ type: 'mathplot', value: s });
+    mathplotBuf = [];
+  };
+
   for (const line of lines) {
-    if (inMermaid) {
+    if (mode === 'mermaid') {
       if (CLOSE_FENCE.test(line)) {
         flushMermaid();
-        inMermaid = false;
+        mode = 'latex';
       } else {
         mermaidBuf.push(line);
       }
       continue;
     }
 
-    if (OPEN_FENCE.test(line)) {
+    if (mode === 'mathplot') {
+      if (CLOSE_FENCE.test(line)) {
+        flushMathplot();
+        mode = 'latex';
+      } else {
+        mathplotBuf.push(line);
+      }
+      continue;
+    }
+
+    if (OPEN_MERMAID.test(line)) {
       flushLatex();
-      inMermaid = true;
+      mode = 'mermaid';
       mermaidBuf = [];
+      continue;
+    }
+
+    if (OPEN_MATHPLOT.test(line)) {
+      flushLatex();
+      mode = 'mathplot';
+      mathplotBuf = [];
       continue;
     }
 
     buf.push(line);
   }
 
-  if (inMermaid) {
+  if (mode === 'mermaid') {
     buf.push('```mermaid');
     buf.push(...mermaidBuf);
     mermaidBuf = [];
-    inMermaid = false;
+    mode = 'latex';
+  }
+
+  if (mode === 'mathplot') {
+    buf.push('```mathplot');
+    buf.push(...mathplotBuf);
+    mathplotBuf = [];
+    mode = 'latex';
   }
 
   flushLatex();
@@ -69,7 +103,13 @@ function mergeAdjacentLatex(segments: RichSegment[]): RichSegment[] {
     if (seg.type === 'latex' && last?.type === 'latex') {
       last.value += `\n${seg.value}`;
     } else {
-      merged.push(seg.type === 'latex' ? { type: 'latex', value: seg.value } : { type: 'mermaid', value: seg.value });
+      merged.push(
+        seg.type === 'latex'
+          ? { type: 'latex', value: seg.value }
+          : seg.type === 'mermaid'
+            ? { type: 'mermaid', value: seg.value }
+            : { type: 'mathplot', value: seg.value },
+      );
     }
   }
   return merged;
