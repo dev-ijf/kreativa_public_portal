@@ -192,14 +192,14 @@ export function AdaptiveHistoryDetailPageClient() {
             </p>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="p-4 space-y-4">
             {questions.map((q, idx) => {
               const isStudentCorrect = q.studentAnswer != null && q.studentAnswer === q.correctAnswer;
 
               return (
-                <div key={q.id} className="p-5">
+                <div key={q.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-5">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs font-medium text-slate-500 bg-white px-2.5 py-1 rounded-full border border-slate-200">
                       #{idx + 1} · {q.gradeBand} · {lang === 'en' ? 'difficulty' : 'kesulitan'} {q.difficulty.toFixed(2)}
                     </p>
                   </div>

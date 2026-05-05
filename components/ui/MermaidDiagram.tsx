@@ -27,7 +27,25 @@ export function MermaidDiagram({ code, className = '' }: MermaidDiagramProps) {
           mermaid.initialize({
             startOnLoad: false,
             securityLevel: 'strict',
-            theme: 'neutral',
+            theme: 'default',
+            themeVariables: {
+              pie1: '#6366f1',
+              pie2: '#f59e0b',
+              pie3: '#10b981',
+              pie4: '#ef4444',
+              pie5: '#8b5cf6',
+              pie6: '#06b6d4',
+              pie7: '#f97316',
+              pie8: '#ec4899',
+              pie9: '#14b8a6',
+              pie10: '#84cc16',
+              pie11: '#a855f7',
+              pie12: '#0ea5e9',
+              pieTitleTextColor: '#334155',
+              pieSectionTextColor: '#ffffff',
+              pieLegendTextColor: '#475569',
+              pieLegendTextSize: '13px',
+            },
           });
           mermaidInitialized = true;
         }
