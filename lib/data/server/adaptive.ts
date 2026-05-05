@@ -268,14 +268,19 @@ export async function getBankQuestionCorrectAnswer(bankQuestionId: number): Prom
 // ────────────────────────────────────────────────────────────────
 
 function mapHistoryRows(rows: unknown[]): AdaptiveHistoryRow[] {
-  return (rows as AdaptiveHistoryRow[]).map((r) => ({
-    ...r,
-    id: Number(r.id),
-    subjectId: Number(r.subjectId),
-    score: Number(r.score),
-    masteryLevel: Number(r.masteryLevel),
-    testDate: r.testDate instanceof Date ? r.testDate.toISOString() : String(r.testDate),
-  }));
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    const td = r.testDate;
+    return {
+      id: Number(r.id),
+      subjectId: Number(r.subjectId),
+      subjectNameEn: String(r.subjectNameEn),
+      subjectNameId: String(r.subjectNameId),
+      score: Number(r.score),
+      masteryLevel: Number(r.masteryLevel),
+      testDate: td instanceof Date ? td.toISOString() : String(td),
+    };
+  });
 }
 
 export async function getAdaptiveHistory(studentId: number): Promise<AdaptiveHistoryRow[]> {

@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { Check, X, Loader2 } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { LatexText } from '@/components/ui/LatexText';
+import { RichText } from '@/components/ui/RichText';
 
 type QuestionRow = {
   id: number;
@@ -130,7 +130,7 @@ export function AdaptiveHistoryDetailPageClient() {
                   </div>
 
                   <div className="mt-3 text-sm text-slate-800">
-                    <LatexText>{q.questionText}</LatexText>
+                    <RichText>{q.questionText}</RichText>
                   </div>
 
                   <p className="mt-4 text-xs font-semibold tracking-wider text-slate-500 uppercase">
@@ -157,7 +157,7 @@ export function AdaptiveHistoryDetailPageClient() {
                           <div className="flex items-center gap-3">
                             <div className="w-8 text-xs font-semibold text-slate-500 shrink-0">{String.fromCharCode(65 + optIdx)}.</div>
                             <div className="text-sm text-slate-700">
-                              <LatexText>{opt}</LatexText>
+                              <RichText>{opt}</RichText>
                             </div>
                           </div>
 
@@ -186,7 +186,7 @@ export function AdaptiveHistoryDetailPageClient() {
                   <div className="mt-4 text-xs text-slate-600">
                     <span className="text-slate-500">{lang === 'en' ? 'Student answer' : 'Jawaban siswa'}:</span>{' '}
                     <span className={isStudentCorrect ? 'text-emerald-700 font-semibold' : 'text-red-700 font-semibold'}>
-                      {q.studentAnswer == null ? '-' : <LatexText>{q.studentAnswer}</LatexText>}
+                      {q.studentAnswer == null ? '-' : <RichText>{q.studentAnswer}</RichText>}
                     </span>{' '}
                     <span className="text-slate-500">
                       ({isStudentCorrect ? (lang === 'en' ? 'correct' : 'benar') : (lang === 'en' ? 'wrong' : 'salah')})
@@ -194,13 +194,13 @@ export function AdaptiveHistoryDetailPageClient() {
                     <span className="mx-2 text-slate-300">|</span>
                     <span className="text-slate-500">{lang === 'en' ? 'Key' : 'Kunci'}:</span>{' '}
                     <span className="text-emerald-700 font-semibold">
-                      <LatexText>{q.correctAnswer}</LatexText>
+                      <RichText>{q.correctAnswer}</RichText>
                     </span>
                   </div>
 
                   {q.explanation && (
                     <div className="mt-3 text-xs text-slate-500">
-                      <LatexText>{q.explanation}</LatexText>
+                      <RichText>{q.explanation}</RichText>
                     </div>
                   )}
 
@@ -209,7 +209,7 @@ export function AdaptiveHistoryDetailPageClient() {
                       <p className="text-[10px] font-semibold text-slate-400 uppercase">{lang === 'en' ? 'Hints' : 'Petunjuk'}</p>
                       {q.hintsJson.map((hint, hIdx) => (
                         <p key={hIdx} className="text-xs text-slate-400 pl-3">
-                          • <LatexText>{hint}</LatexText>
+                          • <RichText>{hint}</RichText>
                         </p>
                       ))}
                     </div>

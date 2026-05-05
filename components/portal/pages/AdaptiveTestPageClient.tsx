@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { LatexText } from '@/components/ui/LatexText';
+import { RichText } from '@/components/ui/RichText';
 
 type BankQuestion = {
   id: number;
@@ -271,7 +271,7 @@ export function AdaptiveTestPageClient() {
             </p>
           )}
           <h2 className="text-slate-800 text-base leading-relaxed">
-            <LatexText>{question.questionText}</LatexText>
+            <RichText>{question.questionText}</RichText>
           </h2>
 
           {/* Options */}
@@ -296,7 +296,7 @@ export function AdaptiveTestPageClient() {
                           : 'border-slate-200 bg-white hover:bg-slate-50',
                   ].join(' ')}
                 >
-                  <LatexText>{opt}</LatexText>
+                  <RichText>{opt}</RichText>
                 </button>
               );
             })}
@@ -324,7 +324,7 @@ export function AdaptiveTestPageClient() {
               {question.explanation && (
                 <div className="text-sm text-slate-600 mt-2">
                   <span className="font-semibold">{lang === 'en' ? 'Explanation' : 'Penjelasan'}: </span>
-                  <LatexText>{question.explanation}</LatexText>
+                  <RichText>{question.explanation}</RichText>
                 </div>
               )}
               {result === 'incorrect' && question.hintsJson && question.hintsJson.length > 0 && (
@@ -332,7 +332,7 @@ export function AdaptiveTestPageClient() {
                   <p className="text-xs font-semibold text-slate-500">{lang === 'en' ? 'Hints' : 'Petunjuk'}:</p>
                   {question.hintsJson.map((hint, idx) => (
                     <p key={idx} className="text-xs text-slate-500 pl-3">
-                      • <LatexText>{hint}</LatexText>
+                      • <RichText>{hint}</RichText>
                     </p>
                   ))}
                 </div>
