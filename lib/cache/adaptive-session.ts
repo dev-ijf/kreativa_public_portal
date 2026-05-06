@@ -92,6 +92,14 @@ export async function updateAdaptiveSession(
   return updated;
 }
 
+/** Write full state directly — skips the extra read when caller already has current state. */
+export function setAdaptiveSession(state: AdaptiveSessionState): void {
+  const r = getRedis();
+  if (!r) return;
+  const key = sessionKey(state.studentId, state.testId);
+  r.set(key, JSON.stringify(state), { ex: SESSION_TTL_SECONDS });
+}
+
 export async function deleteAdaptiveSession(studentId: number, testId: number): Promise<void> {
   const r = getRedis();
   if (!r) return;

@@ -14,7 +14,11 @@ import { createAdaptiveSession } from '@/lib/cache/adaptive-session';
 const DEFAULT_QUESTION_COUNT = 10;
 
 export async function POST(request: Request) {
-  const session = await getCachedServerSession();
+  const [session, body] = await Promise.all([
+    getCachedServerSession(),
+    request.json().catch(() => null),
+  ]);
+
   const userId = session?.user?.userId;
   const role = session?.user?.role ?? '';
 
@@ -22,32 +26,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { studentId?: number; subjectId?: number };
-  try {
-    body = await request.json();
-  } catch {
+  if (!body) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { studentId, subjectId } = body;
+  const { studentId, subjectId } = body as { studentId?: number; subjectId?: number };
   if (!studentId || !subjectId) {
     return NextResponse.json({ error: 'studentId and subjectId are required' }, { status: 400 });
   }
 
-  const visible = await isStudentVisibleToViewer(userId, role, studentId);
-  if (!visible) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const [gradeBand, initialMastery, correctQuestionIds, enrollment] = await Promise.all([
+  const [visible, gradeBand, initialMastery, correctQuestionIds, enrollment] = await Promise.all([
+    isStudentVisibleToViewer(userId, role, studentId),
     getGradeBandForStudent(studentId),
     getLastMastery(studentId, subjectId),
     getLifetimeCorrectIds(studentId, subjectId),
     getActiveEnrollmentContextForStudent(studentId),
   ]);
 
-  // Hanya persist baris tes setelah ada soal — hindari baris "kosong" yang ikut
-  // mastery per mapel, riwayat, dan statistik (total/avg score).
+  if (!visible) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
   const question = await fetchNextIRTQuestion(
     subjectId,
     gradeBand,
@@ -58,17 +57,14 @@ export async function POST(request: Request) {
 
   if (!question) {
     return NextResponse.json(
-      {
-        error: 'No questions available for your level.',
-        code: 'NO_QUESTIONS',
-      },
+      { error: 'No questions available for your level.', code: 'NO_QUESTIONS' },
       { status: 404 },
     );
   }
 
   const testId = await createAdaptiveTest(studentId, subjectId, initialMastery, enrollment);
 
-  await createAdaptiveSession({
+  createAdaptiveSession({
     studentId,
     testId,
     subjectId,

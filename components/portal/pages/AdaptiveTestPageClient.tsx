@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
@@ -49,10 +49,12 @@ export function AdaptiveTestPageClient() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [transitioning, startTransition] = useTransition();
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const startedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const title = useMemo(
     () => (lang === 'en' ? `Test - ${subjectName}` : `Tes - ${subjectName}`),
@@ -64,10 +66,12 @@ export function AdaptiveTestPageClient() {
     setLoading(true);
     setError(null);
     try {
+      abortRef.current = new AbortController();
       const res = await fetch('/api/portal/adaptive/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ studentId: activeChildId, subjectId }),
+        signal: abortRef.current.signal,
       });
       if (!res.ok) {
         const err = (await res.json()) as { error?: string; code?: string };
@@ -83,8 +87,8 @@ export function AdaptiveTestPageClient() {
       setQuestionCount(data.questionCount);
       setCurrentMastery(data.currentMastery);
       setAnsweredCount(0);
-    } catch {
-      setError('Network error');
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') setError('Network error');
     } finally {
       setLoading(false);
     }
@@ -94,6 +98,7 @@ export function AdaptiveTestPageClient() {
     if (startedRef.current) return;
     startedRef.current = true;
     startSession();
+    return () => { abortRef.current?.abort(); };
   }, [startSession]);
 
   const handleSubmit = useCallback(async () => {
@@ -130,11 +135,13 @@ export function AdaptiveTestPageClient() {
 
   const handleNext = useCallback(() => {
     if (nextQuestion) {
-      setQuestion(nextQuestion);
-      setNextQuestion(null);
-      setSelected(null);
-      setResult(null);
-      setCorrectAnswer(null);
+      startTransition(() => {
+        setQuestion(nextQuestion);
+        setNextQuestion(null);
+        setSelected(null);
+        setResult(null);
+        setCorrectAnswer(null);
+      });
     }
   }, [nextQuestion]);
 

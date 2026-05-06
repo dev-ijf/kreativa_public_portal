@@ -1,30 +1,29 @@
 import { NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import {
-  isStudentVisibleToViewer,
   computeNewMastery,
   fetchNextIRTQuestion,
 } from '@/lib/data/server/adaptive';
 import { sql } from '@/lib/db/client';
-import { getAdaptiveSession, updateAdaptiveSession } from '@/lib/cache/adaptive-session';
+import { getAdaptiveSession, setAdaptiveSession } from '@/lib/cache/adaptive-session';
 
 export async function POST(request: Request) {
-  const session = await getCachedServerSession();
-  const userId = session?.user?.userId;
-  const role = session?.user?.role ?? '';
+  const [session, body] = await Promise.all([
+    getCachedServerSession(),
+    request.json().catch(() => null),
+  ]);
 
-  if (userId == null) {
+  if (session?.user?.userId == null) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { studentId?: number; testId?: number; bankQuestionId?: number; studentAnswer?: string };
-  try {
-    body = await request.json();
-  } catch {
+  if (!body) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { studentId, testId, bankQuestionId, studentAnswer } = body;
+  const { studentId, testId, bankQuestionId, studentAnswer } = body as {
+    studentId?: number; testId?: number; bankQuestionId?: number; studentAnswer?: string;
+  };
   if (!studentId || !testId || !bankQuestionId || studentAnswer == null) {
     return NextResponse.json(
       { error: 'studentId, testId, bankQuestionId, and studentAnswer are required' },
@@ -32,28 +31,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const visible = await isStudentVisibleToViewer(userId, role, studentId);
-  if (!visible) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const [state, bankRows] = await Promise.all([
+    getAdaptiveSession(studentId, testId),
+    sql`
+      SELECT correct_answer AS "correctAnswer", difficulty
+      FROM academic_adaptive_questions_bank
+      WHERE id = ${bankQuestionId}
+    `,
+  ]);
 
-  const state = await getAdaptiveSession(studentId, testId);
   if (!state) {
     return NextResponse.json({ error: 'Session not found or expired' }, { status: 404 });
   }
 
-  const bankRows = await sql`
-    SELECT correct_answer AS "correctAnswer", difficulty
-    FROM academic_adaptive_questions_bank
-    WHERE id = ${bankQuestionId}
-  `;
   if (!bankRows.length) {
     return NextResponse.json({ error: 'Question not found in bank' }, { status: 404 });
   }
 
   const correctAnswer = String((bankRows[0] as { correctAnswer: string }).correctAnswer);
   const questionDifficulty = Number((bankRows[0] as { difficulty: number }).difficulty);
-
   const isCorrect = studentAnswer.trim() === correctAnswer.trim();
 
   const newMastery = computeNewMastery(state.currentMastery, questionDifficulty, isCorrect);
@@ -86,13 +82,16 @@ export async function POST(request: Request) {
     }
   }
 
-  await updateAdaptiveSession(studentId, testId, {
+  const updatedState = {
+    ...state,
     currentMastery: newMastery,
     correctQuestionIds: newCorrectIds,
     sessionQuestionIds: updatedSessionQuestionIds,
     answers: newAnswers,
     answeredCount: newAnsweredCount,
-  });
+  };
+
+  setAdaptiveSession(updatedState);
 
   return NextResponse.json({
     isCorrect,

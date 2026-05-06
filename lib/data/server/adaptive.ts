@@ -136,8 +136,8 @@ export async function fetchNextIRTQuestion(
   correctQuestionIds: number[],
   sessionQuestionIds: number[],
 ): Promise<BankQuestion | null> {
-  const excludeCorrect = correctQuestionIds.length > 0 ? correctQuestionIds : [0];
-  const excludeSession = sessionQuestionIds.length > 0 ? sessionQuestionIds : [0];
+  const allExcluded = [...new Set([...correctQuestionIds, ...sessionQuestionIds])];
+  const excludeIds = allExcluded.length > 0 ? allExcluded : [0];
 
   const rows = await sql`
     SELECT
@@ -156,8 +156,7 @@ export async function fetchNextIRTQuestion(
     WHERE bank.subject_id = ${subjectId}
       AND bank.grade_band = ${gradeBand}
       AND bank.is_approved = true
-      AND bank.id NOT IN (SELECT unnest(${excludeCorrect}::int8[]))
-      AND bank.id NOT IN (SELECT unnest(${excludeSession}::int8[]))
+      AND bank.id <> ALL(${excludeIds}::int8[])
     ORDER BY ABS(bank.difficulty - ${theta}) ASC, RANDOM()
     LIMIT 1
   `;
@@ -271,28 +270,72 @@ export type AnswerRecord = {
 
 export async function finalizeAdaptiveTest(
   testId: number,
-  subjectId: number,
+  _subjectId: number,
   answers: AnswerRecord[],
   finalMastery: number,
 ): Promise<{ score: number }> {
   const correctCount = answers.filter((a) => a.isCorrect).length;
   const score = answers.length > 0 ? Math.round((correctCount / answers.length) * 100) : 0;
 
-  await sql`UPDATE academic_adaptive_tests SET score = ${score}, mastery_level = ${finalMastery} WHERE id = ${testId}`;
+  if (answers.length === 0) {
+    await sql`UPDATE academic_adaptive_tests SET score = ${score}, mastery_level = ${finalMastery} WHERE id = ${testId}`;
+    return { score };
+  }
 
-  for (const ans of answers) {
-    const bankRow = await sql`
-      SELECT subject_id, grade_band, difficulty, question_text, options_json, correct_answer, explanation
-      FROM academic_adaptive_questions_bank WHERE id = ${ans.bankQuestionId}
-    `;
-    if (!bankRow.length) continue;
-    const b = bankRow[0] as Record<string, unknown>;
+  const bankIds = answers.map((a) => a.bankQuestionId);
+  const answerMap = new Map(answers.map((a) => [a.bankQuestionId, a.studentAnswer]));
+
+  const [, bankRows] = await Promise.all([
+    sql`UPDATE academic_adaptive_tests SET score = ${score}, mastery_level = ${finalMastery} WHERE id = ${testId}`,
+    sql`
+      SELECT id, subject_id, grade_band, difficulty, question_text, options_json, correct_answer, explanation
+      FROM academic_adaptive_questions_bank
+      WHERE id = ANY(${bankIds}::int8[])
+    `,
+  ]);
+
+  if (bankRows.length > 0) {
+    const subjectIds: unknown[] = [];
+    const gradeBands: unknown[] = [];
+    const difficulties: unknown[] = [];
+    const questionTexts: unknown[] = [];
+    const optionsJsons: string[] = [];
+    const correctAnswers: unknown[] = [];
+    const explanations: unknown[] = [];
+    const studentAnswers: (string | null)[] = [];
+    const bqIds: unknown[] = [];
+
+    for (const row of bankRows) {
+      const b = row as Record<string, unknown>;
+      subjectIds.push(b.subject_id);
+      gradeBands.push(b.grade_band);
+      difficulties.push(b.difficulty);
+      questionTexts.push(b.question_text);
+      optionsJsons.push(JSON.stringify(b.options_json));
+      correctAnswers.push(b.correct_answer);
+      explanations.push(b.explanation);
+      studentAnswers.push(answerMap.get(Number(b.id)) ?? null);
+      bqIds.push(b.id);
+    }
 
     await sql`
       INSERT INTO academic_adaptive_questions
         (subject_id, grade_band, difficulty, question_text, options_json, correct_answer, explanation, adaptive_test_id, student_answer, bank_question_id)
-      VALUES
-        (${b.subject_id}, ${b.grade_band}, ${b.difficulty}, ${b.question_text}, ${JSON.stringify(b.options_json)}, ${b.correct_answer}, ${b.explanation}, ${testId}, ${ans.studentAnswer}, ${ans.bankQuestionId})
+      SELECT
+        s.subject_id, s.grade_band, s.difficulty, s.question_text,
+        s.options_json::jsonb, s.correct_answer, s.explanation,
+        ${testId}, s.student_answer, s.bq_id
+      FROM UNNEST(
+        ${subjectIds}::int8[],
+        ${gradeBands}::text[],
+        ${difficulties}::numeric[],
+        ${questionTexts}::text[],
+        ${optionsJsons}::text[],
+        ${correctAnswers}::text[],
+        ${explanations}::text[],
+        ${studentAnswers}::text[],
+        ${bqIds}::int8[]
+      ) AS s(subject_id, grade_band, difficulty, question_text, options_json, correct_answer, explanation, student_answer, bq_id)
     `;
   }
 
