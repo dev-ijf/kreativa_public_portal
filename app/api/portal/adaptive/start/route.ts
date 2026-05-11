@@ -10,6 +10,7 @@ import {
   fetchNextIRTQuestion,
 } from '@/lib/data/server/adaptive';
 import { createAdaptiveSession } from '@/lib/cache/adaptive-session';
+import { isValidGradeBand } from '@/lib/utils/grade-bands';
 
 const DEFAULT_QUESTION_COUNT = 10;
 
@@ -30,12 +31,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { studentId, subjectId } = body as { studentId?: number; subjectId?: number };
+  const { studentId, subjectId, gradeBand: requestedBand } = body as {
+    studentId?: number; subjectId?: number; gradeBand?: string;
+  };
   if (!studentId || !subjectId) {
     return NextResponse.json({ error: 'studentId and subjectId are required' }, { status: 400 });
   }
 
-  const [visible, gradeBand, initialMastery, correctQuestionIds, enrollment] = await Promise.all([
+  if (requestedBand != null && !isValidGradeBand(requestedBand)) {
+    return NextResponse.json({ error: 'Invalid gradeBand value' }, { status: 400 });
+  }
+
+  const [visible, detectedBand, initialMastery, correctQuestionIds, enrollment] = await Promise.all([
     isStudentVisibleToViewer(userId, role, studentId),
     getGradeBandForStudent(studentId),
     getLastMastery(studentId, subjectId),
@@ -46,6 +53,8 @@ export async function POST(request: Request) {
   if (!visible) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  const gradeBand = requestedBand ?? detectedBand;
 
   const question = await fetchNextIRTQuestion(
     subjectId,

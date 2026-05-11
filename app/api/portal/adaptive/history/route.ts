@@ -6,6 +6,7 @@ import {
   getAdaptiveHistoryStats,
   getAdaptiveSubjects,
   getMasteryPerSubject,
+  getGradeBandForStudent,
 } from '@/lib/data/server/adaptive';
 
 const DEFAULT_HISTORY_LIMIT = 5;
@@ -38,10 +39,11 @@ export async function GET(request: Request) {
   const history = await getAdaptiveHistoryPage(studentId, limit, offset);
 
   if (offset === 0) {
-    const [stats, subjects, masteryMap] = await Promise.all([
+    const [stats, subjects, masteryMap, defaultGradeBand] = await Promise.all([
       getAdaptiveHistoryStats(studentId),
       getAdaptiveSubjects(),
       getMasteryPerSubject(studentId),
+      getGradeBandForStudent(studentId),
     ]);
     const historyTotal = stats.totalTests;
     return NextResponse.json({
@@ -52,6 +54,7 @@ export async function GET(request: Request) {
       totalTests: stats.totalTests,
       subjects,
       masteryMap,
+      defaultGradeBand,
     });
   }
 

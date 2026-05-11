@@ -6,6 +6,7 @@ import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { RichText } from '@/components/ui/RichText';
+import { GRADE_BANDS } from '@/lib/utils/grade-bands';
 
 type BankQuestion = {
   id: number;
@@ -34,6 +35,14 @@ export function AdaptiveTestPageClient() {
   const sp = useSearchParams();
   const subjectId = Number(sp.get('subject')) || 0;
   const subjectName = sp.get('subjectName') || '';
+  const gradeBandParam = sp.get('gradeBand') || undefined;
+
+  const gradeBandLabel = useMemo(() => {
+    if (!gradeBandParam) return null;
+    const band = GRADE_BANDS.find((b) => b.value === gradeBandParam);
+    if (!band) return null;
+    return lang === 'en' ? band.labelEn : band.labelId;
+  }, [gradeBandParam, lang]);
 
   const [testId, setTestId] = useState<number | null>(null);
   const [question, setQuestion] = useState<BankQuestion | null>(null);
@@ -70,7 +79,7 @@ export function AdaptiveTestPageClient() {
       const res = await fetch('/api/portal/adaptive/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: activeChildId, subjectId }),
+        body: JSON.stringify({ studentId: activeChildId, subjectId, gradeBand: gradeBandParam }),
         signal: abortRef.current.signal,
       });
       if (!res.ok) {
@@ -92,7 +101,7 @@ export function AdaptiveTestPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [activeChildId, subjectId]);
+  }, [activeChildId, subjectId, gradeBandParam]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -257,6 +266,11 @@ export function AdaptiveTestPageClient() {
       <div className="px-4 mt-4 space-y-4">
         {/* Progress bar + mastery */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+          {gradeBandLabel && (
+            <p className="text-[10px] text-primary font-semibold bg-primary/5 px-2.5 py-1 rounded-full inline-block mb-2">
+              {gradeBandLabel}
+            </p>
+          )}
           <div className="flex items-center justify-between mb-2">
             <p className="text-xs text-slate-500 font-semibold">
               {lang === 'en' ? 'Question' : 'Soal'} {answeredCount + 1} / {questionCount}

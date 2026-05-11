@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Brain, Target, Loader2 } from 'lucide-react';
+import { Brain, Target, Loader2, X, ChevronRight, Star } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { GRADE_BANDS, type GradeBandValue } from '@/lib/utils/grade-bands';
 
 type HistoryRow = {
   id: number;
@@ -33,7 +34,13 @@ type InitialDashboardResponse = {
   totalTests: number;
   subjects: SubjectRow[];
   masteryMap: Record<number, number>;
+  defaultGradeBand: GradeBandValue;
 };
+
+type PickerState = {
+  subject: SubjectRow;
+  selected: GradeBandValue;
+} | null;
 
 type TabId = 'start' | 'history';
 
@@ -47,6 +54,8 @@ export function AdaptiveLearningPageClient() {
   const [masteryMap, setMasteryMap] = useState<Record<number, number>>({});
   const [avgScore, setAvgScore] = useState(0);
   const [totalTests, setTotalTests] = useState(0);
+  const [defaultGradeBand, setDefaultGradeBand] = useState<GradeBandValue>('g4-6');
+  const [picker, setPicker] = useState<PickerState>(null);
 
   const [historyItems, setHistoryItems] = useState<HistoryRow[]>([]);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -85,6 +94,7 @@ export function AdaptiveLearningPageClient() {
       setTotalTests(json.totalTests ?? 0);
       setHistoryItems(json.history ?? []);
       setHistoryTotal(json.historyTotal ?? 0);
+      if (json.defaultGradeBand) setDefaultGradeBand(json.defaultGradeBand);
     } catch {
       /* best effort */
     } finally {
@@ -234,12 +244,13 @@ export function AdaptiveLearningPageClient() {
                         )}
                       </div>
                     </div>
-                    <Link
-                      href={`/adaptive-learning/test?subject=${subj.id}&subjectName=${encodeURIComponent(lang === 'en' ? subj.nameEn : subj.nameId)}`}
+                    <button
+                      type="button"
+                      onClick={() => setPicker({ subject: subj, selected: defaultGradeBand })}
                       className="shrink-0 bg-primary-light text-primary px-4 py-2 rounded-full font-bold hover:bg-indigo-100 ml-2"
                     >
                       {lang === 'en' ? 'Start' : 'Mulai'}
-                    </Link>
+                    </button>
                   </div>
                 );
               })
@@ -297,6 +308,96 @@ export function AdaptiveLearningPageClient() {
           </div>
         )}
       </div>
+
+      {/* Bottom sheet: Grade Band Picker */}
+      {picker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/40 transition-opacity"
+            onClick={() => setPicker(null)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-3xl p-6 pb-8 animate-in slide-in-from-bottom duration-300">
+            {/* Close button */}
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={() => setPicker(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-slate-100 text-slate-400"
+            >
+              <X size={20} />
+            </button>
+
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-2">
+              <div
+                className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center ${picker.subject.colorTheme ?? 'bg-slate-100 text-slate-600'}`}
+              >
+                <Brain size={20} />
+              </div>
+              <h3 className="font-bold text-lg text-slate-800">
+                {lang === 'en' ? picker.subject.nameEn : picker.subject.nameId}
+              </h3>
+            </div>
+            <p className="text-sm text-slate-500 mb-5">
+              {lang === 'en'
+                ? 'Choose a grade level for your questions:'
+                : 'Pilih tingkat kelas untuk soalmu:'}
+            </p>
+
+            {/* Grade band options */}
+            <div className="space-y-2 mb-6">
+              {GRADE_BANDS.map((band) => {
+                const isSelected = picker.selected === band.value;
+                const isRecommended = defaultGradeBand === band.value;
+                return (
+                  <button
+                    key={band.value}
+                    type="button"
+                    onClick={() => setPicker((prev) => prev ? { ...prev, selected: band.value } : null)}
+                    className={[
+                      'w-full flex items-center justify-between px-4 py-3.5 rounded-2xl border-2 transition-all text-left',
+                      isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={[
+                          'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                          isSelected ? 'border-primary bg-primary' : 'border-slate-300',
+                        ].join(' ')}
+                      >
+                        {isSelected && (
+                          <div className="w-2 h-2 bg-white rounded-full" />
+                        )}
+                      </div>
+                      <span className={['font-semibold text-sm', isSelected ? 'text-primary' : 'text-slate-700'].join(' ')}>
+                        {lang === 'en' ? band.labelEn : band.labelId}
+                      </span>
+                    </div>
+                    {isRecommended && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                        <Star size={10} className="fill-amber-500 text-amber-500" />
+                        {lang === 'en' ? 'Your level' : 'Levelmu'}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Start button */}
+            <Link
+              href={`/adaptive-learning/test?subject=${picker.subject.id}&subjectName=${encodeURIComponent(lang === 'en' ? picker.subject.nameEn : picker.subject.nameId)}&gradeBand=${picker.selected}`}
+              className="flex items-center justify-center w-full bg-primary text-white font-bold py-3.5 rounded-full hover:bg-primary-hover transition-colors gap-2"
+            >
+              {lang === 'en' ? 'Start Test' : 'Mulai Tes'}
+              <ChevronRight size={18} />
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
