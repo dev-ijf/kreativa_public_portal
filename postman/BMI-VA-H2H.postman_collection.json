@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Bank Muamalat — VA H2H (Mitra)",
-    "description": "5 endpoint POST VA H2H.\n\n**Mode Debug:** Tambah `?debug=1` di URL → kirim JSON biasa, respons JSON biasa (tanpa JWT).\n**Mode Produksi:** Tanpa query param → body = JWT HS256, respons = JWT HS256.\n\nSet collection variables sebelum pakai.",
+    "description": "5 endpoint POST VA H2H + 1 unified endpoint (`/api/va`) yang menggabungkan kelima fungsi berdasarkan field `METHOD` di payload.\n\n**Mode Debug:** Tambah `?debug=1` di URL → kirim JSON biasa, respons JSON biasa (tanpa JWT).\n**Mode Produksi:** Tanpa query param → body = JWT HS256, respons = JWT HS256.\n\nSet collection variables sebelum pakai.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -351,6 +351,344 @@
             "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
             "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
             "url": "{{BASE_URL}}/api/va/echo"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unified Debug (Plain JSON — ?debug=1)",
+      "description": "Single endpoint /api/va — routing ditentukan oleh field METHOD di payload. Kirim JSON biasa dengan ?debug=1.",
+      "item": [
+        {
+          "name": "1. ECHO (unified debug)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ECHODATE\": \"{{TRXDATE}}\",\n  \"METHOD\": \"ECHO\",\n  \"USERNAME\": \"{{USERNAME_BMI}}\",\n  \"PASSWORD\": \"{{PASSWORD_BMI}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{BASE_URL}}/api/va?debug=1"
+          }
+        },
+        {
+          "name": "2. INQUIRY (unified debug)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"CCY\": \"360\",\n  \"VANO\": \"{{VANO}}\",\n  \"TRXDATE\": \"{{TRXDATE}}\",\n  \"METHOD\": \"INQUIRY\",\n  \"USERNAME\": \"{{USERNAME_BMI}}\",\n  \"PASSWORD\": \"{{PASSWORD_BMI}}\",\n  \"CHANNELID\": \"1\",\n  \"REFNO\": \"{{REFNO}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{BASE_URL}}/api/va?debug=1"
+          }
+        },
+        {
+          "name": "3. PAYMENT (unified debug)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"TRXDATE\": \"{{TRXDATE}}\",\n  \"CCY\": \"360\",\n  \"REFNO\": \"{{REFNO}}\",\n  \"BILL\": \"{{BILL_AMOUNT}}\",\n  \"PAYMENT\": \"{{PAYMENT_AMOUNT}}\",\n  \"CHANNELID\": \"1\",\n  \"METHOD\": \"PAYMENT\",\n  \"VANO\": \"{{VANO}}\",\n  \"CUSTNAME\": \"BUDI SANTOSO\",\n  \"USERNAME\": \"{{USERNAME_BMI}}\",\n  \"PASSWORD\": \"{{PASSWORD_BMI}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{BASE_URL}}/api/va?debug=1"
+          }
+        },
+        {
+          "name": "4. SIGNON (unified debug)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"SIGNONINFO\": \"{{TRXDATE}};bankmuamalatindonesia\",\n  \"METHOD\": \"SIGNON\",\n  \"USERNAME\": \"{{USERNAME_BMI}}\",\n  \"PASSWORD\": \"{{PASSWORD_BMI}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{BASE_URL}}/api/va?debug=1"
+          }
+        },
+        {
+          "name": "5. SIGNOFF (unified debug)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"METHOD\": \"SIGNOFF\",\n  \"SIGNOFFINFO\": \"{{TRXDATE}};bankmuamalatindonesia\",\n  \"USERNAME\": \"{{USERNAME_BMI}}\",\n  \"PASSWORD\": \"{{PASSWORD_BMI}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{BASE_URL}}/api/va?debug=1"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unified Production (JWT HS256)",
+      "description": "Single endpoint /api/va — routing ditentukan oleh field METHOD di payload. Body = JWT HS256 (text/plain), respons = JWT HS256.",
+      "item": [
+        {
+          "name": "1. ECHO (unified)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "function b64url(wordArr) { return CryptoJS.enc.Base64.stringify(wordArr).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); }",
+                  "function signJwt(p, s) {",
+                  "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+                  "  var b = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(p)));",
+                  "  var d = h+'.'+b;",
+                  "  return d+'.'+b64url(CryptoJS.HmacSHA256(d,s));",
+                  "}",
+                  "var jwt = signJwt({",
+                  "  ECHODATE:pm.collectionVariables.get('TRXDATE'),",
+                  "  METHOD:'ECHO',",
+                  "  USERNAME:pm.collectionVariables.get('USERNAME_BMI'),",
+                  "  PASSWORD:pm.collectionVariables.get('PASSWORD_BMI')",
+                  "}, pm.collectionVariables.get('JWT_SECRET'));",
+                  "pm.variables.set('JWT_BODY', jwt);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  var parts = pm.response.text().split('.');",
+                  "  if(parts.length===3){",
+                  "    var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "    console.log('Decoded response:', JSON.stringify(payload,null,2));",
+                  "    pm.visualizer.set('<pre>'+JSON.stringify(payload,null,2)+'</pre>');",
+                  "  }",
+                  "} catch(e){ console.log('Not JWT or decode error:', e.message); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+            "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+            "url": "{{BASE_URL}}/api/va"
+          }
+        },
+        {
+          "name": "2. INQUIRY (unified)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "function b64url(wordArr) { return CryptoJS.enc.Base64.stringify(wordArr).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); }",
+                  "function signJwt(p, s) {",
+                  "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+                  "  var b = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(p)));",
+                  "  var d = h+'.'+b;",
+                  "  return d+'.'+b64url(CryptoJS.HmacSHA256(d,s));",
+                  "}",
+                  "var jwt = signJwt({",
+                  "  CCY:'360',",
+                  "  VANO:pm.collectionVariables.get('VANO'),",
+                  "  TRXDATE:pm.collectionVariables.get('TRXDATE'),",
+                  "  METHOD:'INQUIRY',",
+                  "  USERNAME:pm.collectionVariables.get('USERNAME_BMI'),",
+                  "  PASSWORD:pm.collectionVariables.get('PASSWORD_BMI'),",
+                  "  CHANNELID:'1',",
+                  "  REFNO:pm.collectionVariables.get('REFNO')",
+                  "}, pm.collectionVariables.get('JWT_SECRET'));",
+                  "pm.variables.set('JWT_BODY', jwt);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  var parts = pm.response.text().split('.');",
+                  "  if(parts.length===3){",
+                  "    var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "    console.log('Decoded response:', JSON.stringify(payload,null,2));",
+                  "    pm.visualizer.set('<pre>'+JSON.stringify(payload,null,2)+'</pre>');",
+                  "  }",
+                  "} catch(e){ console.log('Not JWT or decode error:', e.message); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+            "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+            "url": "{{BASE_URL}}/api/va"
+          }
+        },
+        {
+          "name": "3. PAYMENT (unified)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "function b64url(wordArr) { return CryptoJS.enc.Base64.stringify(wordArr).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); }",
+                  "function signJwt(p, s) {",
+                  "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+                  "  var b = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(p)));",
+                  "  var d = h+'.'+b;",
+                  "  return d+'.'+b64url(CryptoJS.HmacSHA256(d,s));",
+                  "}",
+                  "var jwt = signJwt({",
+                  "  TRXDATE:pm.collectionVariables.get('TRXDATE'),",
+                  "  CCY:'360',",
+                  "  REFNO:pm.collectionVariables.get('REFNO'),",
+                  "  BILL:pm.collectionVariables.get('BILL_AMOUNT'),",
+                  "  PAYMENT:pm.collectionVariables.get('PAYMENT_AMOUNT'),",
+                  "  CHANNELID:'1',",
+                  "  METHOD:'PAYMENT',",
+                  "  VANO:pm.collectionVariables.get('VANO'),",
+                  "  CUSTNAME:'BUDI SANTOSO',",
+                  "  USERNAME:pm.collectionVariables.get('USERNAME_BMI'),",
+                  "  PASSWORD:pm.collectionVariables.get('PASSWORD_BMI')",
+                  "}, pm.collectionVariables.get('JWT_SECRET'));",
+                  "pm.variables.set('JWT_BODY', jwt);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  var parts = pm.response.text().split('.');",
+                  "  if(parts.length===3){",
+                  "    var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "    console.log('Decoded response:', JSON.stringify(payload,null,2));",
+                  "    pm.visualizer.set('<pre>'+JSON.stringify(payload,null,2)+'</pre>');",
+                  "  }",
+                  "} catch(e){ console.log('Not JWT or decode error:', e.message); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+            "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+            "url": "{{BASE_URL}}/api/va"
+          }
+        },
+        {
+          "name": "4. SIGNON (unified)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "function b64url(wordArr) { return CryptoJS.enc.Base64.stringify(wordArr).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); }",
+                  "function signJwt(p, s) {",
+                  "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+                  "  var b = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(p)));",
+                  "  var d = h+'.'+b;",
+                  "  return d+'.'+b64url(CryptoJS.HmacSHA256(d,s));",
+                  "}",
+                  "var jwt = signJwt({",
+                  "  SIGNONINFO: pm.collectionVariables.get('TRXDATE')+';bankmuamalatindonesia',",
+                  "  METHOD:'SIGNON',",
+                  "  USERNAME:pm.collectionVariables.get('USERNAME_BMI'),",
+                  "  PASSWORD:pm.collectionVariables.get('PASSWORD_BMI')",
+                  "}, pm.collectionVariables.get('JWT_SECRET'));",
+                  "pm.variables.set('JWT_BODY', jwt);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  var parts = pm.response.text().split('.');",
+                  "  if(parts.length===3){",
+                  "    var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "    console.log('Decoded response:', JSON.stringify(payload,null,2));",
+                  "    pm.visualizer.set('<pre>'+JSON.stringify(payload,null,2)+'</pre>');",
+                  "  }",
+                  "} catch(e){ console.log('Not JWT or decode error:', e.message); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+            "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+            "url": "{{BASE_URL}}/api/va"
+          }
+        },
+        {
+          "name": "5. SIGNOFF (unified)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const CryptoJS = require('crypto-js');",
+                  "function b64url(wordArr) { return CryptoJS.enc.Base64.stringify(wordArr).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,''); }",
+                  "function signJwt(p, s) {",
+                  "  var h = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({alg:'HS256',typ:'JWT'})));",
+                  "  var b = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(p)));",
+                  "  var d = h+'.'+b;",
+                  "  return d+'.'+b64url(CryptoJS.HmacSHA256(d,s));",
+                  "}",
+                  "var jwt = signJwt({",
+                  "  METHOD:'SIGNOFF',",
+                  "  SIGNOFFINFO:pm.collectionVariables.get('TRXDATE')+';bankmuamalatindonesia',",
+                  "  USERNAME:pm.collectionVariables.get('USERNAME_BMI'),",
+                  "  PASSWORD:pm.collectionVariables.get('PASSWORD_BMI')",
+                  "}, pm.collectionVariables.get('JWT_SECRET'));",
+                  "pm.variables.set('JWT_BODY', jwt);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  var parts = pm.response.text().split('.');",
+                  "  if(parts.length===3){",
+                  "    var payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));",
+                  "    console.log('Decoded response:', JSON.stringify(payload,null,2));",
+                  "    pm.visualizer.set('<pre>'+JSON.stringify(payload,null,2)+'</pre>');",
+                  "  }",
+                  "} catch(e){ console.log('Not JWT or decode error:', e.message); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain; charset=ISO-8859-1" }],
+            "body": { "mode": "raw", "raw": "{{JWT_BODY}}", "options": { "raw": { "language": "text" } } },
+            "url": "{{BASE_URL}}/api/va"
           }
         }
       ]
