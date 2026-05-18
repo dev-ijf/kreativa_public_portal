@@ -129,12 +129,36 @@ function billToBmiString(amount: number): string {
   return String(safe);
 }
 
+function inquiryError(errCode: string, ccy?: string): Record<string, string> {
+  return {
+    CCY: ccy || '360',
+    BILL: '0',
+    DESCRIPTION: '',
+    DESCRIPTION2: '',
+    CUSTNAME: '',
+    ERR: errCode,
+    METHOD: 'INQUIRY',
+  };
+}
+
+function paymentError(errCode: string, ccy?: string): Record<string, string> {
+  return {
+    CCY: ccy || '360',
+    BILL: '0',
+    DESCRIPTION: '',
+    DESCRIPTION2: '',
+    CUSTNAME: '',
+    ERR: errCode,
+    METHOD: 'PAYMENT',
+  };
+}
+
 async function handleInquiry(payload: Record<string, unknown>, debug: boolean): Promise<Response> {
   const { CCY, VANO } = payload as Record<string, string>;
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -163,25 +187,25 @@ async function handleInquiry(payload: Record<string, unknown>, debug: boolean): 
   }[];
 
   if (rows.length === 0) {
-    return buildResponse({ ERR: '15', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('15', CCY), 200, debug);
   }
 
   const row = rows[0];
   const st = String(row.status ?? '').toLowerCase();
 
   if (st === 'success') {
-    return buildResponse({ ERR: '88', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('88', CCY), 200, debug);
   }
 
   if (st !== 'pending') {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const total = num(row.total_amount);
   const custRaw = row.student_name ?? '';
   const cust = formatCustomerName(custRaw);
   if (!cust) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const desc2 = String(row.academic_year_name ?? '').slice(0, 256);
@@ -287,12 +311,14 @@ function nextBillStatus(params: { billTotal: number; newPaid: number }): string 
   return 'unpaid';
 }
 
-async function pay30(debug: boolean, reason: string): Promise<Response> {
-  return buildResponse(
-    debug ? { ERR: '30', METHOD: 'PAYMENT', _debug: reason } : { ERR: '30', METHOD: 'PAYMENT' },
-    200,
-    debug,
-  );
+function payErr(errCode: string, ccy?: string, debug?: boolean, reason?: string): Record<string, unknown> {
+  const base = paymentError(errCode, ccy);
+  if (debug && reason) return { ...base, _debug: reason };
+  return base;
+}
+
+async function pay30(debug: boolean, reason: string, ccy?: string): Promise<Response> {
+  return buildResponse(payErr('30', ccy, debug, reason), 200, debug);
 }
 
 async function handlePayment(payload: Record<string, unknown>, debug: boolean): Promise<Response> {
@@ -303,7 +329,7 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return pay30(debug, 'vano_invalid_not_16_digits');
+    return pay30(debug, 'vano_invalid_not_16_digits', CCY);
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -311,13 +337,13 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
   const trxDate = String(TRXDATE ?? '').trim();
 
   if (!refNo || !trxDate) {
-    return pay30(debug, 'refno_or_trxdate_empty');
+    return pay30(debug, 'refno_or_trxdate_empty', CCY);
   }
 
   const billScaled = parseScaledAmount(BILL);
   const paymentScaled = parseScaledAmount(PAYMENT);
   if (billScaled == null || paymentScaled == null) {
-    return pay30(debug, 'bill_or_payment_unparseable');
+    return pay30(debug, 'bill_or_payment_unparseable', CCY);
   }
 
   const headRows = (await sql`
@@ -352,39 +378,39 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
   }[];
 
   if (headRows.length === 0) {
-    return pay30(debug, 'transaction_not_found_for_va');
+    return buildResponse(payErr('15', CCY, debug, 'transaction_not_found_for_va'), 200, debug);
   }
 
   const head = headRows[0];
   const st = String(head.status ?? '').toLowerCase();
 
   if (st === 'success') {
-    return buildResponse({ ERR: '88', METHOD: 'PAYMENT' }, 200, debug);
+    return buildResponse(paymentError('88', CCY), 200, debug);
   }
 
   if (st !== 'pending') {
-    return pay30(debug, `transaction_status_not_pending:${st}`);
+    return pay30(debug, `transaction_status_not_pending:${st}`, CCY);
   }
 
   if (head.student_id == null) {
-    return pay30(debug, 'student_id_null_on_transaction');
+    return pay30(debug, 'student_id_null_on_transaction', CCY);
   }
   const nameGate = String(head.student_name ?? CUSTNAME ?? '').trim();
   if (!nameGate || !formatCustomerName(nameGate)) {
-    return pay30(debug, 'customer_name_missing_join_core_students_or_invalid_custname');
+    return pay30(debug, 'customer_name_missing_join_core_students_or_invalid_custname', CCY);
   }
 
   const totalDb = num(head.total_amount);
   if (Math.abs(billScaled - totalDb) > 0.02) {
-    return pay30(debug, `bill_amount_mismatch_db_${totalDb}_payload_${billScaled}`);
+    return pay30(debug, `bill_amount_mismatch_db_${totalDb}_payload_${billScaled}`, CCY);
   }
 
   const claim = await tryClaimBmiPaymentKey(vanoNorm, refNo, trxDate);
   if (claim === 'duplicate') {
-    return pay30(debug, 'duplicate_vano_refno_trxdate');
+    return pay30(debug, 'duplicate_vano_refno_trxdate', CCY);
   }
   if (claim === 'error') {
-    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' }, 200, debug);
+    return buildResponse(paymentError('12', CCY), 200, debug);
   }
 
   const tid = Number(head.id);
@@ -417,6 +443,7 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
     return pay30(
       debug,
       'no_transaction_details_or_bill_product_join_failed_check_bill_id_product_id',
+      CCY,
     );
   }
 
@@ -430,7 +457,7 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
   } else if (mode === 'PARTIAL') {
     if (paymentScaled - totalDb > 0.005) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' }, 200, debug);
+      return buildResponse(paymentError('13', CCY), 200, debug);
     }
     let floor = 0;
     for (const d of detailRows) {
@@ -438,13 +465,13 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
     }
     if (floor > 0 && paymentScaled + 0.005 < floor) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '13', METHOD: 'PAYMENT' }, 200, debug);
+      return buildResponse(paymentError('13', CCY), 200, debug);
     }
     effectivePayment = round2(Math.min(paymentScaled, maxApply));
   } else {
     if (Math.abs(paymentScaled - totalDb) > 0.02) {
       await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-      return buildResponse({ ERR: '16', METHOD: 'PAYMENT' }, 200, debug);
+      return buildResponse(paymentError('16', CCY), 200, debug);
     }
     effectivePayment = round2(Math.min(paymentScaled, maxApply));
   }
@@ -454,6 +481,7 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
     return pay30(
       debug,
       `effective_payment_zero_or_negative_mode_${mode}_maxApply_${maxApply}_paymentScaled_${paymentScaled}`,
+      CCY,
     );
   }
 
@@ -511,7 +539,7 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
   } catch (e) {
     console.error('bmi_va_payment_db', e);
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
-    return buildResponse({ ERR: '12', METHOD: 'PAYMENT' }, 200, debug);
+    return buildResponse(paymentError('12', CCY), 200, debug);
   }
 
   void schedulePaymentSuccessWhatsAppJob({

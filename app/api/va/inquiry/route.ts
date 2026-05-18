@@ -23,6 +23,18 @@ function billToBmiString(amount: number): string {
   return String(safe);
 }
 
+function inquiryError(errCode: string, ccy?: string): Record<string, string> {
+  return {
+    CCY: ccy || '360',
+    BILL: '0',
+    DESCRIPTION: '',
+    DESCRIPTION2: '',
+    CUSTNAME: '',
+    ERR: errCode,
+    METHOD: 'INQUIRY',
+  };
+}
+
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
@@ -41,12 +53,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (METHOD !== 'INQUIRY') {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const parsed = parseVANO(String(VANO ?? ''));
   if (!parsed) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const vanoNorm = String(VANO ?? '').replace(/\D/g, '');
@@ -75,25 +87,25 @@ export async function POST(req: NextRequest) {
   }[];
 
   if (rows.length === 0) {
-    return buildResponse({ ERR: '15', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('15', CCY), 200, debug);
   }
 
   const row = rows[0];
   const st = String(row.status ?? '').toLowerCase();
 
   if (st === 'success') {
-    return buildResponse({ ERR: '88', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('88', CCY), 200, debug);
   }
 
   if (st !== 'pending') {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const total = num(row.total_amount);
   const custRaw = row.student_name ?? '';
   const cust = formatCustomerName(custRaw);
   if (!cust) {
-    return buildResponse({ ERR: '30', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('30', CCY), 200, debug);
   }
 
   const desc2 = String(row.academic_year_name ?? '').slice(0, 256);
