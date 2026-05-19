@@ -250,6 +250,10 @@ type DetailRow = {
 function classifyPaymentMode(details: DetailRow[]): 'OPEN' | 'PARTIAL' | 'FULL' {
   for (const d of details) {
     const pt = String(d.payment_type ?? '').toLowerCase();
+    if (pt === 'full') return 'FULL';
+  }
+  for (const d of details) {
+    const pt = String(d.payment_type ?? '').toLowerCase();
     if (pt === 'open' || pt === 'none') return 'OPEN';
   }
   for (const d of details) {
@@ -450,6 +454,11 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
   const mode = classifyPaymentMode(detailRows);
   const remMap = billRemainingMap(detailRows);
   const maxApply = sumRemaining(remMap);
+
+  if (maxApply <= 0 && mode !== 'OPEN') {
+    await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
+    return buildResponse(paymentError('88', CCY), 200, debug);
+  }
 
   let effectivePayment = paymentScaled;
   if (mode === 'OPEN') {
