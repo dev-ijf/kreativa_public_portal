@@ -34,7 +34,15 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     payload = await parseRequestBody(body, debug);
   } catch {
-    return buildResponse({ ERR: '55', METHOD: 'UNKNOWN' }, 200, debug);
+    return buildResponse({
+      CCY: '360',
+      BILL: '0',
+      DESCRIPTION: '',
+      DESCRIPTION2: '',
+      CUSTNAME: '',
+      ERR: '55',
+      METHOD: 'UNKNOWN',
+    }, 200, debug);
   }
 
   const { USERNAME, PASSWORD, METHOD, CCY } = payload as Record<string, string>;
