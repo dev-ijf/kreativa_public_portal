@@ -43,13 +43,13 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     payload = await parseRequestBody(body, debug);
   } catch {
-    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('55'), 200, debug);
   }
 
   const { CCY, VANO, METHOD, USERNAME, PASSWORD } = payload as Record<string, string>;
 
   if (!validateCredentials(USERNAME, PASSWORD)) {
-    return buildResponse({ ERR: '55', METHOD: 'INQUIRY' }, 200, debug);
+    return buildResponse(inquiryError('55', CCY), 200, debug);
   }
 
   if (METHOD !== 'INQUIRY') {

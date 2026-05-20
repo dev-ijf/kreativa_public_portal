@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     const body = await req.text();
     payload = await parseRequestBody(body, debug);
   } catch {
-    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' }, 200, debug);
+    return buildResponse(paymentError('55'), 200, debug);
   }
 
   const {
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
   } = payload as Record<string, string>;
 
   if (!validateCredentials(USERNAME, PASSWORD)) {
-    return buildResponse({ ERR: '55', METHOD: 'PAYMENT' }, 200, debug);
+    return buildResponse(paymentError('55', CCY), 200, debug);
   }
 
   if (String(METHOD ?? '').trim() !== 'PAYMENT') {

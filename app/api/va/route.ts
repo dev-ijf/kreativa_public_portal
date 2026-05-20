@@ -20,6 +20,12 @@ const HANDLERS: Record<string, HandlerFn> = {
   SIGNOFF: handleSignoff,
 };
 
+function authError55(method: string, ccy?: string): Record<string, string> {
+  if (method === 'INQUIRY') return inquiryError('55', ccy);
+  if (method === 'PAYMENT') return paymentError('55', ccy);
+  return { ERR: '55', METHOD: method || 'UNKNOWN' };
+}
+
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
@@ -31,13 +37,13 @@ export async function POST(req: NextRequest) {
     return buildResponse({ ERR: '55', METHOD: 'UNKNOWN' }, 200, debug);
   }
 
-  const { USERNAME, PASSWORD, METHOD } = payload as Record<string, string>;
+  const { USERNAME, PASSWORD, METHOD, CCY } = payload as Record<string, string>;
+  const method = String(METHOD ?? '').trim().toUpperCase().replace(/\s/g, '') as typeof VALID_METHODS[number];
 
   if (!validateCredentials(USERNAME, PASSWORD)) {
-    return buildResponse({ ERR: '55', METHOD: METHOD || 'UNKNOWN' }, 200, debug);
+    return buildResponse(authError55(method, CCY), 200, debug);
   }
 
-  const method = String(METHOD ?? '').trim().toUpperCase().replace(/\s/g, '') as typeof VALID_METHODS[number];
   const handler = HANDLERS[method];
   if (!handler) {
     return buildResponse({ ERR: '30', METHOD: method || 'UNKNOWN' }, 200, debug);
