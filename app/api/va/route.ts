@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
 import { releaseBmiPaymentKey, tryClaimBmiPaymentKey } from '@/lib/va/bmi-payment-idempotency';
-import { parseRequestBody } from '@/lib/va/jwt';
+import { decodeTokenUnsafe, parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
 import { formatCustomerName, parseVANO, validateCredentials } from '@/lib/va/validate';
 
@@ -23,32 +23,45 @@ const HANDLERS: Record<string, HandlerFn> = {
 function authError55(method: string, ccy?: string): Record<string, string> {
   if (method === 'INQUIRY') return inquiryError('55', ccy);
   if (method === 'PAYMENT') return paymentError('55', ccy);
-  return { ERR: '55', METHOD: method || 'UNKNOWN' };
+  if (method === 'ECHO' || method === 'SIGNON' || method === 'SIGNOFF') {
+    return { ERR: '55', METHOD: method };
+  }
+  return {
+    CCY: ccy || '360',
+    BILL: '0',
+    DESCRIPTION: '',
+    DESCRIPTION2: '',
+    CUSTNAME: '',
+    ERR: '55',
+    METHOD: method || 'UNKNOWN',
+  };
 }
 
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
-  let payload: Record<string, unknown>;
+  let rawBody: string;
   try {
-    const body = await req.text();
-    payload = await parseRequestBody(body, debug);
+    rawBody = await req.text();
   } catch {
-    return buildResponse({
-      CCY: '360',
-      BILL: '0',
-      DESCRIPTION: '',
-      DESCRIPTION2: '',
-      CUSTNAME: '',
-      ERR: '55',
-      METHOD: 'UNKNOWN',
-    }, 200, debug);
+    return buildResponse({ ERR: '55', METHOD: 'UNKNOWN' }, 200, debug);
   }
 
-  const { USERNAME, PASSWORD, METHOD, CCY } = payload as Record<string, string>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = await parseRequestBody(rawBody, debug);
+  } catch {
+    // JWT secret/signature invalid — decode tanpa verifikasi untuk ambil METHOD & CCY
+    const unsafe = decodeTokenUnsafe(rawBody);
+    const badMethod = String(unsafe.METHOD ?? '').trim().toUpperCase() || 'UNKNOWN';
+    const badCcy = String(unsafe.CCY ?? '360') || '360';
+    return buildResponse(authError55(badMethod, badCcy), 200, debug);
+  }
+
+  const { USERNAME, PASSWORD, METHOD, CCY, ENCRYPTKEY, JWT_SECRET } = payload as Record<string, string>;
   const method = String(METHOD ?? '').trim().toUpperCase().replace(/\s/g, '') as typeof VALID_METHODS[number];
 
-  if (!validateCredentials(USERNAME, PASSWORD)) {
+  if (!validateCredentials(USERNAME, PASSWORD, ENCRYPTKEY ?? JWT_SECRET)) {
     return buildResponse(authError55(method, CCY), 200, debug);
   }
 

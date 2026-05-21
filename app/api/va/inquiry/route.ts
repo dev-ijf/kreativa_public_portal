@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
-import { parseRequestBody } from '@/lib/va/jwt';
+import { decodeTokenUnsafe, parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
 import { formatCustomerName, parseVANO, validateCredentials } from '@/lib/va/validate';
 
@@ -38,17 +38,25 @@ function inquiryError(errCode: string, ccy?: string): Record<string, string> {
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
-  let payload: Record<string, unknown>;
+  let rawBody: string;
   try {
-    const body = await req.text();
-    payload = await parseRequestBody(body, debug);
+    rawBody = await req.text();
   } catch {
     return buildResponse(inquiryError('55'), 200, debug);
   }
 
-  const { CCY, VANO, METHOD, USERNAME, PASSWORD } = payload as Record<string, string>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = await parseRequestBody(rawBody, debug);
+  } catch {
+    const unsafe = decodeTokenUnsafe(rawBody);
+    const ccy = String(unsafe.CCY ?? '360') || '360';
+    return buildResponse(inquiryError('55', ccy), 200, debug);
+  }
 
-  if (!validateCredentials(USERNAME, PASSWORD)) {
+  const { CCY, VANO, METHOD, USERNAME, PASSWORD, ENCRYPTKEY, JWT_SECRET } = payload as Record<string, string>;
+
+  if (!validateCredentials(USERNAME, PASSWORD, ENCRYPTKEY ?? JWT_SECRET)) {
     return buildResponse(inquiryError('55', CCY), 200, debug);
   }
 

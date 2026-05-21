@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
 import { releaseBmiPaymentKey, tryClaimBmiPaymentKey } from '@/lib/va/bmi-payment-idempotency';
-import { parseRequestBody } from '@/lib/va/jwt';
+import { decodeTokenUnsafe, parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
 import { formatCustomerName, parseVANO, validateCredentials } from '@/lib/va/validate';
 
@@ -130,20 +130,28 @@ async function pay30(debug: boolean, reason: string, ccy?: string): Promise<Resp
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
-  let payload: Record<string, unknown>;
+  let rawBody: string;
   try {
-    const body = await req.text();
-    payload = await parseRequestBody(body, debug);
+    rawBody = await req.text();
   } catch {
     return buildResponse(paymentError('55'), 200, debug);
   }
 
+  let payload: Record<string, unknown>;
+  try {
+    payload = await parseRequestBody(rawBody, debug);
+  } catch {
+    const unsafe = decodeTokenUnsafe(rawBody);
+    const ccy = String(unsafe.CCY ?? '360') || '360';
+    return buildResponse(paymentError('55', ccy), 200, debug);
+  }
+
   const {
     TRXDATE, CCY, REFNO, BILL, PAYMENT, CHANNELID,
-    VANO, CUSTNAME, USERNAME, PASSWORD, METHOD,
+    VANO, CUSTNAME, USERNAME, PASSWORD, METHOD, ENCRYPTKEY, JWT_SECRET,
   } = payload as Record<string, string>;
 
-  if (!validateCredentials(USERNAME, PASSWORD)) {
+  if (!validateCredentials(USERNAME, PASSWORD, ENCRYPTKEY ?? JWT_SECRET)) {
     return buildResponse(paymentError('55', CCY), 200, debug);
   }
 

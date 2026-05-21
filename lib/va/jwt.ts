@@ -28,14 +28,40 @@ export async function encodeToken(payload: Record<string, unknown>): Promise<str
 }
 
 /**
- * Parse body request: jika debug=true, parse JSON biasa; jika tidak, decode JWT.
+ * Detect apakah string merupakan format JWT (3 bagian dipisah titik).
+ */
+function looksLikeJwt(s: string): boolean {
+  const trimmed = s.trim();
+  if (trimmed.startsWith('{')) return false;
+  const parts = trimmed.split('.');
+  return parts.length === 3 && parts.every(p => p.length > 0);
+}
+
+/**
+ * Parse body request:
+ * - production (debug=false): body HARUS JWT, diverifikasi HS256
+ * - debug (debug=true): auto-detect format body:
+ *   - JWT → tetap verifikasi (test EncryptKey validity)
+ *   - Plain JSON → parse langsung (test credential/logic saja)
  */
 export async function parseRequestBody(
   rawBody: string,
   debug: boolean,
 ): Promise<Record<string, unknown>> {
-  if (debug) {
+  if (debug && !looksLikeJwt(rawBody)) {
     return JSON.parse(rawBody) as Record<string, unknown>;
   }
   return decodeToken(rawBody);
+}
+
+/**
+ * Decode JWT tanpa verifikasi signature — digunakan hanya untuk membaca
+ * field METHOD / CCY dari token yang gagal verifikasi (response RC 55).
+ */
+export function decodeTokenUnsafe(token: string): Record<string, unknown> {
+  try {
+    return jose.decodeJwt(token) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }

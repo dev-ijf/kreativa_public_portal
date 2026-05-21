@@ -1,11 +1,23 @@
 /**
- * Validasi kredensial mitra dari payload JWT (USERNAME / PASSWORD).
+ * Validasi kredensial mitra dari payload (USERNAME / PASSWORD / ENCRYPTKEY).
+ * Per spec RC 55: "Username/Password/EncryptKey Not Valid"
+ *
+ * - USERNAME harus cocok dengan USERNAME_BMI
+ * - PASSWORD harus cocok dengan PASSWORD_BMI
+ * - ENCRYPTKEY (jika ada di payload) harus cocok dengan BMI_JWT_SECRET
  */
-export function validateCredentials(username?: string, password?: string): boolean {
+export function validateCredentials(username?: string, password?: string, encryptKey?: string): boolean {
   const expectedUser = process.env.USERNAME_BMI?.trim();
   const expectedPass = process.env.PASSWORD_BMI?.trim();
   if (!expectedUser || !expectedPass) return false;
-  return username === expectedUser && password === expectedPass;
+  if (username !== expectedUser || password !== expectedPass) return false;
+
+  if (encryptKey !== undefined && encryptKey !== null) {
+    const expectedKey = process.env.BMI_JWT_SECRET?.trim();
+    if (!expectedKey || encryptKey !== expectedKey) return false;
+  }
+
+  return true;
 }
 
 export type ParsedVANO = {

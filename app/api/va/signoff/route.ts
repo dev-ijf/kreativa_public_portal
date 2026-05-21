@@ -8,17 +8,23 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   const debug = req.nextUrl.searchParams.get('debug') === '1';
 
-  let payload: Record<string, unknown>;
+  let rawBody: string;
   try {
-    const body = await req.text();
-    payload = await parseRequestBody(body, debug);
+    rawBody = await req.text();
   } catch {
     return buildResponse({ ERR: '55', METHOD: 'SIGNOFF' }, 200, debug);
   }
 
-  const { SIGNOFFINFO, METHOD, USERNAME, PASSWORD } = payload as Record<string, string>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = await parseRequestBody(rawBody, debug);
+  } catch {
+    return buildResponse({ ERR: '55', METHOD: 'SIGNOFF' }, 200, debug);
+  }
 
-  if (!validateCredentials(USERNAME, PASSWORD)) {
+  const { SIGNOFFINFO, METHOD, USERNAME, PASSWORD, ENCRYPTKEY, JWT_SECRET } = payload as Record<string, string>;
+
+  if (!validateCredentials(USERNAME, PASSWORD, ENCRYPTKEY ?? JWT_SECRET)) {
     return buildResponse({ ERR: '55', METHOD: 'SIGNOFF' }, 200, debug);
   }
 
