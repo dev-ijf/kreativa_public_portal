@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { cache } from 'react';
 import { headers } from 'next/headers';
 import { sql } from '@/lib/db/client';
+import { ensureUsablePrimary, isPrimaryTooLight } from '@/lib/utils/color';
 
 export type PortalThemeResolved = {
   id: number;
@@ -15,7 +16,7 @@ export type PortalThemeResolved = {
 };
 
 const FALLBACK_LOGO = '/assets/tenant/kreativa-logo.png';
-const FALLBACK_PRIMARY = '#3A2EAE';
+const FALLBACK_PRIMARY = '#4f46e5';
 
 const FALLBACK_THEME: PortalThemeResolved = {
   id: 0,
@@ -36,10 +37,16 @@ export function normalizePortalHostname(hostHeader: string | null | undefined): 
 }
 
 function tenantCssVars(primary: string): CSSProperties {
+  const usable = ensureUsablePrimary(primary, FALLBACK_PRIMARY);
+  const tooLight = isPrimaryTooLight(primary);
+
   return {
-    '--tenant-primary': primary,
+    '--tenant-primary': usable,
     '--tenant-primary-hover': 'color-mix(in srgb, var(--tenant-primary) 78%, black)',
-    '--tenant-primary-light': 'color-mix(in srgb, var(--tenant-primary) 12%, white)',
+    '--tenant-primary-light': tooLight
+      ? 'color-mix(in srgb, var(--tenant-primary) 10%, white)'
+      : 'color-mix(in srgb, var(--tenant-primary) 12%, white)',
+    '--tenant-primary-on': tooLight ? '#ffffff' : '#ffffff',
   } as CSSProperties;
 }
 

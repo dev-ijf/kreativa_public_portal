@@ -6,6 +6,7 @@
   --color-primary: var(--tenant-primary);
   --color-primary-hover: var(--tenant-primary-hover);
   --color-primary-light: var(--tenant-primary-light);
+  --color-primary-on: var(--tenant-primary-on);
 }
 
 /* Base custom styles if needed beyond standard Tailwind utilities */
