@@ -13,6 +13,9 @@ export type PortalThemeResolved = {
   login_bg_url: string | null;
   welcome_text: string | null;
   favicon_url: string | null;
+  secondary_color: string | null;
+  secondary_logo_url: string | null;
+  secondary_title: string | null;
 };
 
 const FALLBACK_LOGO = '/assets/tenant/kreativa-logo.png';
@@ -27,6 +30,9 @@ const FALLBACK_THEME: PortalThemeResolved = {
   login_bg_url: null,
   welcome_text: null,
   favicon_url: null,
+  secondary_color: null,
+  secondary_logo_url: null,
+  secondary_title: null,
 };
 
 export function normalizePortalHostname(hostHeader: string | null | undefined): string {
@@ -36,8 +42,9 @@ export function normalizePortalHostname(hostHeader: string | null | undefined): 
   return noPort.trim().toLowerCase();
 }
 
-function tenantCssVars(primary: string): CSSProperties {
-  const usable = ensureUsablePrimary(primary, FALLBACK_PRIMARY);
+function tenantCssVars(primary: string, secondary: string | null): CSSProperties {
+  const fallback = secondary?.trim() || FALLBACK_PRIMARY;
+  const usable = ensureUsablePrimary(primary, fallback);
   const tooLight = isPrimaryTooLight(primary);
 
   return {
@@ -46,12 +53,28 @@ function tenantCssVars(primary: string): CSSProperties {
     '--tenant-primary-light': tooLight
       ? 'color-mix(in srgb, var(--tenant-primary) 10%, white)'
       : 'color-mix(in srgb, var(--tenant-primary) 12%, white)',
-    '--tenant-primary-on': tooLight ? '#ffffff' : '#ffffff',
+    '--tenant-primary-on': '#ffffff',
   } as CSSProperties;
 }
 
 export function portalThemeToHtmlStyle(theme: PortalThemeResolved): CSSProperties {
-  return tenantCssVars(theme.primary_color);
+  return tenantCssVars(theme.primary_color, theme.secondary_color);
+}
+
+/**
+ * Returns the appropriate logo URL for dark backgrounds (login page, hero).
+ * Uses secondary_logo_url if available, otherwise falls back to logo_url.
+ */
+export function getDarkBgLogoUrl(theme: PortalThemeResolved): string {
+  return theme.secondary_logo_url?.trim() || theme.logo_url;
+}
+
+/**
+ * Returns the browser tab title.
+ * Uses secondary_title if available, otherwise falls back to portal_title.
+ */
+export function getBrowserTitle(theme: PortalThemeResolved): string {
+  return theme.secondary_title?.trim() || theme.portal_title;
 }
 
 type ThemeRow = {
@@ -63,6 +86,9 @@ type ThemeRow = {
   login_bg_url: string | null;
   welcome_text: string | null;
   favicon_url: string | null;
+  secondary_color: string | null;
+  secondary_logo_url: string | null;
+  secondary_title: string | null;
 };
 
 async function fetchThemeByHostname(hostname: string): Promise<ThemeRow | null> {
@@ -76,7 +102,10 @@ async function fetchThemeByHostname(hostname: string): Promise<ThemeRow | null> 
       primary_color,
       login_bg_url,
       welcome_text,
-      favicon_url
+      favicon_url,
+      secondary_color,
+      secondary_logo_url,
+      secondary_title
     FROM core_portal_themes
     WHERE host_domain = ${hostname}
     LIMIT 1
@@ -95,6 +124,9 @@ function resolveTheme(row: ThemeRow | null): PortalThemeResolved {
     login_bg_url: row.login_bg_url,
     welcome_text: row.welcome_text,
     favicon_url: row.favicon_url?.trim() || null,
+    secondary_color: row.secondary_color?.trim() || null,
+    secondary_logo_url: row.secondary_logo_url?.trim() || null,
+    secondary_title: row.secondary_title?.trim() || null,
   };
 }
 

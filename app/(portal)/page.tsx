@@ -2,7 +2,7 @@ import { HomePageClient } from '@/components/portal/pages/HomePageClient';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { getAgendasForPortal } from '@/lib/data/server/agendas';
 import { getAnnouncementsForPortal } from '@/lib/data/server/announcements';
-import { getPortalThemeForRequest } from '@/lib/data/server/portal-theme';
+import { getPortalThemeForRequest, getDarkBgLogoUrl } from '@/lib/data/server/portal-theme';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ export default async function Page() {
 
   return (
     <HomePageClient
-      logoUrl={theme.logo_url}
+      logoUrl={getDarkBgLogoUrl(theme)}
       logoAlt={theme.portal_title}
       initialAgendas={initialAgendas}
       initialAnnouncements={initialAnnouncements}

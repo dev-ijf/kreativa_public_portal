@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Source_Sans_3 } from 'next/font/google';
-import { getPortalThemeForRequest, portalThemeToHtmlStyle } from '@/lib/data/server/portal-theme';
+import { getPortalThemeForRequest, getBrowserTitle, portalThemeToHtmlStyle } from '@/lib/data/server/portal-theme';
 import './globals.css';
 import 'katex/dist/katex.min.css';
 
@@ -13,9 +13,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const theme = await getPortalThemeForRequest();
 
   return {
-    title: theme.portal_title,
+    title: getBrowserTitle(theme),
     description: 'Parent Portal and Student Adaptive Learning',
-    // Same-origin: Chromium sering memakai /favicon.ico; middleware rewrite ke route ini lalu redirect ke Blob.
     icons: {
       icon: [{ url: '/api/portal/favicon', type: 'image/png' }],
       apple: [{ url: '/api/portal/favicon' }],
