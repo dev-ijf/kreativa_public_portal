@@ -6,6 +6,7 @@ import type { NextConfig } from "next";
 const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['pdfkit'],
   turbopack: {
     root: turbopackRoot,
   },
