@@ -1,6 +1,6 @@
-import { HabitsPageClient } from '@/components/portal/pages/HabitsPageClient';
+import { HabitsEntryClient } from '@/components/portal/pages/HabitsEntryClient';
 
 export default function Page() {
-  return <HabitsPageClient />;
+  return <HabitsEntryClient />;
 }
 

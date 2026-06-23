@@ -8,6 +8,7 @@ import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User
 import { TopHero } from '@/components/portal/TopHero';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
+import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
 import { t, type Lang } from '@/lib/i18n/translations';
 import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
@@ -89,7 +90,14 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
     { href: '/agenda', label: t(lang, 'agenda'), color: 'bg-red-100', icon: <Calendar size={28} className="text-red-600" /> },
     { href: '/updates', label: t(lang, 'updates'), color: 'bg-teal-100', icon: <Megaphone size={28} className="text-teal-600" /> },
     { href: '/adaptive-learning', label: t(lang, 'adaptiveLearning'), color: 'bg-pink-100', icon: <Brain size={28} className="text-pink-600" /> },
-    { href: '/habits', label: t(lang, 'habits'), color: 'bg-emerald-100', icon: <CheckSquare size={28} className="text-emerald-600" /> },
+    {
+      href: '/habits',
+      label: isKindergartenStudent(activeChild ?? {})
+        ? t(lang, 'dailyReports')
+        : t(lang, 'habits'),
+      color: 'bg-emerald-100',
+      icon: <CheckSquare size={28} className="text-emerald-600" />,
+    },
   ];
 
   return (
