@@ -20,6 +20,7 @@ import {
   ReportSectionShell,
   StarRating,
 } from "@/components/portal/daily-reports/ReportSectionShell";
+import { ClassReportSection } from "@/components/portal/daily-reports/ClassReportSection";
 
 type Props = {
   report: DailyReportFull;
@@ -70,6 +71,10 @@ export function DailyReportReadView({ report, lang }: Props) {
 
   return (
     <div className="space-y-4">
+      {report.classReport ? (
+        <ClassReportSection classReport={report.classReport} lang={lang} />
+      ) : null}
+
       {characterOptions.length > 0 ? (
         <ReportSectionShell
           title={t(lang, "drSectionMuslimCharacter")}

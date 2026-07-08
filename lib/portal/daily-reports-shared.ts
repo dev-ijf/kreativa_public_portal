@@ -1,5 +1,21 @@
 import type { TranslationKey } from '@/lib/i18n/translations';
 
+export type ClassReportMedia = {
+  id: number;
+  mediaType: 'image' | 'video_file' | 'video_link';
+  url: string;
+  thumbnailUrl: string | null;
+  caption: string | null;
+  sortOrder: number;
+};
+
+export type ClassReportInfo = {
+  id: number;
+  theme: string | null;
+  teacherNote: string | null;
+  media: ClassReportMedia[];
+};
+
 export type DailyReportCalendarDay = {
   date: string;
   hasReport: boolean;
@@ -58,6 +74,7 @@ export type DailyReportFull = {
   playCentres: DailyReportPlayCentre[];
   learningAreas: DailyReportLearningArea[];
   vocabulary: DailyReportVocabulary[];
+  classReport: ClassReportInfo | null;
 };
 
 export type DailyReportSummaryLearningArea = {

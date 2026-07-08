@@ -2,6 +2,8 @@ import { sql } from '@/lib/db/client';
 import { isStudentVisibleToViewer } from '@/lib/data/server/attendance';
 import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
 import type {
+  ClassReportInfo,
+  ClassReportMedia,
   DailyReportCalendarDay,
   DailyReportFull,
   DailyReportSummaryResponse,
@@ -223,6 +225,59 @@ export async function getDailyReportByDate(
     ORDER BY sort_order
   `;
 
+  const classReportRows = await sql`
+    SELECT id, theme, teacher_note AS "teacherNote"
+    FROM dr_class_reports
+    WHERE class_id = ${classId}
+      AND report_date = ${date}::date
+      AND status = 'submitted'
+    LIMIT 1
+  `;
+
+  let classReport: ClassReportInfo | null = null;
+  const crRow = classReportRows[0] as
+    | { id: number; theme: string | null; teacherNote: string | null }
+    | undefined;
+
+  if (crRow) {
+    const crId = Number(crRow.id);
+    const mediaRows = await sql`
+      SELECT
+        id,
+        media_type   AS "mediaType",
+        url,
+        thumbnail_url AS "thumbnailUrl",
+        caption,
+        sort_order   AS "sortOrder"
+      FROM dr_class_report_media
+      WHERE class_report_id = ${crId}
+      ORDER BY sort_order, id
+    `;
+
+    classReport = {
+      id: crId,
+      theme: crRow.theme ?? null,
+      teacherNote: crRow.teacherNote ?? null,
+      media: (
+        mediaRows as {
+          id: number;
+          mediaType: string;
+          url: string;
+          thumbnailUrl: string | null;
+          caption: string | null;
+          sortOrder: number;
+        }[]
+      ).map((m) => ({
+        id: Number(m.id),
+        mediaType: m.mediaType as ClassReportMedia['mediaType'],
+        url: m.url,
+        thumbnailUrl: m.thumbnailUrl ?? null,
+        caption: m.caption ?? null,
+        sortOrder: Number(m.sortOrder),
+      })),
+    };
+  }
+
   const report: DailyReportFull = {
     id: reportId,
     studentName: String(h.studentName ?? ''),
@@ -271,6 +326,7 @@ export async function getDailyReportByDate(
       rating: r.rating != null ? Number(r.rating) : null,
     })),
     vocabulary: vocabRows as DailyReportFull['vocabulary'],
+    classReport,
   };
 
   return { ok: true, report };

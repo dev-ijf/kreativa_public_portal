@@ -240,6 +240,11 @@ export const TRANSLATIONS = {
     drDate: 'Date',
     drClass: 'Class',
     drFilledByTeacher: 'Filled by teacher',
+    drSectionClassActivity: 'Class Activity',
+    drClassTheme: "Today's Theme",
+    drClassTeacherNote: 'Class Note',
+    drClassMediaTitle: 'Photos & Videos',
+    drClassMediaExpand: 'View all',
   },
   id: {
     welcome: 'Selamat datang di Parent Portal',
@@ -483,6 +488,11 @@ export const TRANSLATIONS = {
     drDate: 'Tanggal',
     drClass: 'Kelas',
     drFilledByTeacher: 'Diisi guru',
+    drSectionClassActivity: 'Aktivitas Kelas',
+    drClassTheme: 'Tema Hari Ini',
+    drClassTeacherNote: 'Catatan Kelas',
+    drClassMediaTitle: 'Foto & Video',
+    drClassMediaExpand: 'Lihat semua',
   },
 } as const;
 
