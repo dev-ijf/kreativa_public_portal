@@ -46,6 +46,21 @@ export type DailyReportVocabulary = {
   meaning: string;
 };
 
+export type DailyReportTilawah = {
+  method: 'quran' | 'iqra' | 'ummi' | 'tilawati';
+  jilid: number | null;
+  page: number | null;
+  rating: number | null;
+  ratingLabel: string | null;
+};
+
+export type DailyReportMemorize = {
+  surahName: string;
+  verseNote: string | null;
+  rating: number | null;
+  ratingLabel: string | null;
+};
+
 export type DailyReportFull = {
   id: number;
   studentName: string;
@@ -75,6 +90,8 @@ export type DailyReportFull = {
   learningAreas: DailyReportLearningArea[];
   vocabulary: DailyReportVocabulary[];
   classReport: ClassReportInfo | null;
+  tilawah: DailyReportTilawah | null;
+  memorize: DailyReportMemorize[];
 };
 
 export type DailyReportSummaryLearningArea = {

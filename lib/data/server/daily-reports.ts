@@ -6,7 +6,9 @@ import type {
   ClassReportMedia,
   DailyReportCalendarDay,
   DailyReportFull,
+  DailyReportMemorize,
   DailyReportSummaryResponse,
+  DailyReportTilawah,
 } from '@/lib/portal/daily-reports-shared';
 import { monthRange } from '@/lib/data/server/habits';
 
@@ -225,6 +227,29 @@ export async function getDailyReportByDate(
     ORDER BY sort_order
   `;
 
+  const tilawahRows = await sql`
+    SELECT
+      tilawah_method  AS "tilawahMethod",
+      tilawah_jilid   AS "tilawahJilid",
+      tilawah_page    AS "tilawahPage",
+      rating,
+      rating_label    AS "ratingLabel"
+    FROM dr_tilawah_records
+    WHERE report_id = ${reportId}
+    LIMIT 1
+  `;
+
+  const memorizeRows = await sql`
+    SELECT
+      surah_name   AS "surahName",
+      verse_note   AS "verseNote",
+      rating,
+      rating_label AS "ratingLabel"
+    FROM dr_memorize_records
+    WHERE report_id = ${reportId}
+    ORDER BY sort_order
+  `;
+
   const classReportRows = await sql`
     SELECT id, theme, teacher_note AS "teacherNote"
     FROM dr_class_reports
@@ -278,6 +303,38 @@ export async function getDailyReportByDate(
     };
   }
 
+  const tilawahRaw = tilawahRows[0] as {
+    tilawahMethod: string;
+    tilawahJilid: number | null;
+    tilawahPage: number | null;
+    rating: number | null;
+    ratingLabel: string | null;
+  } | undefined;
+
+  const tilawah: DailyReportTilawah | null = tilawahRaw
+    ? {
+        method: tilawahRaw.tilawahMethod as DailyReportTilawah['method'],
+        jilid: tilawahRaw.tilawahJilid != null ? Number(tilawahRaw.tilawahJilid) : null,
+        page: tilawahRaw.tilawahPage != null ? Number(tilawahRaw.tilawahPage) : null,
+        rating: tilawahRaw.rating != null ? Number(tilawahRaw.rating) : null,
+        ratingLabel: tilawahRaw.ratingLabel ?? null,
+      }
+    : null;
+
+  const memorize: DailyReportMemorize[] = (
+    memorizeRows as {
+      surahName: string;
+      verseNote: string | null;
+      rating: number | null;
+      ratingLabel: string | null;
+    }[]
+  ).map((r) => ({
+    surahName: r.surahName,
+    verseNote: r.verseNote ?? null,
+    rating: r.rating != null ? Number(r.rating) : null,
+    ratingLabel: r.ratingLabel ?? null,
+  }));
+
   const report: DailyReportFull = {
     id: reportId,
     studentName: String(h.studentName ?? ''),
@@ -327,6 +384,8 @@ export async function getDailyReportByDate(
     })),
     vocabulary: vocabRows as DailyReportFull['vocabulary'],
     classReport,
+    tilawah,
+    memorize,
   };
 
   return { ok: true, report };

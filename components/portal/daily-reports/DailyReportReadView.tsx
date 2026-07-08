@@ -8,6 +8,7 @@ import {
   WATER_KEYS,
   ZUHUR_KEYS,
   type DailyReportFull,
+  type DailyReportTilawah,
 } from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
 import {
@@ -30,6 +31,129 @@ type Props = {
 function displayName(name: string, nameId: string | null, lang: Lang): string {
   if (lang === "id" && nameId) return nameId;
   return name;
+}
+
+const TILAWAH_METHOD_LABELS: Record<DailyReportTilawah['method'], string> = {
+  quran: 'Quran',
+  iqra: 'Iqra',
+  ummi: 'Ummi',
+  tilawati: 'Tilawati',
+};
+
+type TilawahSectionProps = { tilawah: DailyReportTilawah; lang: Lang };
+
+function TilawahSection({ tilawah, lang }: TilawahSectionProps) {
+  const methodOptions = (["quran", "iqra", "ummi", "tilawati"] as const).map((v) => ({
+    value: v,
+    label: TILAWAH_METHOD_LABELS[v],
+  }));
+
+  const labelKey = tilawah.ratingLabel?.toLowerCase();
+  const labelOptions = [
+    { value: "fluent", label: t(lang, "drTilawahFluent") },
+    { value: "needs_guidance", label: t(lang, "drTilawahNeedsGuidance") },
+    { value: "not_yet", label: t(lang, "drTilawahNotYet") },
+  ];
+  const normalizedLabel =
+    labelKey === "fluent"
+      ? "fluent"
+      : labelKey === "needs guidance" || labelKey === "needs_guidance"
+      ? "needs_guidance"
+      : labelKey === "not yet" || labelKey === "not_yet"
+      ? "not_yet"
+      : labelKey ?? null;
+
+  return (
+    <ReportSectionShell
+      title={t(lang, "drSectionTilawah")}
+      icon="📖"
+      headerClassName="bg-gradient-to-r from-teal-600 to-green-600"
+    >
+      <ReadOnlyPills
+        label={t(lang, "drTilawahMethod")}
+        options={methodOptions}
+        selected={tilawah.method}
+      />
+      {tilawah.jilid != null ? (
+        <ReadOnlyField label={t(lang, "drTilawahJilid")} value={String(tilawah.jilid)} />
+      ) : null}
+      {tilawah.page != null ? (
+        <ReadOnlyField label={t(lang, "drTilawahPage")} value={String(tilawah.page)} />
+      ) : null}
+      <div>
+        <FieldLabel>{t(lang, "drTilawahRating")}</FieldLabel>
+        <StarRating rating={tilawah.rating} />
+      </div>
+      {normalizedLabel ? (
+        <ReadOnlyPills
+          label={t(lang, "drTilawahLabel")}
+          options={labelOptions}
+          selected={normalizedLabel}
+        />
+      ) : null}
+    </ReportSectionShell>
+  );
+}
+
+type MemorizeSectionProps = {
+  memorize: DailyReportFull["memorize"];
+  lang: Lang;
+};
+
+function MemorizeSection({ memorize, lang }: MemorizeSectionProps) {
+  const labelOptions = [
+    { value: "fluent", label: t(lang, "drTilawahFluent") },
+    { value: "needs_guidance", label: t(lang, "drTilawahNeedsGuidance") },
+    { value: "not_yet", label: t(lang, "drTilawahNotYet") },
+  ];
+
+  function normalizeLabel(raw: string | null): string | null {
+    const key = raw?.toLowerCase();
+    if (key === "fluent") return "fluent";
+    if (key === "needs guidance" || key === "needs_guidance") return "needs_guidance";
+    if (key === "not yet" || key === "not_yet") return "not_yet";
+    return key ?? null;
+  }
+
+  return (
+    <ReportSectionShell
+      title={t(lang, "drSectionMemorize")}
+      icon="🌙"
+      headerClassName="bg-gradient-to-r from-purple-700 to-violet-600"
+    >
+      {memorize.length === 0 ? (
+        <FieldCaption>{t(lang, "drMemorizeEmpty")}</FieldCaption>
+      ) : (
+        <ul className="space-y-4">
+          {memorize.map((entry, i) => {
+            const normalizedLabel = normalizeLabel(entry.ratingLabel);
+            return (
+              <li
+                key={i}
+                className="space-y-2 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[15px] font-semibold text-slate-900 leading-snug">
+                    {entry.surahName}
+                  </span>
+                  {entry.verseNote ? (
+                    <span className="text-[14px] text-slate-500 shrink-0">{entry.verseNote}</span>
+                  ) : null}
+                </div>
+                <StarRating rating={entry.rating} />
+                {normalizedLabel ? (
+                  <ReadOnlyPills
+                    options={labelOptions}
+                    selected={normalizedLabel}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </ReportSectionShell>
+  );
 }
 
 export function DailyReportReadView({ report, lang }: Props) {
@@ -109,6 +233,14 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReadOnlyField label={t(lang, "drSurahMemorised")} value={report.surahMemorised} />
         <ReadOnlyField label={t(lang, "drAsmaulHusna")} value={report.asmaulHusna} />
       </ReportSectionShell>
+
+      {report.tilawah ? (
+        <TilawahSection tilawah={report.tilawah} lang={lang} />
+      ) : null}
+
+      {report.memorize.length > 0 ? (
+        <MemorizeSection memorize={report.memorize} lang={lang} />
+      ) : null}
 
       {playCentreOptions.length > 0 || report.playCentreHighlights ? (
         <ReportSectionShell
