@@ -138,9 +138,33 @@ export function PaymentHistoryPageClient({
       <ChildSelector />
 
       <div className="px-4 md:px-6 mt-2 space-y-4">
-        <div className="flex gap-2 p-1 bg-white rounded-2xl border border-slate-100 shadow-sm md:w-fit">
+        {/* Mobile: pill tabs */}
+        <div className="flex gap-2 p-1 bg-white rounded-2xl border border-slate-100 shadow-sm md:hidden">
           {tabBtn('checkout', 'Checkout', 'Menunggu bayar')}
           {tabBtn('paid', 'Paid', 'Berhasil')}
+        </div>
+        {/* Desktop: underline tabs */}
+        <div className="hidden md:flex border-b border-slate-200">
+          {(['checkout', 'paid'] as const).map((id) => {
+            const label = id === 'checkout'
+              ? (lang === 'en' ? 'Checkout' : 'Menunggu bayar')
+              : (lang === 'en' ? 'Paid' : 'Berhasil');
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={[
+                  'px-6 py-3 text-sm font-bold border-b-2 -mb-px transition-colors',
+                  tab === id
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300',
+                ].join(' ')}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* ===== Mobile: cards ===== */}
