@@ -13,10 +13,8 @@ export default async function LoginLayout({ children }: { children: ReactNode })
   return (
     <AuthProvider session={session}>
       <PortalProvider initialLang={initialLang}>
-        <div className="min-h-screen w-full flex justify-center">
-          <div className="w-full max-w-[420px] sm:border sm:border-slate-200/70 sm:shadow-sm md:max-w-none md:border-0 md:shadow-none overflow-hidden">
-            {children}
-          </div>
+        <div className="min-h-screen w-full">
+          {children}
         </div>
       </PortalProvider>
     </AuthProvider>

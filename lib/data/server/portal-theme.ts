@@ -130,6 +130,17 @@ function resolveTheme(row: ThemeRow | null): PortalThemeResolved {
   };
 }
 
+/** Fetch a single global setting (school_id IS NULL) from core_settings. */
+export async function getGlobalSetting(key: string): Promise<string | null> {
+  const rows = await sql`
+    SELECT setting_value FROM core_settings
+    WHERE setting_key = ${key} AND school_id IS NULL
+    LIMIT 1
+  `;
+  const row = rows[0] as { setting_value: string | null } | undefined;
+  return row?.setting_value ?? null;
+}
+
 /** Satu query per request; dipakai layout + generateMetadata + halaman portal. */
 export const getPortalThemeForRequest = cache(async (): Promise<PortalThemeResolved> => {
   const headersList = await headers();
