@@ -53,8 +53,10 @@ export function LoginPageClient({ logoUrl, logoAlt }: LoginPageClientProps) {
       </div>
 
       <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
-        <div className="h-20 w-[220px] relative mb-10 drop-shadow-xl">
-          <Image src={logoUrl} alt={logoAlt} fill sizes="220px" className="object-contain" priority />
+        <div className="mb-10 drop-shadow-xl flex justify-center">
+          <div className="relative h-40 w-[320px]">
+            <Image src={logoUrl} alt={logoAlt} fill sizes="320px" className="object-contain object-center" priority />
+          </div>
         </div>
 
         <div className="text-center mb-12">

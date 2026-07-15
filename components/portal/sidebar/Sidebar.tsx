@@ -92,9 +92,16 @@ export function Sidebar({ logoUrl, logoAlt }: Props) {
 
           {/* Logo */}
           <div className="px-4 pb-4 flex justify-center">
-            <Link href="/" className="block">
-              <div className="h-14 w-[160px] relative">
-                <Image src={logoUrl} alt={logoAlt} fill sizes="160px" className="object-contain" priority />
+            <Link href="/" className="block w-full">
+              <div className="relative h-28 w-full">
+                <Image
+                  src={logoUrl}
+                  alt={logoAlt}
+                  fill
+                  sizes="240px"
+                  className="object-contain object-center"
+                  priority
+                />
               </div>
             </Link>
           </div>
