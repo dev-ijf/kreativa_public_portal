@@ -547,125 +547,49 @@ export function HabitsPageClient() {
 
         {tab === "daily" && activeChildId ? (
           <div className="mt-4 space-y-4">
-            <PortalMonthCalendar
-              lang={lang}
-              calYear={calYear}
-              calMonth0={calMonth0}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onShiftMonth={shiftMonth}
-              days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
-              loading={loadingCal}
-              todayISO={todayISO()}
-              legendKeys={habitsLegendKeys}
-            />
+            {/* Mobile: stacked, Desktop: calendar left + table right */}
+            <div className="md:grid md:grid-cols-[340px_1fr] md:gap-6 md:items-start space-y-4 md:space-y-0">
+              {/* Calendar column */}
+              <div className="space-y-3">
+                <PortalMonthCalendar
+                  lang={lang}
+                  calYear={calYear}
+                  calMonth0={calMonth0}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  onShiftMonth={shiftMonth}
+                  days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
+                  loading={loadingCal}
+                  todayISO={todayISO()}
+                  legendKeys={habitsLegendKeys}
+                />
 
-            <div className="flex items-center justify-between px-1 gap-3">
-              <div className="min-w-0">
-                <p className="text-xs text-slate-500">{t(lang, "habitsScoreLabel")}</p>
-                <p className="text-2xl font-black text-slate-800">
-                  {score.done}/{score.total}
-                  <span className="text-sm font-bold text-slate-400 ml-1">
-                    ({score.total ? Math.round((score.done / score.total) * 100) : 0}%)
-                  </span>
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">{t(lang, "habitsSaveHint")}</p>
-              </div>
-              <div className="text-xs font-bold text-right shrink-0 text-slate-500 min-h-5 max-w-[8rem]">
-                {saveState === "saving" ? t(lang, "habitsSaving") : null}
-                {saveState === "saved" ? t(lang, "habitsSaved") : null}
-                {saveState === "error" ? t(lang, "habitsSaveError") : null}
-              </div>
-            </div>
-
-            {loadingDay ? (
-              <p className="text-center text-sm text-slate-400">…</p>
-            ) : (
-              <>
-                {habitSection(
-                  t(lang, "habitsSectionWake"),
-                  ["wake_up_early"],
-                  isFuture(selectedDate),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionWajib"),
-                  ["fajr", "dhuhr", "asr", "maghrib", "isha"],
-                  isFuture(selectedDate),
-                  t(lang, "habitsSectionWajibHint"),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionSunnahExtra"),
-                  ["dhuha", "tahajud", "sunnah_fasting", "pray_with_parents"],
-                  isFuture(selectedDate),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionMengajiMaghrib"),
-                  ["read_quran"],
-                  isFuture(selectedDate),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionPolite4s"),
-                  ["give_greetings", "smile_greet_polite"],
-                  isFuture(selectedDate),
-                  t(lang, "habitsSectionPolite4sHint"),
-                )}
-
-                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
-                  <h3 className="font-bold text-slate-700">{t(lang, "habitsOnTimeTitle")}</h3>
-                  <p className="text-xs text-slate-500 -mt-1">{t(lang, "habitsOnTimeHint")}</p>
-                  {onTimeControl}
+                <div className="flex items-center justify-between px-1 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-500">{t(lang, "habitsScoreLabel")}</p>
+                    <p className="text-2xl font-black text-slate-800">
+                      {score.done}/{score.total}
+                      <span className="text-sm font-bold text-slate-400 ml-1">
+                        ({score.total ? Math.round((score.done / score.total) * 100) : 0}%)
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">{t(lang, "habitsSaveHint")}</p>
+                  </div>
+                  <div className="text-xs font-bold text-right shrink-0 text-slate-500 min-h-5 max-w-[8rem]">
+                    {saveState === "saving" ? t(lang, "habitsSaving") : null}
+                    {saveState === "saved" ? t(lang, "habitsSaved") : null}
+                    {saveState === "error" ? t(lang, "habitsSaveError") : null}
+                  </div>
                 </div>
 
-                {habitSection(
-                  t(lang, "habitsSectionHelpChores"),
-                  ["help_parents"],
-                  isFuture(selectedDate),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionParentHugPray"),
-                  ["parent_hug_pray"],
-                  isFuture(selectedDate),
-                )}
-                {habitSection(
-                  t(lang, "habitsSectionChildStory"),
-                  ["child_tell_parents"],
-                  isFuture(selectedDate),
-                )}
-
-                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-2">
-                  <label className="font-semibold text-slate-700 text-sm" htmlFor="quran-juz">
-                    {t(lang, "habitsQuranJuzLabel")}
-                  </label>
-                  <p className="text-xs text-slate-500">{t(lang, "habitsQuranJuzHint")}</p>
-                  <textarea
-                    id="quran-juz"
-                    rows={2}
-                    disabled={isFuture(selectedDate)}
-                    placeholder={t(lang, "habitsQuranJuzPlaceholder")}
-                    value={payload.quranJuzInfo ?? ""}
-                    onChange={(e) =>
-                      setPayload((p) => ({
-                        ...p,
-                        quranJuzInfo: e.target.value.trim() ? e.target.value : null,
-                      }))
-                    }
-                    className="w-full rounded-xl border border-slate-200 p-3 text-sm disabled:opacity-40"
-                  />
-                </div>
-
-                <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent border-t border-slate-100/80">
+                {/* Desktop save button under calendar */}
+                <div className="hidden md:block">
                   <button
                     type="button"
-                    disabled={
-                      !isDirty ||
-                      loadingDay ||
-                      isFuture(selectedDate) ||
-                      !habitsCanSave ||
-                      saveState === "saving"
-                    }
+                    disabled={!isDirty || loadingDay || isFuture(selectedDate) || !habitsCanSave || saveState === "saving"}
                     onClick={() => setSaveConfirmOpen(true)}
                     className={[
-                      "w-full py-3.5 rounded-2xl font-bold text-sm shadow-md",
+                      "w-full py-3 rounded-2xl font-bold text-sm shadow-md",
                       isDirty && habitsCanSave && !isFuture(selectedDate) && !loadingDay
                         ? "bg-primary text-white shadow-primary/25"
                         : "bg-slate-200 text-slate-400",
@@ -674,14 +598,128 @@ export function HabitsPageClient() {
                     {t(lang, "habitsSaveButton")}
                   </button>
                 </div>
-              </>
-            )}
+              </div>
+
+              {/* Habits checklist column */}
+              <div>
+                {loadingDay ? (
+                  <p className="text-center text-sm text-slate-400">…</p>
+                ) : (
+                  <>
+                    {/* Mobile: card sections */}
+                    <div className="md:hidden space-y-4">
+                      {habitSection(t(lang, "habitsSectionWake"), ["wake_up_early"], isFuture(selectedDate))}
+                      {habitSection(t(lang, "habitsSectionWajib"), ["fajr", "dhuhr", "asr", "maghrib", "isha"], isFuture(selectedDate), t(lang, "habitsSectionWajibHint"))}
+                      {habitSection(t(lang, "habitsSectionSunnahExtra"), ["dhuha", "tahajud", "sunnah_fasting", "pray_with_parents"], isFuture(selectedDate))}
+                      {habitSection(t(lang, "habitsSectionMengajiMaghrib"), ["read_quran"], isFuture(selectedDate))}
+                      {habitSection(t(lang, "habitsSectionPolite4s"), ["give_greetings", "smile_greet_polite"], isFuture(selectedDate), t(lang, "habitsSectionPolite4sHint"))}
+
+                      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
+                        <h3 className="font-bold text-slate-700">{t(lang, "habitsOnTimeTitle")}</h3>
+                        <p className="text-xs text-slate-500 -mt-1">{t(lang, "habitsOnTimeHint")}</p>
+                        {onTimeControl}
+                      </div>
+
+                      {habitSection(t(lang, "habitsSectionHelpChores"), ["help_parents"], isFuture(selectedDate))}
+                      {habitSection(t(lang, "habitsSectionParentHugPray"), ["parent_hug_pray"], isFuture(selectedDate))}
+                      {habitSection(t(lang, "habitsSectionChildStory"), ["child_tell_parents"], isFuture(selectedDate))}
+
+                      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-2">
+                        <label className="font-semibold text-slate-700 text-sm" htmlFor="quran-juz">
+                          {t(lang, "habitsQuranJuzLabel")}
+                        </label>
+                        <p className="text-xs text-slate-500">{t(lang, "habitsQuranJuzHint")}</p>
+                        <textarea
+                          id="quran-juz"
+                          rows={2}
+                          disabled={isFuture(selectedDate)}
+                          placeholder={t(lang, "habitsQuranJuzPlaceholder")}
+                          value={payload.quranJuzInfo ?? ""}
+                          onChange={(e) => setPayload((p) => ({ ...p, quranJuzInfo: e.target.value.trim() ? e.target.value : null }))}
+                          className="w-full rounded-xl border border-slate-200 p-3 text-sm disabled:opacity-40"
+                        />
+                      </div>
+
+                      <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent border-t border-slate-100/80">
+                        <button
+                          type="button"
+                          disabled={!isDirty || loadingDay || isFuture(selectedDate) || !habitsCanSave || saveState === "saving"}
+                          onClick={() => setSaveConfirmOpen(true)}
+                          className={[
+                            "w-full py-3.5 rounded-2xl font-bold text-sm shadow-md",
+                            isDirty && habitsCanSave && !isFuture(selectedDate) && !loadingDay
+                              ? "bg-primary text-white shadow-primary/25"
+                              : "bg-slate-200 text-slate-400",
+                          ].join(" ")}
+                        >
+                          {t(lang, "habitsSaveButton")}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Desktop: table-based checklist */}
+                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-xs text-slate-500 border-b border-slate-200 bg-slate-50">
+                            <th className="px-4 py-2.5 font-semibold">{lang === "en" ? "Habit" : "Kebiasaan"}</th>
+                            <th className="px-4 py-2.5 font-semibold text-center w-20">{lang === "en" ? "Done" : "Sudah"}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {HABIT_BOOLEAN_KEYS.map((k) => (
+                            <tr key={k} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-2.5 text-slate-700 font-medium">{t(lang, HABIT_ROW_LABEL_KEY[k])}</td>
+                              <td className="px-4 py-2.5 text-center">
+                                <button
+                                  type="button"
+                                  disabled={isFuture(selectedDate)}
+                                  onClick={() => setPayload((p) => ({ ...p, [k]: !p[k] }))}
+                                  className={[
+                                    "w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-black transition-colors",
+                                    payload[k] ? "bg-emerald-500 text-white" : "bg-white border-2 border-slate-200 text-slate-300",
+                                    isFuture(selectedDate) ? "opacity-40 cursor-not-allowed" : "hover:border-emerald-300",
+                                  ].join(" ")}
+                                >
+                                  {payload[k] ? "✓" : ""}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {/* On-time + Quran inside the same card */}
+                      <div className="border-t border-slate-200 px-4 py-3 space-y-3">
+                        <div>
+                          <p className="font-bold text-slate-700 text-sm mb-1">{t(lang, "habitsOnTimeTitle")}</p>
+                          {onTimeControl}
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 text-sm" htmlFor="quran-juz-desktop">
+                            {t(lang, "habitsQuranJuzLabel")}
+                          </label>
+                          <textarea
+                            id="quran-juz-desktop"
+                            rows={2}
+                            disabled={isFuture(selectedDate)}
+                            placeholder={t(lang, "habitsQuranJuzPlaceholder")}
+                            value={payload.quranJuzInfo ?? ""}
+                            onChange={(e) => setPayload((p) => ({ ...p, quranJuzInfo: e.target.value.trim() ? e.target.value : null }))}
+                            className="w-full rounded-lg border border-slate-200 p-2 text-sm disabled:opacity-40 mt-1"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
 
         {tab === "summary" && activeChildId ? (
           <div className="mt-4 space-y-4">
-            <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 p-2">
+            <div className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 p-2 md:w-fit md:mx-0 md:gap-6">
               <button
                 type="button"
                 aria-label={t(lang, "habitsPrevMonth")}
@@ -707,60 +745,68 @@ export function HabitsPageClient() {
               <p className="text-center text-sm text-slate-500 py-6">{t(lang, "habitsEmptySummary")}</p>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <p className="text-xs text-slate-500 font-medium">{t(lang, "habitsSummaryDays")}</p>
-                    <p className="text-2xl font-black text-slate-800">{summary.totalDays}</p>
-                  </div>
-                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                    <p className="text-xs text-slate-500 font-medium">{t(lang, "habitsSummaryAvg")}</p>
-                    <p className="text-2xl font-black text-primary">{summary.avgScorePct}%</p>
-                  </div>
-                </div>
+                {/* Desktop: 3-col grid, Mobile: stacked */}
+                <div className="md:grid md:grid-cols-3 md:gap-4 space-y-4 md:space-y-0">
+                  {/* Stats + Categories */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                        <p className="text-xs text-slate-500 font-medium">{t(lang, "habitsSummaryDays")}</p>
+                        <p className="text-2xl font-black text-slate-800">{summary.totalDays}</p>
+                      </div>
+                      <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+                        <p className="text-xs text-slate-500 font-medium">{t(lang, "habitsSummaryAvg")}</p>
+                        <p className="text-2xl font-black text-primary">{summary.avgScorePct}%</p>
+                      </div>
+                    </div>
 
-                <div className="bg-primary rounded-3xl p-5 text-white shadow-lg shadow-primary/25">
-                  <div className="flex items-center gap-2 font-bold text-sm mb-4">
-                    <BarChart2 size={18} /> {lang === "en" ? "Categories" : "Kategori"}
+                    <div className="bg-primary rounded-3xl p-5 text-white shadow-lg shadow-primary/25">
+                      <div className="flex items-center gap-2 font-bold text-sm mb-4">
+                        <BarChart2 size={18} /> {lang === "en" ? "Categories" : "Kategori"}
+                      </div>
+                      <div className="space-y-3">
+                        {(
+                          [
+                            ["habitsCategoryIbadah", summary.ibadahPct] as const,
+                            ["habitsCategoryDisiplin", summary.disiplinPct] as const,
+                            ["habitsCategoryKarakter", summary.karakterPct] as const,
+                          ] as const
+                        ).map(([labelKey, pct]) => (
+                          <div key={labelKey}>
+                            <div className="flex justify-between text-xs text-white/90 mb-1">
+                              <span>{t(lang, labelKey)}</span>
+                              <span>{pct}%</span>
+                            </div>
+                            <div className="w-full bg-white/20 rounded-full h-2">
+                              <div className="bg-white h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-3">
-                    {(
-                      [
-                        ["habitsCategoryIbadah", summary.ibadahPct] as const,
-                        ["habitsCategoryDisiplin", summary.disiplinPct] as const,
-                        ["habitsCategoryKarakter", summary.karakterPct] as const,
-                      ] as const
-                    ).map(([labelKey, pct]) => (
-                      <div key={labelKey}>
-                        <div className="flex justify-between text-xs text-white/90 mb-1">
-                          <span>{t(lang, labelKey)}</span>
-                          <span>{pct}%</span>
+
+                  {/* Trend chart */}
+                  <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
+                    <p className="font-bold text-slate-700 text-sm mb-2">{t(lang, "habitsTrendTitle")}</p>
+                    <TrendChart points={summary.dailyTrend} lang={lang} />
+                  </div>
+
+                  {/* Consistency */}
+                  <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm space-y-3">
+                    <p className="font-bold text-slate-700 text-sm">{t(lang, "habitsItemConsistency")}</p>
+                    {summary.itemRates.map(({ key, pct }) => (
+                      <div key={key}>
+                        <div className="flex justify-between text-xs text-slate-600 mb-1">
+                          <span>{t(lang, HABIT_ROW_LABEL_KEY[key])}</span>
+                          <span className="font-bold">{pct}%</span>
                         </div>
-                        <div className="w-full bg-white/20 rounded-full h-2">
-                          <div className="bg-white h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        <div className="w-full bg-slate-100 rounded-full h-2">
+                          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm">
-                  <p className="font-bold text-slate-700 text-sm mb-2">{t(lang, "habitsTrendTitle")}</p>
-                  <TrendChart points={summary.dailyTrend} lang={lang} />
-                </div>
-
-                <div className="bg-white rounded-3xl p-4 border border-slate-100 shadow-sm space-y-3">
-                  <p className="font-bold text-slate-700 text-sm">{t(lang, "habitsItemConsistency")}</p>
-                  {summary.itemRates.map(({ key, pct }) => (
-                    <div key={key}>
-                      <div className="flex justify-between text-xs text-slate-600 mb-1">
-                        <span>{t(lang, HABIT_ROW_LABEL_KEY[key])}</span>
-                        <span className="font-bold">{pct}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 rounded-full h-2">
-                        <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </>
             )}

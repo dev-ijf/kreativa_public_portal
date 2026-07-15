@@ -10,7 +10,7 @@ type FullPageBlockingLoaderProps = {
 export function FullPageBlockingLoader({ title, subtitle }: FullPageBlockingLoaderProps) {
   return (
     <div
-      className="fixed inset-0 z-9999 flex flex-col items-center justify-center bg-slate-50 px-5"
+      className="min-h-[60vh] flex flex-col items-center justify-center px-5"
       role="status"
       aria-busy="true"
       aria-live="polite"
