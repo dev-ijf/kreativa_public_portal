@@ -13,7 +13,7 @@ export function TopHero({ heightClassName = 'h-[260px]', children }: Props) {
     <div className="relative">
       <div
         className={[
-          'bg-primary w-full rounded-b-[2.5rem] absolute top-0 left-0 z-0 overflow-hidden',
+          'bg-primary w-full rounded-b-[2.5rem] md:rounded-b-2xl absolute top-0 left-0 z-0 overflow-hidden',
           heightClassName,
         ].join(' ')}
       >

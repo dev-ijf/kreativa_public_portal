@@ -25,3 +25,11 @@
     display: none;
   }
 }
+
+@layer base {
+  @media (min-width: 768px) {
+    .sidebar-content-transition {
+      transition: margin-left 300ms ease-in-out;
+    }
+  }
+}

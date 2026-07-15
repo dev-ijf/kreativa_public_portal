@@ -60,7 +60,7 @@ export function AgendaPageClient({ initialAgendas }: Props) {
       <Header title={lang === 'en' ? 'Agenda' : 'Agenda'} backHref="/" />
       <ChildSelector />
 
-      <div className="px-4 space-y-6">
+      <div className="px-4 space-y-6 md:grid md:grid-cols-2 md:gap-6 md:space-y-0 md:items-start">
         <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-4">
             <button

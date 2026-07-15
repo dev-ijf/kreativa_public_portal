@@ -214,9 +214,9 @@ export function AdaptiveLearningPageClient() {
 
         {/* Tab: Start */}
         {activeTab === 'start' && (
-          <div className="space-y-3 min-h-[200px]">
+          <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 min-h-[200px]">
             {loadingInitial ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 md:col-span-2">
                 <Loader2 size={24} className="animate-spin text-slate-400" />
               </div>
             ) : (
@@ -260,13 +260,13 @@ export function AdaptiveLearningPageClient() {
 
         {/* Tab: History + infinite scroll */}
         {activeTab === 'history' && (
-          <div className="space-y-3 min-h-[200px]">
+          <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 min-h-[200px]">
             {loadingInitial ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 md:col-span-2">
                 <Loader2 size={24} className="animate-spin text-slate-400" />
               </div>
             ) : historyItems.length === 0 ? (
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center text-slate-400 text-sm">
+              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 text-center text-slate-400 text-sm md:col-span-2">
                 {lang === 'en' ? 'No history yet.' : 'Belum ada riwayat.'}
               </div>
             ) : (

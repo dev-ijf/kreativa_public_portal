@@ -274,7 +274,7 @@ export function AttendancePageClient() {
           ) : loading && !summary ? (
             <p className="text-sm text-slate-500">…</p>
           ) : summary ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-green-100">
                 <p className="text-xs text-slate-500 font-semibold mb-1">{t(lang, "attendanceStatusPresent")}</p>
                 <p className="text-2xl font-bold text-green-600">{summary.present}</p>

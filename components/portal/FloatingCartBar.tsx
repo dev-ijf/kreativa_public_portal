@@ -10,7 +10,7 @@ export function FloatingCartBar() {
   if (cart.length === 0) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-3 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.15)] flex justify-between items-center z-30">
+    <div className="fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-white border-t border-slate-200 px-4 py-3 shadow-[0_-10px_20px_-5px_rgba(0,0,0,0.15)] flex justify-between items-center z-30">
       <Link href="/cart" className="cursor-pointer">
         <p className="text-xs text-slate-500 font-semibold">Total ({cart.length} items)</p>
         <p className="text-lg font-bold text-primary">{formatRupiah(total)}</p>

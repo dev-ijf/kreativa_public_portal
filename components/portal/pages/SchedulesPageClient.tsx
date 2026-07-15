@@ -88,7 +88,7 @@ export function SchedulesPageClient({ initialSchedules }: Props) {
       <div className="px-4 space-y-4">
         <div>
           <p className="text-xs font-semibold text-slate-500 mb-2">{pickDay}</p>
-          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide md:overflow-x-visible">
             {WEEKDAY_KEYS.map((_, idx) => {
               const isOn = idx === selectedDayIndex;
               return (
@@ -98,7 +98,7 @@ export function SchedulesPageClient({ initialSchedules }: Props) {
                   title={dayLabel(idx, lang)}
                   onClick={() => setSelectedDayIndex(idx)}
                   className={[
-                    'rounded-lg px-2.5 py-2 text-xs font-bold transition-colors border shrink-0',
+                    'rounded-lg px-2.5 py-2 text-xs font-bold transition-colors border shrink-0 md:flex-1 md:text-center',
                     isOn
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-white text-slate-600 border-slate-200 hover:border-primary/40',

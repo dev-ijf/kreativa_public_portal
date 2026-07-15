@@ -73,7 +73,7 @@ function TermReportList({ reports, lang }: { reports: TermReportListItem[]; lang
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
       {reports.map((report) => (
         <ReportCard
           key={report.id}
@@ -95,7 +95,7 @@ function SemesterReportList({ reports, lang }: { reports: SemesterReportListItem
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 md:grid md:grid-cols-2 md:gap-3 md:space-y-0">
       {reports.map((report) => (
         <ReportCard
           key={report.id}

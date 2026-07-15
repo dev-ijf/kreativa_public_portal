@@ -137,130 +137,225 @@ export function PaymentHistoryPageClient({
       <Header title={lang === 'en' ? 'Payment History' : 'Riwayat Pembayaran'} backHref="/finance" />
       <ChildSelector />
 
-      <div className="px-4 mt-2 space-y-4">
-        <div className="flex gap-2 p-1 bg-white rounded-2xl border border-slate-100 shadow-sm">
+      <div className="px-4 md:px-6 mt-2 space-y-4">
+        <div className="flex gap-2 p-1 bg-white rounded-2xl border border-slate-100 shadow-sm md:w-fit">
           {tabBtn('checkout', 'Checkout', 'Menunggu bayar')}
           {tabBtn('paid', 'Paid', 'Berhasil')}
         </div>
 
-        {tab === 'checkout' && pendingList.length === 0 ? (
-          <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center text-sm text-slate-600">
-            {lang === 'en'
-              ? 'You have no payments waiting to be completed. New checkouts will appear here after you choose a payment method.'
-              : 'Tidak ada pembayaran yang masih menunggu. Transaksi checkout baru akan muncul di sini setelah Anda memilih metode bayar.'}
-          </div>
-        ) : null}
-
-        {tab === 'checkout' && pendingList.length > 0
-          ? pendingList.map((tx) => (
-              <button
-                key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
-                type="button"
-                onClick={() => goToInstruction(tx)}
-                className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:border-primary/40 hover:bg-primary-light/30 transition-colors"
-              >
-                <div className="flex justify-between items-start gap-2 mb-2">
-                  <div className="flex items-center gap-2 text-slate-600 text-xs min-w-0">
-                    <Calendar size={14} className="shrink-0" />
-                    <span className="truncate">{dateForTx(tx)}</span>
-                  </div>
-                  <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                    {pendingStatusLabel}
-                  </span>
-                </div>
-                <p className="font-bold text-slate-800 text-sm mb-0.5">{buildTitle(tx, lang)}</p>
-                <p className="text-xs text-slate-500 mb-3">{tx.paymentMethodName ?? '—'}</p>
-
-                {tx.lines.length > 1 ? (
-                  <div className="bg-slate-50 rounded-xl p-3 mb-3 border border-slate-100">
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
-                      {lang === 'en' ? 'Transaction details' : 'Rincian transaksi'}
-                    </p>
-                    <div className="space-y-1.5">
-                      {tx.lines.map((line, i) => (
-                        <div key={i} className="flex justify-between text-xs gap-2">
-                          <span className="text-slate-600 truncate">{line.label}</span>
-                          <span className="font-semibold text-slate-800 shrink-0">{formatRupiah(line.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex justify-between items-end gap-2">
-                  <div>
-                    <p className="text-[10px] text-slate-500 font-semibold uppercase">
-                      {lang === 'en' ? 'Total payment' : 'Total pembayaran'}
-                    </p>
-                    <p className="text-lg font-bold text-primary">{formatRupiah(tx.totalAmount)}</p>
-                  </div>
-                  <span className="text-[10px] font-bold text-primary shrink-0">
-                    {lang === 'en' ? 'Tap for instructions →' : 'Ketuk untuk instruksi →'}
-                  </span>
-                </div>
-              </button>
-            ))
-          : null}
-
-        {tab === 'paid' ? (
-          paidList.length === 0 ? (
+        {/* ===== Mobile: cards ===== */}
+        <div className="md:hidden space-y-4">
+          {tab === 'checkout' && pendingList.length === 0 ? (
             <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center text-sm text-slate-600">
+              {lang === 'en'
+                ? 'You have no payments waiting to be completed. New checkouts will appear here after you choose a payment method.'
+                : 'Tidak ada pembayaran yang masih menunggu. Transaksi checkout baru akan muncul di sini setelah Anda memilih metode bayar.'}
+            </div>
+          ) : null}
+
+          {tab === 'checkout' && pendingList.length > 0
+            ? pendingList.map((tx) => (
+                <button
+                  key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
+                  type="button"
+                  onClick={() => goToInstruction(tx)}
+                  className="w-full text-left bg-white rounded-2xl p-4 shadow-sm border border-slate-100 hover:border-primary/40 hover:bg-primary-light/30 transition-colors"
+                >
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <div className="flex items-center gap-2 text-slate-600 text-xs min-w-0">
+                      <Calendar size={14} className="shrink-0" />
+                      <span className="truncate">{dateForTx(tx)}</span>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                      {pendingStatusLabel}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-800 text-sm mb-0.5">{buildTitle(tx, lang)}</p>
+                  <p className="text-xs text-slate-500 mb-3">{tx.paymentMethodName ?? '—'}</p>
+
+                  {tx.lines.length > 1 ? (
+                    <div className="bg-slate-50 rounded-xl p-3 mb-3 border border-slate-100">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
+                        {lang === 'en' ? 'Transaction details' : 'Rincian transaksi'}
+                      </p>
+                      <div className="space-y-1.5">
+                        {tx.lines.map((line, i) => (
+                          <div key={i} className="flex justify-between text-xs gap-2">
+                            <span className="text-slate-600 truncate">{line.label}</span>
+                            <span className="font-semibold text-slate-800 shrink-0">{formatRupiah(line.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex justify-between items-end gap-2">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase">
+                        {lang === 'en' ? 'Total payment' : 'Total pembayaran'}
+                      </p>
+                      <p className="text-lg font-bold text-primary">{formatRupiah(tx.totalAmount)}</p>
+                    </div>
+                    <span className="text-[10px] font-bold text-primary shrink-0">
+                      {lang === 'en' ? 'Tap for instructions →' : 'Ketuk untuk instruksi →'}
+                    </span>
+                  </div>
+                </button>
+              ))
+            : null}
+
+          {tab === 'paid' ? (
+            paidList.length === 0 ? (
+              <div className="bg-white rounded-2xl p-6 border border-slate-100 text-center text-sm text-slate-600">
+                {lang === 'en' ? 'No successful payments yet.' : 'Belum ada pembayaran berhasil.'}
+              </div>
+            ) : (
+              paidList.map((tx) => (
+                <div
+                  key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
+                  className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"
+                >
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <div className="flex items-center gap-2 text-slate-600 text-xs min-w-0">
+                      <Calendar size={14} className="shrink-0" />
+                      <span className="truncate">{dateForTx(tx)}</span>
+                    </div>
+                    <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                      {(tx.status ?? '').toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-800 text-sm mb-0.5">{buildTitle(tx, lang)}</p>
+                  <p className="text-xs text-slate-500 mb-3">{tx.paymentMethodName ?? '—'}</p>
+
+                  {tx.lines.length > 1 ? (
+                    <div className="bg-slate-50 rounded-xl p-3 mb-3 border border-slate-100">
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
+                        {lang === 'en' ? 'Transaction details' : 'Rincian transaksi'}
+                      </p>
+                      <div className="space-y-1.5">
+                        {tx.lines.map((line, i) => (
+                          <div key={i} className="flex justify-between text-xs gap-2">
+                            <span className="text-slate-600 truncate">{line.label}</span>
+                            <span className="font-semibold text-slate-800 shrink-0">{formatRupiah(line.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="flex justify-between items-end gap-2">
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-semibold uppercase">
+                        {lang === 'en' ? 'Total payment' : 'Total pembayaran'}
+                      </p>
+                      <p className="text-lg font-bold text-primary">{formatRupiah(tx.totalAmount)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openTuitionReceiptPdf(tx.transactionId, tx.transactionCreatedAt)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-primary bg-primary-light px-3 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                    >
+                      <FileText size={14} />
+                      {lang === 'en' ? 'Receipt PDF' : 'Kuitansi PDF'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )
+          ) : null}
+        </div>
+
+        {/* ===== Desktop: table ===== */}
+        <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          {tab === 'checkout' && pendingList.length === 0 ? (
+            <div className="p-6 text-center text-sm text-slate-600">
+              {lang === 'en'
+                ? 'You have no payments waiting to be completed.'
+                : 'Tidak ada pembayaran yang masih menunggu.'}
+            </div>
+          ) : tab === 'paid' && paidList.length === 0 ? (
+            <div className="p-6 text-center text-sm text-slate-600">
               {lang === 'en' ? 'No successful payments yet.' : 'Belum ada pembayaran berhasil.'}
             </div>
           ) : (
-            paidList.map((tx) => (
-              <div
-                key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
-                className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100"
-              >
-                <div className="flex justify-between items-start gap-2 mb-2">
-                  <div className="flex items-center gap-2 text-slate-600 text-xs min-w-0">
-                    <Calendar size={14} className="shrink-0" />
-                    <span className="truncate">{dateForTx(tx)}</span>
-                  </div>
-                  <span className="shrink-0 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    {(tx.status ?? '').toUpperCase()}
-                  </span>
-                </div>
-                <p className="font-bold text-slate-800 text-sm mb-0.5">{buildTitle(tx, lang)}</p>
-                <p className="text-xs text-slate-500 mb-3">{tx.paymentMethodName ?? '—'}</p>
-
-                {tx.lines.length > 1 ? (
-                  <div className="bg-slate-50 rounded-xl p-3 mb-3 border border-slate-100">
-                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
-                      {lang === 'en' ? 'Transaction details' : 'Rincian transaksi'}
-                    </p>
-                    <div className="space-y-1.5">
-                      {tx.lines.map((line, i) => (
-                        <div key={i} className="flex justify-between text-xs gap-2">
-                          <span className="text-slate-600 truncate">{line.label}</span>
-                          <span className="font-semibold text-slate-800 shrink-0">{formatRupiah(line.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="flex justify-between items-end gap-2">
-                  <div>
-                    <p className="text-[10px] text-slate-500 font-semibold uppercase">
-                      {lang === 'en' ? 'Total payment' : 'Total pembayaran'}
-                    </p>
-                    <p className="text-lg font-bold text-primary">{formatRupiah(tx.totalAmount)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openTuitionReceiptPdf(tx.transactionId, tx.transactionCreatedAt)}
-                    className="flex items-center gap-1.5 text-xs font-bold text-primary bg-primary-light px-3 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors"
-                  >
-                    <FileText size={14} />
-                    {lang === 'en' ? 'Receipt PDF' : 'Kuitansi PDF'}
-                  </button>
-                </div>
-              </div>
-            ))
-          )
-        ) : null}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-slate-500 border-b border-slate-200 bg-slate-50">
+                    <th className="px-5 py-3 font-semibold">{lang === 'en' ? 'Date' : 'Tanggal'}</th>
+                    <th className="px-5 py-3 font-semibold">{lang === 'en' ? 'Description' : 'Deskripsi'}</th>
+                    <th className="px-5 py-3 font-semibold">{lang === 'en' ? 'Method' : 'Metode'}</th>
+                    <th className="px-5 py-3 font-semibold">{lang === 'en' ? 'Details' : 'Rincian'}</th>
+                    <th className="px-5 py-3 font-semibold text-right">{lang === 'en' ? 'Total' : 'Total'}</th>
+                    <th className="px-5 py-3 font-semibold text-center">{lang === 'en' ? 'Status' : 'Status'}</th>
+                    <th className="px-5 py-3 font-semibold text-center w-28" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentList.map((tx) => {
+                    const isPending = tab === 'checkout';
+                    return (
+                      <tr
+                        key={`${tx.transactionId}-${tx.transactionCreatedAt}`}
+                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50 transition-colors"
+                      >
+                        <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{dateForTx(tx)}</td>
+                        <td className="px-5 py-3 font-semibold text-slate-800">{buildTitle(tx, lang)}</td>
+                        <td className="px-5 py-3 text-slate-500">{tx.paymentMethodName ?? '—'}</td>
+                        <td className="px-5 py-3">
+                          {tx.lines.length > 1 ? (
+                            <div className="space-y-0.5">
+                              {tx.lines.map((line, i) => (
+                                <div key={i} className="flex justify-between text-xs gap-4">
+                                  <span className="text-slate-600 truncate">{line.label}</span>
+                                  <span className="font-semibold text-slate-700 shrink-0">{formatRupiah(line.amount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-primary whitespace-nowrap">{formatRupiah(tx.totalAmount)}</td>
+                        <td className="px-5 py-3 text-center">
+                          {isPending ? (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                              {pendingStatusLabel}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                              {(tx.status ?? '').toUpperCase()}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          {isPending ? (
+                            <button
+                              type="button"
+                              onClick={() => goToInstruction(tx)}
+                              className="text-xs font-bold text-primary hover:underline"
+                            >
+                              {lang === 'en' ? 'Instructions' : 'Instruksi'} →
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openTuitionReceiptPdf(tx.transactionId, tx.transactionCreatedAt)}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-primary bg-primary-light px-2.5 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-colors"
+                            >
+                              <FileText size={12} />
+                              {lang === 'en' ? 'Receipt PDF' : 'Kuitansi PDF'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {currentHasMore ? (
           <button

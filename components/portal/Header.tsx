@@ -26,7 +26,7 @@ export function Header({ title, backHref, rightSlot, transparent = false }: Prop
         <Link
           href={resolvedBackHref}
           className={[
-            'mr-3 p-1.5 rounded-full transition-colors',
+            'mr-3 p-1.5 rounded-full transition-colors md:hidden',
             transparent ? 'bg-white/20 text-white hover:bg-white/30' : 'hover:bg-slate-100 text-slate-700',
           ].join(' ')}
           aria-label="Back"

@@ -72,7 +72,8 @@ export function UpdatesPageClient({ initialRows, initialNextCursor }: Props) {
             {lang === 'en' ? 'No announcements yet.' : 'Belum ada pengumuman.'}
           </div>
         ) : (
-          items.map((update) => {
+          <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+          {items.map((update) => {
             const title = lang === 'en' ? update.titleEn : update.titleId;
             const rawHtml = lang === 'en' ? update.contentEn : update.contentId;
             const excerpt = stripTagsForExcerpt(rawHtml, 160);
@@ -112,7 +113,8 @@ export function UpdatesPageClient({ initialRows, initialNextCursor }: Props) {
                 </div>
               </article>
             );
-          })
+          })}
+          </div>
         )}
         {nextCursor ? <div ref={sentinelRef} className="h-4 w-full" aria-hidden /> : null}
         {loading ? (
