@@ -23,20 +23,23 @@ import { usePortalState, useActiveChild } from '@/components/portal/state/Portal
 import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
 import { t } from '@/lib/i18n/translations';
 import { useSidebar } from './SidebarProvider';
+import { isModuleActive, type ModuleActiveMap } from '@/lib/portal/menu-config';
 
 type NavItem = {
   href: string;
   icon: React.ReactNode;
   labelKey: string;
   labelOverride?: string;
+  moduleCode?: string;
 };
 
 type Props = {
   logoUrl: string;
   logoAlt: string;
+  moduleActiveMap: ModuleActiveMap;
 };
 
-export function Sidebar({ logoUrl, logoAlt }: Props) {
+export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { lang, setLang } = usePortalState();
@@ -45,17 +48,18 @@ export function Sidebar({ logoUrl, logoAlt }: Props) {
 
   const navItems: NavItem[] = [
     { href: '/', icon: <Home size={20} />, labelKey: 'quickMenus', labelOverride: lang === 'en' ? 'Home' : 'Beranda' },
-    { href: '/finance', icon: <Receipt size={20} />, labelKey: 'tuition' },
-    { href: '/schedules', icon: <BookOpen size={20} />, labelKey: 'schedules' },
-    { href: '/attendance', icon: <CheckSquare size={20} />, labelKey: 'attendance' },
-    { href: '/report', icon: <Award size={20} />, labelKey: 'report' },
-    { href: '/agenda', icon: <Calendar size={20} />, labelKey: 'agenda' },
-    { href: '/updates', icon: <Megaphone size={20} />, labelKey: 'updates' },
-    { href: '/adaptive-learning', icon: <Brain size={20} />, labelKey: 'adaptiveLearning' },
+    { href: '/finance', icon: <Receipt size={20} />, labelKey: 'tuition', moduleCode: 'financial' },
+    { href: '/schedules', icon: <BookOpen size={20} />, labelKey: 'schedules', moduleCode: 'schedules' },
+    { href: '/attendance', icon: <CheckSquare size={20} />, labelKey: 'attendance', moduleCode: 'attendance' },
+    { href: '/report', icon: <Award size={20} />, labelKey: 'report', moduleCode: 'report' },
+    { href: '/agenda', icon: <Calendar size={20} />, labelKey: 'agenda', moduleCode: 'agenda' },
+    { href: '/updates', icon: <Megaphone size={20} />, labelKey: 'updates', moduleCode: 'updates' },
+    { href: '/adaptive-learning', icon: <Brain size={20} />, labelKey: 'adaptiveLearning', moduleCode: 'adaptive-learning' },
     {
       href: '/habits',
       icon: <CheckSquare size={20} />,
       labelKey: isKindergartenStudent(activeChild ?? {}) ? 'dailyReports' : 'habits',
+      moduleCode: 'habits',
     },
   ];
 
@@ -117,6 +121,22 @@ export function Sidebar({ logoUrl, logoAlt }: Props) {
             {navItems.map((item) => {
               const active = isActive(item.href);
               const label = item.labelOverride ?? t(lang, item.labelKey as Parameters<typeof t>[1]);
+              const moduleActive = item.moduleCode
+                ? isModuleActive(moduleActiveMap, item.moduleCode)
+                : true;
+
+              if (!moduleActive) {
+                return (
+                  <div
+                    key={item.href}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/30 cursor-not-allowed"
+                  >
+                    {item.icon}
+                    <span className="truncate">{label}</span>
+                  </div>
+                );
+              }
+
               return (
                 <Link
                   key={item.href}

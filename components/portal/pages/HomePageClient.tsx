@@ -13,6 +13,7 @@ import { t, type Lang } from '@/lib/i18n/translations';
 import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
 import { agendaForChild } from '@/lib/portal/agenda-filter';
+import { MENU_CONFIG, isModuleActive, type ModuleActiveMap } from '@/lib/portal/menu-config';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -24,9 +25,10 @@ type Props = {
   logoAlt: string;
   initialAgendas: PortalAgendaRow[];
   initialAnnouncements: PortalAnnouncementRow[];
+  moduleActiveMap: ModuleActiveMap;
 };
 
-export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements }: Props) {
+export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements, moduleActiveMap }: Props) {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
   const { lang, setLang } = usePortalState();
@@ -82,23 +84,26 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
       .slice(0, 5);
   }, [initialAgendas, activeChild]);
 
-  const menus = [
-    { href: '/finance', label: t(lang, 'tuition'), color: 'bg-indigo-100', icon: <Receipt size={28} className="text-primary" /> },
-    { href: '/schedules', label: t(lang, 'schedules'), color: 'bg-blue-100', icon: <BookOpen size={28} className="text-blue-600" /> },
-    { href: '/attendance', label: t(lang, 'attendance'), color: 'bg-orange-100', icon: <CheckSquare size={28} className="text-orange-600" /> },
-    { href: '/report', label: t(lang, 'report'), color: 'bg-purple-100', icon: <Award size={28} className="text-purple-600" /> },
-    { href: '/agenda', label: t(lang, 'agenda'), color: 'bg-red-100', icon: <Calendar size={28} className="text-red-600" /> },
-    { href: '/updates', label: t(lang, 'updates'), color: 'bg-teal-100', icon: <Megaphone size={28} className="text-teal-600" /> },
-    { href: '/adaptive-learning', label: t(lang, 'adaptiveLearning'), color: 'bg-pink-100', icon: <Brain size={28} className="text-pink-600" /> },
-    {
-      href: '/habits',
-      label: isKindergartenStudent(activeChild ?? {})
-        ? t(lang, 'dailyReports')
-        : t(lang, 'habits'),
-      color: 'bg-emerald-100',
-      icon: <CheckSquare size={28} className="text-emerald-600" />,
-    },
-  ];
+  const iconMap: Record<string, React.ReactNode> = {
+    financial: <Receipt size={28} className="text-primary" />,
+    schedules: <BookOpen size={28} className="text-blue-600" />,
+    attendance: <CheckSquare size={28} className="text-orange-600" />,
+    report: <Award size={28} className="text-purple-600" />,
+    agenda: <Calendar size={28} className="text-red-600" />,
+    updates: <Megaphone size={28} className="text-teal-600" />,
+    'adaptive-learning': <Brain size={28} className="text-pink-600" />,
+    habits: <CheckSquare size={28} className="text-emerald-600" />,
+  };
+
+  const menus = MENU_CONFIG.map((cfg) => ({
+    href: cfg.href,
+    label: cfg.moduleCode === 'habits' && isKindergartenStudent(activeChild ?? {})
+      ? t(lang, 'dailyReports')
+      : t(lang, cfg.labelKey as Parameters<typeof t>[1]),
+    color: cfg.color,
+    icon: iconMap[cfg.moduleCode],
+    isActive: isModuleActive(moduleActiveMap, cfg.moduleCode),
+  }));
 
   const displayName = session?.user?.role === 'parent'
     ? `${t(stableLang, 'honorific')} ${session.user.fullName ?? ''}`.trim()
@@ -232,14 +237,30 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
                 <p className="text-sm font-bold text-slate-700">{t(lang, 'quickMenus')}</p>
               </div>
               <div className="grid grid-cols-4 gap-3">
-                {menus.map((m) => (
-                  <Link key={m.href} href={m.href} className="flex flex-col items-center text-center">
-                    <div className={['w-14 h-14 rounded-2xl flex items-center justify-center', m.color].join(' ')}>
-                      {m.icon}
-                    </div>
-                    <p className="text-xs font-semibold text-slate-600 mt-2 leading-tight">{m.label}</p>
-                  </Link>
-                ))}
+                {menus.map((m) => {
+                  const content = (
+                    <>
+                      <div className={['w-14 h-14 rounded-2xl flex items-center justify-center', m.color].join(' ')}>
+                        {m.icon}
+                      </div>
+                      <p className="text-xs font-semibold text-slate-600 mt-2 leading-tight">{m.label}</p>
+                    </>
+                  );
+
+                  if (!m.isActive) {
+                    return (
+                      <div key={m.href} className="flex flex-col items-center text-center opacity-40 cursor-not-allowed pointer-events-none">
+                        {content}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <Link key={m.href} href={m.href} className="flex flex-col items-center text-center">
+                      {content}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           </div>
