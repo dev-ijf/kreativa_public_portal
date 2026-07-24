@@ -5,11 +5,12 @@ import type {
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const;
 
-/** Local calendar YYYY-MM-DD. */
+/** Calendar YYYY-MM-DD in Asia/Jakarta (school timezone). */
 export function todayISODate(now = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
+  const shifted = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
@@ -26,7 +27,9 @@ export function computeDefaultDayIndex(
 ): number {
   const today = todayISODate(now);
   if (today >= dateFrom && today <= dateTo) {
-    const js = now.getDay();
+    // Weekday in Asia/Jakarta (UTC+7)
+    const jakarta = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+    const js = jakarta.getUTCDay(); // 0=Sun … 6=Sat
     const monBased = js === 0 ? 6 : js - 1;
     return monBased >= 5 ? 4 : monBased;
   }
@@ -56,22 +59,25 @@ export function formatTimeRange(start: string, end: string): string {
   return `${start} – ${end}`;
 }
 
-/** Calendar day number (1–31) for Mon–Fri tab from week date_from. */
-export function dayNumberFromWeekStart(dateFrom: string, dayIndex: number): number {
-  const [y, m, d] = dateFrom.split('-').map(Number);
-  if (!y || !m || !d) return dayIndex + 1;
-  const dt = new Date(y, m - 1, d + dayIndex);
-  return dt.getDate();
-}
-
+/**
+ * Add days to a YYYY-MM-DD civil date using UTC calendar math
+ * (avoids local/DST timezone shifting the day number).
+ */
 export function addDaysISO(dateFrom: string, dayIndex: number): string {
   const [y, m, d] = dateFrom.split('-').map(Number);
   if (!y || !m || !d) return dateFrom;
-  const dt = new Date(y, m - 1, d + dayIndex);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, '0');
-  const dd = String(dt.getDate()).padStart(2, '0');
+  const dt = new Date(Date.UTC(y, m - 1, d + dayIndex));
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getUTCDate()).padStart(2, '0');
   return `${yy}-${mm}-${dd}`;
+}
+
+/** Calendar day number (1–31) for Mon–Fri tab from week date_from. */
+export function dayNumberFromWeekStart(dateFrom: string, dayIndex: number): number {
+  const iso = addDaysISO(dateFrom, dayIndex);
+  const day = Number(iso.slice(8, 10));
+  return Number.isFinite(day) ? day : dayIndex + 1;
 }
 
 /**

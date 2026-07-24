@@ -20,15 +20,35 @@ type Enrollment = {
   academicYearId: number;
 };
 
+/**
+ * Normalize a Postgres DATE to YYYY-MM-DD calendar text.
+ * Prefer SQL `date_col::text` so drivers never shift by timezone.
+ * Fallback: pure date strings as-is; ISO datetimes use Asia/Jakarta calendar day.
+ */
 function normalizeDate(value: unknown): string {
-  if (value instanceof Date) {
-    const y = value.getUTCFullYear();
-    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(value.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    // Avoid slice(0,10) on ISO timestamps — e.g. 2026-07-19T17:00:00Z is 20 Jul WIB
+    const parsed = Date.parse(trimmed);
+    if (!Number.isNaN(parsed)) {
+      return calendarDateInJakarta(new Date(parsed));
+    }
+    return trimmed.slice(0, 10);
   }
-  if (typeof value === 'string') return value.slice(0, 10);
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return calendarDateInJakarta(value);
+  }
   return String(value ?? '').slice(0, 10);
+}
+
+/** Civil date in Asia/Jakarta (UTC+7, no DST). */
+function calendarDateInJakarta(dt: Date): string {
+  const shifted = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(shifted.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function normalizeTime(value: unknown): string {
@@ -119,8 +139,8 @@ async function resolveWeekConfig(
       id,
       week_number AS "weekNumber",
       week_label AS "weekLabel",
-      date_from AS "dateFrom",
-      date_to AS "dateTo"
+      date_from::text AS "dateFrom",
+      date_to::text AS "dateTo"
     FROM wl_week_configs
     WHERE school_id = ${schoolId}
       AND academic_year_id = ${academicYearId}
