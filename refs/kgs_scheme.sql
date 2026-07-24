@@ -1224,3 +1224,116 @@ CREATE UNIQUE INDEX tuition_transaction_details_id_created_at_pk ON ONLY public.
 -- Indices
 CREATE UNIQUE INDEX tuition_transactions_id_created_at_pk ON ONLY public.tuition_transactions USING btree (id, created_at);
 CREATE UNIQUE INDEX unique_ref_no_per_partition ON ONLY public.tuition_transactions USING btree (reference_no, created_at);
+
+-- =============================================================================
+-- Weekly Lesson Plans (wl_*) — parent portal schedules / rencana mingguan
+-- Source: wl_primary_kinder.sql
+-- =============================================================================
+
+DROP TABLE IF EXISTS "public"."wl_schedule_slots";
+DROP TABLE IF EXISTS "public"."wl_schedule_rows";
+DROP TABLE IF EXISTS "public"."wl_weekly_plans";
+DROP TABLE IF EXISTS "public"."wl_week_configs";
+
+CREATE SEQUENCE IF NOT EXISTS wl_week_configs_id_seq;
+CREATE TABLE "public"."wl_week_configs" (
+    "id" int8 NOT NULL DEFAULT nextval('wl_week_configs_id_seq'::regclass),
+    "school_id" int8 NOT NULL,
+    "academic_year_id" int8 NOT NULL,
+    "term_id" int8,
+    "week_number" int2 NOT NULL,
+    "week_label" varchar(80),
+    "date_from" date NOT NULL,
+    "date_to" date NOT NULL,
+    "is_active" bool NOT NULL DEFAULT true,
+    "created_by" int8,
+    "created_at" timestamp NOT NULL DEFAULT now(),
+    "updated_at" timestamp NOT NULL DEFAULT now(),
+    PRIMARY KEY ("id")
+);
+
+CREATE SEQUENCE IF NOT EXISTS wl_weekly_plans_id_seq;
+CREATE TABLE "public"."wl_weekly_plans" (
+    "id" int8 NOT NULL DEFAULT nextval('wl_weekly_plans_id_seq'::regclass),
+    "school_id" int8 NOT NULL,
+    "academic_year_id" int8 NOT NULL,
+    "term_id" int8,
+    "class_id" int8 NOT NULL,
+    "week_config_id" int8 NOT NULL,
+    "school_level" varchar(20) NOT NULL CHECK ((school_level)::text = ANY ((ARRAY['kindergarten'::character varying, 'primary'::character varying, 'secondary'::character varying, 'high_school'::character varying])::text[])),
+    "weekly_theme" varchar(200),
+    "teacher_notes" text,
+    "status" varchar(12) NOT NULL DEFAULT 'draft'::character varying CHECK ((status)::text = ANY ((ARRAY['draft'::character varying, 'published'::character varying])::text[])),
+    "published_at" timestamp,
+    "published_by" int8,
+    "created_by" int8,
+    "created_at" timestamp NOT NULL DEFAULT now(),
+    "updated_at" timestamp NOT NULL DEFAULT now(),
+    PRIMARY KEY ("id")
+);
+
+CREATE SEQUENCE IF NOT EXISTS wl_schedule_rows_id_seq;
+CREATE TABLE "public"."wl_schedule_rows" (
+    "id" int8 NOT NULL DEFAULT nextval('wl_schedule_rows_id_seq'::regclass),
+    "school_id" int8 NOT NULL,
+    "weekly_plan_id" int8 NOT NULL,
+    "row_type" varchar(15) NOT NULL CHECK ((row_type)::text = ANY ((ARRAY['routine'::character varying, 'instructional'::character varying])::text[])),
+    "time_start" time NOT NULL,
+    "time_end" time NOT NULL,
+    "routine_description" varchar(200),
+    "subject_name" varchar(100),
+    "category" varchar(50),
+    "active_days" varchar(30) NOT NULL DEFAULT 'mon,tue,wed,thu,fri'::character varying,
+    "sort_order" int2 NOT NULL DEFAULT 0,
+    "created_at" timestamp NOT NULL DEFAULT now(),
+    PRIMARY KEY ("id")
+);
+
+CREATE SEQUENCE IF NOT EXISTS wl_schedule_slots_id_seq;
+CREATE TABLE "public"."wl_schedule_slots" (
+    "id" int8 NOT NULL DEFAULT nextval('wl_schedule_slots_id_seq'::regclass),
+    "school_id" int8 NOT NULL,
+    "row_id" int8 NOT NULL,
+    "day_index" int2 NOT NULL CHECK ((day_index >= 0) AND (day_index <= 4)),
+    "topic" varchar(300),
+    "description" text,
+    "created_at" timestamp NOT NULL DEFAULT now(),
+    "updated_at" timestamp NOT NULL DEFAULT now(),
+    "subject_name" varchar(100),
+    PRIMARY KEY ("id")
+);
+
+ALTER TABLE "public"."wl_week_configs" ADD FOREIGN KEY ("term_id") REFERENCES "public"."rpt_terms"("id");
+ALTER TABLE "public"."wl_week_configs" ADD FOREIGN KEY ("academic_year_id") REFERENCES "public"."core_academic_years"("id");
+ALTER TABLE "public"."wl_week_configs" ADD FOREIGN KEY ("school_id") REFERENCES "public"."core_schools"("id");
+ALTER TABLE "public"."wl_week_configs" ADD FOREIGN KEY ("created_by") REFERENCES "public"."core_users"("id");
+
+CREATE UNIQUE INDEX uq_wl_week_configs_school_ay_week ON public.wl_week_configs USING btree (school_id, academic_year_id, week_number);
+CREATE INDEX idx_wl_week_configs_school_date ON public.wl_week_configs USING btree (school_id, date_from, date_to);
+CREATE INDEX idx_wl_week_configs_term ON public.wl_week_configs USING btree (term_id) WHERE (term_id IS NOT NULL);
+
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("term_id") REFERENCES "public"."rpt_terms"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("published_by") REFERENCES "public"."core_users"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("week_config_id") REFERENCES "public"."wl_week_configs"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("school_id") REFERENCES "public"."core_schools"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("created_by") REFERENCES "public"."core_users"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("class_id") REFERENCES "public"."core_classes"("id");
+ALTER TABLE "public"."wl_weekly_plans" ADD FOREIGN KEY ("academic_year_id") REFERENCES "public"."core_academic_years"("id");
+
+CREATE UNIQUE INDEX uq_wl_weekly_plans_class_week ON public.wl_weekly_plans USING btree (class_id, week_config_id);
+CREATE INDEX idx_wl_weekly_plans_school_ay ON public.wl_weekly_plans USING btree (school_id, academic_year_id, week_config_id DESC);
+CREATE INDEX idx_wl_weekly_plans_term ON public.wl_weekly_plans USING btree (term_id, class_id) WHERE (term_id IS NOT NULL);
+CREATE INDEX idx_wl_weekly_plans_status ON public.wl_weekly_plans USING btree (school_id, status, week_config_id DESC);
+
+ALTER TABLE "public"."wl_schedule_rows" ADD FOREIGN KEY ("weekly_plan_id") REFERENCES "public"."wl_weekly_plans"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."wl_schedule_rows" ADD FOREIGN KEY ("school_id") REFERENCES "public"."core_schools"("id");
+
+CREATE INDEX idx_wl_sched_rows_plan ON public.wl_schedule_rows USING btree (weekly_plan_id, sort_order);
+CREATE INDEX idx_wl_sched_rows_school ON public.wl_schedule_rows USING btree (school_id);
+
+ALTER TABLE "public"."wl_schedule_slots" ADD FOREIGN KEY ("row_id") REFERENCES "public"."wl_schedule_rows"("id") ON DELETE CASCADE;
+ALTER TABLE "public"."wl_schedule_slots" ADD FOREIGN KEY ("school_id") REFERENCES "public"."core_schools"("id");
+
+CREATE UNIQUE INDEX uq_wl_schedule_slots_row_day ON public.wl_schedule_slots USING btree (row_id, day_index);
+CREATE INDEX idx_wl_sched_slots_row ON public.wl_schedule_slots USING btree (row_id);
+CREATE INDEX idx_wl_sched_slots_school ON public.wl_schedule_slots USING btree (school_id);
