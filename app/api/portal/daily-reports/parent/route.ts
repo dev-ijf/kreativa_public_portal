@@ -64,7 +64,7 @@ export async function PATCH(request: Request) {
   });
 
   if (!result.ok) {
-    if (result.reason === 'forbidden' || result.reason === 'not_kg') {
+    if (result.reason === 'forbidden' || result.reason === 'unsupported_level') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (result.reason === 'future_date' || result.reason === 'bad_date') {

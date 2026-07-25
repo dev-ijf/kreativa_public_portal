@@ -1,16 +1,27 @@
 import { sql } from '@/lib/db/client';
 import { isStudentVisibleToViewer } from '@/lib/data/server/attendance';
-import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
+import {
+  isDailyReportStudent,
+  isKindergartenStudent,
+  isPrimaryStudent,
+} from '@/lib/portal/is-kindergarten';
 import type {
   ClassReportInfo,
   ClassReportMedia,
   DailyReportCalendarDay,
   DailyReportFull,
+  DailyReportHomeTip,
   DailyReportMemorize,
+  DailyReportObserveDomain,
+  DailyReportSchoolLevel,
+  DailyReportStudentMedia,
+  DailyReportSubject,
   DailyReportSummaryResponse,
   DailyReportTilawah,
 } from '@/lib/portal/daily-reports-shared';
 import { monthRange } from '@/lib/data/server/habits';
+
+type UnsupportedReason = 'unsupported_level' | 'not_found';
 
 function normalizeDate(value: unknown): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -21,6 +32,10 @@ function normalizeDate(value: unknown): string {
 function isValidISODate(d: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
   return !Number.isNaN(Date.parse(`${d}T12:00:00Z`));
+}
+
+function normalizeSchoolLevel(raw: unknown): DailyReportSchoolLevel {
+  return raw === 'primary' ? 'primary' : 'kindergarten';
 }
 
 async function getStudentLevelInfo(studentId: number): Promise<{
@@ -49,6 +64,17 @@ async function getStudentLevelInfo(studentId: number): Promise<{
   };
 }
 
+/** Allow KG + Primary students for parent Daily Reports. */
+export async function assertDailyReportStudent(
+  studentId: number,
+): Promise<{ ok: true } | { ok: false; reason: UnsupportedReason }> {
+  const info = await getStudentLevelInfo(studentId);
+  if (!info) return { ok: false, reason: 'not_found' };
+  if (!isDailyReportStudent(info)) return { ok: false, reason: 'unsupported_level' };
+  return { ok: true };
+}
+
+/** @deprecated Prefer assertDailyReportStudent — kept for any leftover KG-only call sites. */
 export async function assertKindergartenStudent(
   studentId: number,
 ): Promise<{ ok: true } | { ok: false; reason: 'not_kg' | 'not_found' }> {
@@ -96,8 +122,8 @@ export async function getDailyReportCalendarMonth(
 ): Promise<DailyReportCalendarDay[] | null> {
   const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
   if (!ok) return null;
-  const kg = await assertKindergartenStudent(studentId);
-  if (!kg.ok) return null;
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) return null;
 
   const { from, toExclusive } = monthRange(year, monthIndex0);
 
@@ -127,15 +153,17 @@ export async function getDailyReportByDate(
   date: string,
 ): Promise<
   | { ok: true; report: DailyReportFull }
-  | { ok: false; reason: 'forbidden' | 'not_kg' | 'bad_date' | 'not_found' }
+  | { ok: false; reason: 'forbidden' | 'unsupported_level' | 'bad_date' | 'not_found' }
 > {
   if (!isValidISODate(date)) return { ok: false, reason: 'bad_date' };
 
   const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
   if (!ok) return { ok: false, reason: 'forbidden' };
 
-  const kg = await assertKindergartenStudent(studentId);
-  if (!kg.ok) return { ok: false, reason: 'not_kg' };
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) {
+    return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
+  }
 
   const headerRows = await sql`
     SELECT
@@ -143,6 +171,8 @@ export async function getDailyReportByDate(
       cs.full_name                AS "studentName",
       cc.name                     AS "className",
       dr.report_date::text        AS "reportDate",
+      dr.school_id                AS "schoolId",
+      dr.school_level             AS "schoolLevel",
       dr.focus_prayer             AS "focusPrayer",
       dr.focus_prayer_rating      AS "focusPrayerRating",
       dr.dhuha_prayer             AS "dhuhaPrayer",
@@ -156,6 +186,9 @@ export async function getDailyReportByDate(
       dr.water_intake             AS "waterIntake",
       dr.health_note              AS "healthNote",
       dr.mood,
+      dr.shine_moment             AS "shineMoment",
+      dr.teacher_narrative        AS "teacherNarrative",
+      dr.home_guidance            AS "homeGuidance",
       dr.teacher_highlight        AS "teacherHighlight",
       dr.teacher_followup         AS "teacherFollowup",
       dr.parent_message           AS "parentMessage",
@@ -179,6 +212,8 @@ export async function getDailyReportByDate(
   const reportId = Number(h.id);
   const playCentreId = h.playCentreId != null ? Number(h.playCentreId) : null;
   const classId = Number(h.classId ?? 0);
+  const schoolId = h.schoolId != null ? Number(h.schoolId) : null;
+  const schoolLevel = normalizeSchoolLevel(h.schoolLevel);
   const teacherNames =
     Number.isFinite(classId) && classId > 0
       ? await getTeacherNamesForClass(classId, studentId)
@@ -194,18 +229,23 @@ export async function getDailyReportByDate(
       ) AS selected
     FROM dr_muslim_characters mc
     WHERE mc.is_active = true
+      AND (mc.school_id IS NULL OR mc.school_id = ${schoolId})
     ORDER BY mc.sort_order
   `;
 
-  const playCentreRows = await sql`
-    SELECT
-      pc.name,
-      pc.name_id AS "nameId",
-      (pc.id = ${playCentreId}) AS selected
-    FROM dr_play_centres pc
-    WHERE pc.is_active = true
-    ORDER BY pc.sort_order
-  `;
+  const playCentreRows =
+    schoolLevel === 'kindergarten'
+      ? await sql`
+          SELECT
+            pc.name,
+            pc.name_id AS "nameId",
+            (pc.id = ${playCentreId}) AS selected
+          FROM dr_play_centres pc
+          WHERE pc.is_active = true
+            AND (pc.school_id = ${schoolId} OR ${schoolId} IS NULL)
+          ORDER BY pc.sort_order
+        `
+      : [];
 
   const laRows = await sql`
     SELECT
@@ -217,6 +257,8 @@ export async function getDailyReportByDate(
     LEFT JOIN dr_report_learning_areas rla
       ON rla.area_id = la.id AND rla.report_id = ${reportId}
     WHERE la.is_active = true
+      AND (la.school_level = ${schoolLevel} OR la.school_level = 'all')
+      AND (la.school_id IS NULL OR la.school_id = ${schoolId})
     ORDER BY la.sort_order
   `;
 
@@ -249,6 +291,138 @@ export async function getDailyReportByDate(
     WHERE report_id = ${reportId}
     ORDER BY sort_order
   `;
+
+  let subjects: DailyReportSubject[] = [];
+  let observeDomains: DailyReportObserveDomain[] = [];
+  let homeTips: DailyReportHomeTip[] = [];
+  let studentMedia: DailyReportStudentMedia[] = [];
+
+  if (schoolLevel === 'primary') {
+    const subjectRows = await sql`
+      SELECT
+        subject_name AS "subjectName",
+        topic,
+        teacher_note AS "teacherNote",
+        daily_score AS "dailyScore",
+        score_label AS "scoreLabel",
+        homework,
+        homework_due_date::text AS "homeworkDueDate"
+      FROM dr_daily_report_subjects
+      WHERE report_id = ${reportId}
+      ORDER BY sort_order, id
+    `;
+
+    subjects = (
+      subjectRows as {
+        subjectName: string;
+        topic: string | null;
+        teacherNote: string | null;
+        dailyScore: number | null;
+        scoreLabel: string | null;
+        homework: string | null;
+        homeworkDueDate: string | null;
+      }[]
+    ).map((r) => ({
+      subjectName: r.subjectName,
+      topic: r.topic ?? null,
+      teacherNote: r.teacherNote ?? null,
+      dailyScore: r.dailyScore != null ? Number(r.dailyScore) : null,
+      scoreLabel: r.scoreLabel ?? null,
+      homework: r.homework ?? null,
+      homeworkDueDate: r.homeworkDueDate ? normalizeDate(r.homeworkDueDate) : null,
+    }));
+
+    const observeRows = await sql`
+      SELECT
+        d.id AS "domainId",
+        d.name AS "domainName",
+        d.name_id AS "domainNameId",
+        d.sort_order AS "domainSort",
+        o.id AS "optionId",
+        o.name AS "optionName",
+        o.name_id AS "optionNameId",
+        o.sort_order AS "optionSort",
+        EXISTS (
+          SELECT 1 FROM dr_report_observe_options ro
+          WHERE ro.report_id = ${reportId} AND ro.option_id = o.id
+        ) AS selected
+      FROM dr_observe_domains d
+      JOIN dr_observe_options o ON o.domain_id = d.id AND o.is_active = true
+      WHERE d.is_active = true
+        AND (d.school_level = 'primary' OR d.school_level = 'all')
+        AND (d.school_id IS NULL OR d.school_id = ${schoolId})
+      ORDER BY d.sort_order, o.sort_order, o.id
+    `;
+
+    const domainMap = new Map<number, DailyReportObserveDomain>();
+    for (const row of observeRows as {
+      domainId: number;
+      domainName: string;
+      domainNameId: string | null;
+      optionName: string;
+      optionNameId: string | null;
+      selected: boolean;
+    }[]) {
+      const domainId = Number(row.domainId);
+      let domain = domainMap.get(domainId);
+      if (!domain) {
+        domain = {
+          name: row.domainName,
+          nameId: row.domainNameId,
+          options: [],
+        };
+        domainMap.set(domainId, domain);
+      }
+      domain.options.push({
+        name: row.optionName,
+        nameId: row.optionNameId,
+        selected: Boolean(row.selected),
+      });
+    }
+    observeDomains = Array.from(domainMap.values());
+
+    const tipRows = await sql`
+      SELECT t.name, t.name_id AS "nameId"
+      FROM dr_report_home_tips rht
+      JOIN dr_home_support_tips t ON t.id = rht.tip_id
+      WHERE rht.report_id = ${reportId}
+      ORDER BY t.sort_order, t.id
+    `;
+    homeTips = (tipRows as { name: string; nameId: string | null }[]).map((r) => ({
+      name: r.name,
+      nameId: r.nameId,
+    }));
+
+    const mediaRows = await sql`
+      SELECT
+        id,
+        media_type AS "mediaType",
+        url,
+        thumbnail_url AS "thumbnailUrl",
+        caption,
+        sort_order AS "sortOrder"
+      FROM dr_daily_report_media
+      WHERE report_id = ${reportId}
+      ORDER BY sort_order, id
+    `;
+    studentMedia = (
+      mediaRows as {
+        id: number;
+        mediaType: string;
+        url: string;
+        thumbnailUrl: string | null;
+        caption: string | null;
+        sortOrder: number;
+      }[]
+    ).map((m) => ({
+      id: Number(m.id),
+      mediaType: m.mediaType as DailyReportStudentMedia['mediaType'],
+      url: m.url,
+      thumbnailUrl: m.thumbnailUrl ?? null,
+      caption: m.caption ?? null,
+      sortOrder: Number(m.sortOrder),
+    }));
+  }
 
   const classReportRows = await sql`
     SELECT id, theme, teacher_note AS "teacherNote"
@@ -340,6 +514,7 @@ export async function getDailyReportByDate(
     studentName: String(h.studentName ?? ''),
     className: String(h.className ?? ''),
     reportDate: normalizeDate(h.reportDate),
+    schoolLevel,
     focusPrayer: (h.focusPrayer as string | null) ?? null,
     focusPrayerRating:
       h.focusPrayerRating != null ? Number(h.focusPrayerRating) : null,
@@ -353,6 +528,9 @@ export async function getDailyReportByDate(
     waterIntake: (h.waterIntake as DailyReportFull['waterIntake']) ?? null,
     healthNote: (h.healthNote as string | null) ?? null,
     mood: (h.mood as DailyReportFull['mood']) ?? null,
+    shineMoment: (h.shineMoment as string | null) ?? null,
+    teacherNarrative: (h.teacherNarrative as string | null) ?? null,
+    homeGuidance: (h.homeGuidance as string | null) ?? null,
     teacherHighlight: (h.teacherHighlight as string | null) ?? null,
     teacherFollowup: (h.teacherFollowup as string | null) ?? null,
     parentMessage: (h.parentMessage as string | null) ?? null,
@@ -383,6 +561,10 @@ export async function getDailyReportByDate(
       rating: r.rating != null ? Number(r.rating) : null,
     })),
     vocabulary: vocabRows as DailyReportFull['vocabulary'],
+    subjects,
+    observeDomains,
+    homeTips,
+    studentMedia,
     classReport,
     tilawah,
     memorize,
@@ -406,7 +588,7 @@ export async function updateDailyReportParentCorner(
   | { ok: true; report: DailyReportFull }
   | {
       ok: false;
-      reason: 'forbidden' | 'not_kg' | 'bad_date' | 'not_found' | 'future_date';
+      reason: 'forbidden' | 'unsupported_level' | 'bad_date' | 'not_found' | 'future_date';
     }
 > {
   if (!isValidISODate(date)) return { ok: false, reason: 'bad_date' };
@@ -417,8 +599,10 @@ export async function updateDailyReportParentCorner(
   const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
   if (!ok) return { ok: false, reason: 'forbidden' };
 
-  const kg = await assertKindergartenStudent(studentId);
-  if (!kg.ok) return { ok: false, reason: 'not_kg' };
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) {
+    return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
+  }
 
   const existing = await sql`
     SELECT id
@@ -492,7 +676,12 @@ export async function updateDailyReportParentCorner(
   }
 
   const result = await getDailyReportByDate(viewerUserId, viewerRole, studentId, date);
-  if (!result.ok) return { ok: false, reason: result.reason === 'not_kg' ? 'not_kg' : 'not_found' };
+  if (!result.ok) {
+    return {
+      ok: false,
+      reason: result.reason === 'unsupported_level' ? 'unsupported_level' : 'not_found',
+    };
+  }
   return { ok: true, report: result.report };
 }
 
@@ -508,8 +697,11 @@ export async function getDailyReportSummaryRange(
   const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
   if (!ok) return null;
 
-  const kg = await assertKindergartenStudent(studentId);
-  if (!kg.ok) return null;
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) return null;
+
+  const info = await getStudentLevelInfo(studentId);
+  const isPrimary = info ? isPrimaryStudent(info) : false;
 
   const countRows = await sql`
     SELECT
@@ -528,6 +720,8 @@ export async function getDailyReportSummaryRange(
   const readRatePct =
     daysReported > 0 ? Math.round((daysReadByParent / daysReported) * 100) : 0;
 
+  const schoolLevelFilter = isPrimary ? 'primary' : 'kindergarten';
+
   const laRows = await sql`
     SELECT
       la.name,
@@ -541,21 +735,24 @@ export async function getDailyReportSummaryRange(
       AND dr.report_date >= ${from}::date
       AND dr.report_date <= ${to}::date
       AND dr.status IN ('submitted', 'read')
+      AND (la.school_level = ${schoolLevelFilter} OR la.school_level = 'all')
     GROUP BY la.id, la.name, la.name_id, la.sort_order
     ORDER BY la.sort_order
   `;
 
-  const moodRows = await sql`
-    SELECT dr.mood, COUNT(*)::int AS count
-    FROM dr_daily_reports dr
-    WHERE dr.student_id = ${studentId}
-      AND dr.report_date >= ${from}::date
-      AND dr.report_date <= ${to}::date
-      AND dr.status IN ('submitted', 'read')
-      AND dr.mood IS NOT NULL
-    GROUP BY dr.mood
-    ORDER BY count DESC
-  `;
+  const moodRows = isPrimary
+    ? []
+    : await sql`
+        SELECT dr.mood, COUNT(*)::int AS count
+        FROM dr_daily_reports dr
+        WHERE dr.student_id = ${studentId}
+          AND dr.report_date >= ${from}::date
+          AND dr.report_date <= ${to}::date
+          AND dr.status IN ('submitted', 'read')
+          AND dr.mood IS NOT NULL
+        GROUP BY dr.mood
+        ORDER BY count DESC
+      `;
 
   return {
     daysReported,

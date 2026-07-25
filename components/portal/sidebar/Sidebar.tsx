@@ -19,8 +19,7 @@ import {
   User,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
-import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
+import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { t } from '@/lib/i18n/translations';
 import { useSidebar } from './SidebarProvider';
 import { isModuleActive, type ModuleActiveMap } from '@/lib/portal/menu-config';
@@ -43,7 +42,6 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { lang, setLang } = usePortalState();
-  const activeChild = useActiveChild();
   const { expanded, toggle } = useSidebar();
 
   const navItems: NavItem[] = [
@@ -58,7 +56,7 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
     {
       href: '/habits',
       icon: <CheckSquare size={20} />,
-      labelKey: isKindergartenStudent(activeChild ?? {}) ? 'dailyReports' : 'habits',
+      labelKey: 'dailyReports',
       moduleCode: 'habits',
     },
   ];

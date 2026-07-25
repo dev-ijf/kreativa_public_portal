@@ -1,17 +1,8 @@
 "use client";
 
-import { useActiveChild } from "@/components/portal/state/PortalProvider";
-import { isKindergartenStudent } from "@/lib/portal/is-kindergarten";
-import { HabitsPageClient } from "@/components/portal/pages/HabitsPageClient";
 import { DailyReportsPageClient } from "@/components/portal/pages/DailyReportsPageClient";
 
+/** `/habits` entry: Daily Reports for KG + Primary (Habits UI retained but unused). */
 export function HabitsEntryClient() {
-  const activeChild = useActiveChild();
-  const isKg = isKindergartenStudent(activeChild ?? {});
-
-  if (isKg) {
-    return <DailyReportsPageClient />;
-  }
-
-  return <HabitsPageClient />;
+  return <DailyReportsPageClient />;
 }

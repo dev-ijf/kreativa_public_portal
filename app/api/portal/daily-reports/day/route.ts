@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     if (result.reason === 'bad_date') {
       return NextResponse.json({ error: 'Bad request' }, { status: 400 });
     }
-    if (result.reason === 'forbidden' || result.reason === 'not_kg') {
+    if (result.reason === 'forbidden' || result.reason === 'unsupported_level') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     return NextResponse.json({ report: null }, { status: 200 });

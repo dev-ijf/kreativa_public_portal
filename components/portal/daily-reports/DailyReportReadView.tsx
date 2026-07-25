@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   DHUHA_KEYS,
   LUNCH_KEYS,
@@ -8,6 +9,7 @@ import {
   WATER_KEYS,
   ZUHUR_KEYS,
   type DailyReportFull,
+  type DailyReportStudentMedia,
   type DailyReportTilawah,
 } from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
@@ -33,11 +35,11 @@ function displayName(name: string, nameId: string | null, lang: Lang): string {
   return name;
 }
 
-const TILAWAH_METHOD_LABELS: Record<DailyReportTilawah['method'], string> = {
-  quran: 'Quran',
-  iqra: 'Iqra',
-  ummi: 'Ummi',
-  tilawati: 'Tilawati',
+const TILAWAH_METHOD_LABELS: Record<DailyReportTilawah["method"], string> = {
+  quran: "Quran",
+  iqra: "Iqra",
+  ummi: "Ummi",
+  tilawati: "Tilawati",
 };
 
 type TilawahSectionProps = { tilawah: DailyReportTilawah; lang: Lang };
@@ -58,10 +60,10 @@ function TilawahSection({ tilawah, lang }: TilawahSectionProps) {
     labelKey === "fluent"
       ? "fluent"
       : labelKey === "needs guidance" || labelKey === "needs_guidance"
-      ? "needs_guidance"
-      : labelKey === "not yet" || labelKey === "not_yet"
-      ? "not_yet"
-      : labelKey ?? null;
+        ? "needs_guidance"
+        : labelKey === "not yet" || labelKey === "not_yet"
+          ? "not_yet"
+          : (labelKey ?? null);
 
   return (
     <ReportSectionShell
@@ -142,10 +144,7 @@ function MemorizeSection({ memorize, lang }: MemorizeSectionProps) {
                 </div>
                 <StarRating rating={entry.rating} />
                 {normalizedLabel ? (
-                  <ReadOnlyPills
-                    options={labelOptions}
-                    selected={normalizedLabel}
-                  />
+                  <ReadOnlyPills options={labelOptions} selected={normalizedLabel} />
                 ) : null}
               </li>
             );
@@ -156,16 +155,139 @@ function MemorizeSection({ memorize, lang }: MemorizeSectionProps) {
   );
 }
 
-export function DailyReportReadView({ report, lang }: Props) {
+function StudentMediaSection({
+  media,
+  lang,
+}: {
+  media: DailyReportStudentMedia[];
+  lang: Lang;
+}) {
+  if (media.length === 0) return null;
+
+  return (
+    <ReportSectionShell
+      title={t(lang, "drSectionStudentMedia")}
+      icon="📷"
+      headerClassName="bg-gradient-to-r from-sky-600 to-blue-600"
+    >
+      <div className="grid grid-cols-2 gap-2">
+        {media.map((item) => {
+          if (item.mediaType === "image") {
+            return (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative block overflow-hidden rounded-xl bg-slate-100"
+                style={{ aspectRatio: "1/1" }}
+              >
+                <Image
+                  src={item.url}
+                  alt={item.caption ?? ""}
+                  fill
+                  sizes="(max-width: 420px) 50vw, 210px"
+                  className="object-cover"
+                />
+              </a>
+            );
+          }
+          if (item.mediaType === "video_file") {
+            return (
+              <div
+                key={item.id}
+                className="col-span-2 rounded-xl overflow-hidden bg-black"
+                style={{ aspectRatio: "16/9" }}
+              >
+                <video
+                  src={item.url}
+                  poster={item.thumbnailUrl ?? undefined}
+                  controls
+                  className="w-full h-full object-contain"
+                  preload="metadata"
+                />
+              </div>
+            );
+          }
+          return (
+            <a
+              key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="col-span-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold text-primary"
+            >
+              {item.caption?.trim() || t(lang, "drStudentMediaOpen")}
+            </a>
+          );
+        })}
+      </div>
+    </ReportSectionShell>
+  );
+}
+
+function DailyWorshipSection({ report, lang }: Props) {
+  const isPrimary = report.schoolLevel === "primary";
   const dhuhaOptions = (["yes", "no"] as const).map((v) => ({
     value: v,
     label: t(lang, DHUHA_KEYS[v]),
   }));
-
   const zuhurOptions = (["well_done", "needs_guidance", "did_not_pray"] as const).map((v) => ({
     value: v,
     label: t(lang, ZUHUR_KEYS[v]),
   }));
+
+  const hasAny =
+    report.focusPrayer ||
+    report.focusPrayerRating != null ||
+    report.dhuhaPrayer ||
+    report.zuhurPrayer ||
+    report.surahMemorised ||
+    report.asmaulHusna;
+
+  if (isPrimary && !hasAny) return null;
+
+  return (
+    <ReportSectionShell
+      title={t(lang, "drSectionDailyWorship")}
+      icon="🕌"
+      headerClassName="bg-gradient-to-r from-emerald-600 to-green-600"
+    >
+      {(!isPrimary || report.focusPrayer) && (
+        <ReadOnlyField label={t(lang, "drFocusPrayer")} value={report.focusPrayer} />
+      )}
+      {(!isPrimary || report.focusPrayerRating != null) && (
+        <div>
+          <FieldLabel>{t(lang, "drRecitationRating")}</FieldLabel>
+          <StarRating rating={report.focusPrayerRating} />
+        </div>
+      )}
+      {(!isPrimary || report.dhuhaPrayer) && (
+        <ReadOnlyPills
+          label={t(lang, "drDhuhaPrayer")}
+          options={dhuhaOptions}
+          selected={report.dhuhaPrayer}
+        />
+      )}
+      {(!isPrimary || report.zuhurPrayer) && (
+        <ReadOnlyPills
+          label={t(lang, "drZuhurPrayer")}
+          options={zuhurOptions}
+          selected={report.zuhurPrayer}
+        />
+      )}
+      {(!isPrimary || report.surahMemorised) && (
+        <ReadOnlyField label={t(lang, "drSurahMemorised")} value={report.surahMemorised} />
+      )}
+      {(!isPrimary || report.asmaulHusna) && (
+        <ReadOnlyField label={t(lang, "drAsmaulHusna")} value={report.asmaulHusna} />
+      )}
+    </ReportSectionShell>
+  );
+}
+
+export function DailyReportReadView({ report, lang }: Props) {
+  const isPrimary = report.schoolLevel === "primary";
 
   const lunchOptions = (["finished", "half", "refused"] as const).map((v) => ({
     value: v,
@@ -193,56 +315,40 @@ export function DailyReportReadView({ report, lang }: Props) {
     selected: pc.selected,
   }));
 
+  const selectedLearningAreas = report.learningAreas.filter((la) => la.selected || la.rating != null);
+
   return (
     <div className="space-y-4">
       {report.classReport ? (
         <ClassReportSection classReport={report.classReport} lang={lang} />
       ) : null}
 
-      {characterOptions.length > 0 ? (
+      {characterOptions.some((c) => c.selected) || (!isPrimary && characterOptions.length > 0) ? (
         <ReportSectionShell
           title={t(lang, "drSectionMuslimCharacter")}
           icon="⭐"
           subtitle={t(lang, "drMuslimCharacterHint")}
           headerClassName="bg-gradient-to-r from-indigo-600 to-violet-600"
         >
-          <ReadOnlyMultiPills options={characterOptions} />
+          <ReadOnlyMultiPills
+            options={
+              isPrimary
+                ? characterOptions.filter((c) => c.selected)
+                : characterOptions
+            }
+          />
         </ReportSectionShell>
       ) : null}
 
-      <ReportSectionShell
-        title={t(lang, "drSectionDailyWorship")}
-        icon="🕌"
-        headerClassName="bg-gradient-to-r from-emerald-600 to-green-600"
-      >
-        <ReadOnlyField label={t(lang, "drFocusPrayer")} value={report.focusPrayer} />
-        <div>
-          <FieldLabel>{t(lang, "drRecitationRating")}</FieldLabel>
-          <StarRating rating={report.focusPrayerRating} />
-        </div>
-        <ReadOnlyPills
-          label={t(lang, "drDhuhaPrayer")}
-          options={dhuhaOptions}
-          selected={report.dhuhaPrayer}
-        />
-        <ReadOnlyPills
-          label={t(lang, "drZuhurPrayer")}
-          options={zuhurOptions}
-          selected={report.zuhurPrayer}
-        />
-        <ReadOnlyField label={t(lang, "drSurahMemorised")} value={report.surahMemorised} />
-        <ReadOnlyField label={t(lang, "drAsmaulHusna")} value={report.asmaulHusna} />
-      </ReportSectionShell>
+      <DailyWorshipSection report={report} lang={lang} />
 
-      {report.tilawah ? (
-        <TilawahSection tilawah={report.tilawah} lang={lang} />
-      ) : null}
+      {report.tilawah ? <TilawahSection tilawah={report.tilawah} lang={lang} /> : null}
 
       {report.memorize.length > 0 ? (
         <MemorizeSection memorize={report.memorize} lang={lang} />
       ) : null}
 
-      {playCentreOptions.length > 0 || report.playCentreHighlights ? (
+      {!isPrimary && (playCentreOptions.length > 0 || report.playCentreHighlights) ? (
         <ReportSectionShell
           title={t(lang, "drSectionPlayCentre")}
           icon="🎨"
@@ -266,7 +372,54 @@ export function DailyReportReadView({ report, lang }: Props) {
         </ReportSectionShell>
       ) : null}
 
-      {report.learningAreas.length > 0 ? (
+      {isPrimary && report.subjects.length > 0 ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionSubjects")}
+          icon="📘"
+          subtitle={t(lang, "drSubjectsHint")}
+          headerClassName="bg-gradient-to-r from-indigo-500 to-blue-600"
+        >
+          <ul className="space-y-4">
+            {report.subjects.map((s, i) => (
+              <li
+                key={i}
+                className="space-y-2 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
+              >
+                <p className="text-[15px] font-bold text-slate-900">{s.subjectName}</p>
+                <ReadOnlyField label={t(lang, "drSubjectTopic")} value={s.topic} />
+                {s.dailyScore != null || s.scoreLabel ? (
+                  <ReadOnlyField
+                    label={t(lang, "drSubjectScore")}
+                    value={
+                      [s.dailyScore != null ? String(s.dailyScore) : null, s.scoreLabel]
+                        .filter(Boolean)
+                        .join(" · ") || null
+                    }
+                  />
+                ) : null}
+                <ReadOnlyField
+                  label={t(lang, "drSubjectNote")}
+                  value={s.teacherNote}
+                  multiline
+                />
+                <ReadOnlyField
+                  label={t(lang, "drSubjectHomework")}
+                  value={s.homework}
+                  multiline
+                />
+                {s.homeworkDueDate ? (
+                  <ReadOnlyField
+                    label={t(lang, "drSubjectHomeworkDue")}
+                    value={s.homeworkDueDate}
+                  />
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </ReportSectionShell>
+      ) : null}
+
+      {(isPrimary ? selectedLearningAreas : report.learningAreas).length > 0 ? (
         <ReportSectionShell
           title={t(lang, "drSectionLearningAreas")}
           icon="📚"
@@ -274,7 +427,7 @@ export function DailyReportReadView({ report, lang }: Props) {
           headerClassName="bg-gradient-to-r from-rose-500 to-pink-500"
         >
           <ReadOnlyLearningAreaList
-            items={report.learningAreas}
+            items={isPrimary ? selectedLearningAreas : report.learningAreas}
             displayName={(name, nameId) => displayName(name, nameId, lang)}
           />
         </ReportSectionShell>
@@ -312,49 +465,133 @@ export function DailyReportReadView({ report, lang }: Props) {
         </ReportSectionShell>
       ) : null}
 
-      <ReportSectionShell
-        title={t(lang, "drSectionMeals")}
-        icon="🍱"
-        headerClassName="bg-gradient-to-r from-amber-500 to-orange-500"
-      >
-        <ReadOnlyPills label={t(lang, "drLunch")} options={lunchOptions} selected={report.lunchStatus} />
-        <ReadOnlyPills
-          label={t(lang, "drWaterIntake")}
-          options={waterOptions}
-          selected={report.waterIntake}
-        />
-        <ReadOnlyField label={t(lang, "drHealthNote")} value={report.healthNote} multiline />
-      </ReportSectionShell>
+      {isPrimary && report.observeDomains.some((d) => d.options.some((o) => o.selected)) ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionObservations")}
+          icon="👁"
+          subtitle={t(lang, "drObservationsHint")}
+          headerClassName="bg-gradient-to-r from-amber-500 to-orange-500"
+        >
+          <ul className="space-y-5">
+            {report.observeDomains
+              .filter((d) => d.options.some((o) => o.selected))
+              .map((domain) => (
+                <li key={domain.name} className="space-y-2">
+                  <FieldLabel>
+                    {displayName(domain.name, domain.nameId, lang)}
+                  </FieldLabel>
+                  <ReadOnlyMultiPills
+                    options={domain.options
+                      .filter((o) => o.selected)
+                      .map((o) => ({
+                        label: displayName(o.name, o.nameId, lang),
+                        selected: true,
+                      }))}
+                  />
+                </li>
+              ))}
+          </ul>
+        </ReportSectionShell>
+      ) : null}
 
-      <ReportSectionShell
-        title={t(lang, "drSectionMood")}
-        icon="💙"
-        headerClassName="bg-gradient-to-r from-blue-600 to-indigo-600"
-      >
-        <FieldCaption className="text-center mb-3">{t(lang, "drMoodQuestion")}</FieldCaption>
-        <div className="grid grid-cols-5 gap-1.5">
-          {moodOptions.map((m) => (
-            <span
-              key={m.value}
-              className={[
-                "flex flex-col items-center justify-center px-1 py-2 rounded-2xl border text-center min-w-0",
-                report.mood === m.value
-                  ? "bg-primary/10 border-primary text-primary"
-                  : "bg-white border-slate-200 text-slate-400",
-              ].join(" ")}
-            >
-              <span className="text-lg sm:text-xl leading-none" aria-hidden>
-                {m.emoji}
-              </span>
-              <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wide mt-1 leading-tight line-clamp-2">
-                {m.label}
-              </span>
-            </span>
-          ))}
-        </div>
-      </ReportSectionShell>
+      {!isPrimary ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionMeals")}
+          icon="🍱"
+          headerClassName="bg-gradient-to-r from-amber-500 to-orange-500"
+        >
+          <ReadOnlyPills
+            label={t(lang, "drLunch")}
+            options={lunchOptions}
+            selected={report.lunchStatus}
+          />
+          <ReadOnlyPills
+            label={t(lang, "drWaterIntake")}
+            options={waterOptions}
+            selected={report.waterIntake}
+          />
+          <ReadOnlyField label={t(lang, "drHealthNote")} value={report.healthNote} multiline />
+        </ReportSectionShell>
+      ) : null}
 
-      {(report.teacherHighlight || report.teacherFollowup) ? (
+      {!isPrimary ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionMood")}
+          icon="💙"
+          headerClassName="bg-gradient-to-r from-blue-600 to-indigo-600"
+        >
+          <FieldCaption className="text-center mb-3">{t(lang, "drMoodQuestion")}</FieldCaption>
+          <div className="grid grid-cols-5 gap-1.5">
+            {moodOptions.map((m) => (
+              <span
+                key={m.value}
+                className={[
+                  "flex flex-col items-center justify-center px-1 py-2 rounded-2xl border text-center min-w-0",
+                  report.mood === m.value
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-white border-slate-200 text-slate-400",
+                ].join(" ")}
+              >
+                <span className="text-lg sm:text-xl leading-none" aria-hidden>
+                  {m.emoji}
+                </span>
+                <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-wide mt-1 leading-tight line-clamp-2">
+                  {m.label}
+                </span>
+              </span>
+            ))}
+          </div>
+        </ReportSectionShell>
+      ) : null}
+
+      {isPrimary &&
+      (report.shineMoment || report.teacherNarrative || report.homeGuidance) ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionNarrative")}
+          icon="✨"
+          headerClassName="bg-gradient-to-r from-violet-500 to-fuchsia-500"
+        >
+          <ReadOnlyField
+            label={t(lang, "drShineMoment")}
+            value={report.shineMoment}
+            multiline
+          />
+          <ReadOnlyField
+            label={t(lang, "drTeacherNarrative")}
+            value={report.teacherNarrative}
+            multiline
+          />
+          <ReadOnlyField
+            label={t(lang, "drHomeGuidance")}
+            value={report.homeGuidance}
+            multiline
+          />
+        </ReportSectionShell>
+      ) : null}
+
+      {isPrimary && report.homeTips.length > 0 ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionHomeTips")}
+          icon="🏠"
+          subtitle={t(lang, "drHomeTipsHint")}
+          headerClassName="bg-gradient-to-r from-emerald-500 to-teal-500"
+        >
+          <ul className="space-y-2">
+            {report.homeTips.map((tip, i) => (
+              <li
+                key={i}
+                className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[14px] text-slate-800"
+              >
+                {displayName(tip.name, tip.nameId, lang)}
+              </li>
+            ))}
+          </ul>
+        </ReportSectionShell>
+      ) : null}
+
+      {isPrimary ? <StudentMediaSection media={report.studentMedia} lang={lang} /> : null}
+
+      {report.teacherHighlight || report.teacherFollowup ? (
         <ReportSectionShell
           title={t(lang, "drSectionTeacherNotes")}
           icon="📝"

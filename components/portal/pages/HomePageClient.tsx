@@ -8,7 +8,6 @@ import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User
 import { TopHero } from '@/components/portal/TopHero';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { isKindergartenStudent } from '@/lib/portal/is-kindergarten';
 import { t, type Lang } from '@/lib/i18n/translations';
 import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
@@ -97,7 +96,7 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
 
   const menus = MENU_CONFIG.map((cfg) => ({
     href: cfg.href,
-    label: cfg.moduleCode === 'habits' && isKindergartenStudent(activeChild ?? {})
+    label: cfg.moduleCode === 'habits'
       ? t(lang, 'dailyReports')
       : t(lang, cfg.labelKey as Parameters<typeof t>[1]),
     color: cfg.color,

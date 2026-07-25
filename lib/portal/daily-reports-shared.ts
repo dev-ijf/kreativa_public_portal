@@ -1,5 +1,7 @@
 import type { TranslationKey } from '@/lib/i18n/translations';
 
+export type DailyReportSchoolLevel = 'kindergarten' | 'primary';
+
 export type ClassReportMedia = {
   id: number;
   mediaType: 'image' | 'video_file' | 'video_link';
@@ -61,11 +63,48 @@ export type DailyReportMemorize = {
   ratingLabel: string | null;
 };
 
+export type DailyReportSubject = {
+  subjectName: string;
+  topic: string | null;
+  teacherNote: string | null;
+  dailyScore: number | null;
+  scoreLabel: string | null;
+  homework: string | null;
+  homeworkDueDate: string | null;
+};
+
+export type DailyReportObserveOption = {
+  name: string;
+  nameId: string | null;
+  selected: boolean;
+};
+
+export type DailyReportObserveDomain = {
+  name: string;
+  nameId: string | null;
+  options: DailyReportObserveOption[];
+};
+
+export type DailyReportHomeTip = {
+  name: string;
+  nameId: string | null;
+};
+
+export type DailyReportStudentMedia = {
+  id: number;
+  mediaType: 'image' | 'video_file' | 'video_link' | 'document';
+  url: string;
+  thumbnailUrl: string | null;
+  caption: string | null;
+  sortOrder: number;
+};
+
 export type DailyReportFull = {
   id: number;
   studentName: string;
   className: string;
   reportDate: string;
+  schoolLevel: DailyReportSchoolLevel;
   focusPrayer: string | null;
   focusPrayerRating: number | null;
   dhuhaPrayer: 'yes' | 'no' | null;
@@ -78,6 +117,9 @@ export type DailyReportFull = {
   waterIntake: 'good' | 'not_enough' | null;
   healthNote: string | null;
   mood: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'fussy' | null;
+  shineMoment: string | null;
+  teacherNarrative: string | null;
+  homeGuidance: string | null;
   teacherHighlight: string | null;
   teacherFollowup: string | null;
   parentMessage: string | null;
@@ -89,6 +131,10 @@ export type DailyReportFull = {
   playCentres: DailyReportPlayCentre[];
   learningAreas: DailyReportLearningArea[];
   vocabulary: DailyReportVocabulary[];
+  subjects: DailyReportSubject[];
+  observeDomains: DailyReportObserveDomain[];
+  homeTips: DailyReportHomeTip[];
+  studentMedia: DailyReportStudentMedia[];
   classReport: ClassReportInfo | null;
   tilawah: DailyReportTilawah | null;
   memorize: DailyReportMemorize[];
