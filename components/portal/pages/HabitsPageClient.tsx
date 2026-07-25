@@ -4,16 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BarChart2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
-import { usePortalState } from "@/components/portal/state/PortalProvider";
+import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
 import {
   HABIT_BOOLEAN_KEYS,
+  HABIT_PERIOD_EXCUSED_KEYS,
   emptyHabitPayload,
+  habitScoreParts,
   type HabitBooleanKey,
   type HabitCalendarDay,
   type HabitSummaryResponse,
   type OnTimeArrivalValue,
   type PortalHabitDayPayload,
 } from "@/lib/portal/habits-shared";
+import { isFemaleStudent } from "@/lib/portal/student-gender";
 import { t, type Lang, type TranslationKey } from "@/lib/i18n/translations";
 import {
   PortalMonthCalendar,
@@ -80,15 +83,8 @@ function apiRowToPayload(row: unknown): PortalHabitDayPayload {
   base.onTimeArrival = parseOnTimeFromApi(r.onTimeArrival ?? r.on_time_arrival);
   const q = r.quranJuzInfo ?? r.quran_juz_info;
   base.quranJuzInfo = typeof q === "string" && q.trim() ? q : null;
+  base.isOnPeriod = r.isOnPeriod === true || r.is_on_period === true;
   return base;
-}
-
-function payloadScorePct(p: PortalHabitDayPayload): { done: number; total: number } {
-  let done = 0;
-  for (const k of HABIT_BOOLEAN_KEYS) {
-    if (p[k]) done += 1;
-  }
-  return { done, total: HABIT_BOOLEAN_KEYS.length };
 }
 
 function HabitItem({
@@ -245,6 +241,8 @@ function TrendChart({
 
 export function HabitsPageClient() {
   const { lang, activeChildId } = usePortalState();
+  const activeChild = useActiveChild();
+  const showPeriod = isFemaleStudent(activeChild?.gender);
   const [tab, setTab] = useState<"daily" | "summary">("daily");
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
@@ -444,9 +442,30 @@ export function HabitsPageClient() {
     return d.toLocaleString(lang === "id" ? "id-ID" : "en-US", { month: "long", year: "numeric" });
   }, [calYear, calMonth0, lang]);
 
-  const score = useMemo(() => payloadScorePct(payload), [payload]);
+  const score = useMemo(() => habitScoreParts(payload), [payload]);
 
   const isFuture = (ds: string) => ds > todayISO();
+
+  const isKeyDisabled = (k: HabitBooleanKey) =>
+    isFuture(selectedDate) || (payload.isOnPeriod && HABIT_PERIOD_EXCUSED_KEYS.includes(k));
+
+  const periodToggle = showPeriod ? (
+    <div className="bg-amber-50 rounded-3xl p-4 shadow-sm border border-amber-100 space-y-1.5">
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={payload.isOnPeriod}
+          disabled={isFuture(selectedDate)}
+          onChange={(e) => setPayload((p) => ({ ...p, isOnPeriod: e.target.checked }))}
+          className="h-5 w-5 rounded border-slate-300 text-primary"
+        />
+        <span className="text-sm font-bold text-slate-800">{t(lang, "habitsPeriodToggle")}</span>
+      </label>
+      {payload.isOnPeriod ? (
+        <p className="text-xs text-amber-800 leading-relaxed">{t(lang, "habitsPeriodNote")}</p>
+      ) : null}
+    </div>
+  ) : null;
 
   const onTimeOptions: { val: OnTimeArrivalValue; key: TranslationKey }[] = [
     { val: null, key: "habitsOnTimeUnset" },
@@ -498,7 +517,7 @@ export function HabitsPageClient() {
             key={k}
             checked={payload[k]}
             label={t(lang, HABIT_ROW_LABEL_KEY[k])}
-            disabled={disabled}
+            disabled={disabled || isKeyDisabled(k)}
             onToggle={() =>
               setPayload((p) => ({
                 ...p,
@@ -608,8 +627,14 @@ export function HabitsPageClient() {
                   <>
                     {/* Mobile: card sections */}
                     <div className="md:hidden space-y-4">
+                      {periodToggle}
                       {habitSection(t(lang, "habitsSectionWake"), ["wake_up_early"], isFuture(selectedDate))}
-                      {habitSection(t(lang, "habitsSectionWajib"), ["fajr", "dhuhr", "asr", "maghrib", "isha"], isFuture(selectedDate), t(lang, "habitsSectionWajibHint"))}
+                      {habitSection(
+                        t(lang, "habitsSectionWajib"),
+                        ["fajr", "dhuhr", "asr", "maghrib", "isha"],
+                        isFuture(selectedDate),
+                        showPeriod ? undefined : t(lang, "habitsSectionWajibHint"),
+                      )}
                       {habitSection(t(lang, "habitsSectionSunnahExtra"), ["dhuha", "tahajud", "sunnah_fasting", "pray_with_parents"], isFuture(selectedDate))}
                       {habitSection(t(lang, "habitsSectionMengajiMaghrib"), ["read_quran"], isFuture(selectedDate))}
                       {habitSection(t(lang, "habitsSectionPolite4s"), ["give_greetings", "smile_greet_polite"], isFuture(selectedDate), t(lang, "habitsSectionPolite4sHint"))}
@@ -658,7 +683,9 @@ export function HabitsPageClient() {
                     </div>
 
                     {/* Desktop: table-based checklist */}
-                    <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div className="hidden md:block space-y-3">
+                      {periodToggle}
+                      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-slate-500 border-b border-slate-200 bg-slate-50">
@@ -673,12 +700,12 @@ export function HabitsPageClient() {
                               <td className="px-4 py-2.5 text-center">
                                 <button
                                   type="button"
-                                  disabled={isFuture(selectedDate)}
+                                  disabled={isKeyDisabled(k)}
                                   onClick={() => setPayload((p) => ({ ...p, [k]: !p[k] }))}
                                   className={[
                                     "w-7 h-7 rounded-full inline-flex items-center justify-center text-xs font-black transition-colors",
                                     payload[k] ? "bg-emerald-500 text-white" : "bg-white border-2 border-slate-200 text-slate-300",
-                                    isFuture(selectedDate) ? "opacity-40 cursor-not-allowed" : "hover:border-emerald-300",
+                                    isKeyDisabled(k) ? "opacity-40 cursor-not-allowed" : "hover:border-emerald-300",
                                   ].join(" ")}
                                 >
                                   {payload[k] ? "✓" : ""}
@@ -708,6 +735,7 @@ export function HabitsPageClient() {
                             className="w-full rounded-lg border border-slate-200 p-2 text-sm disabled:opacity-40 mt-1"
                           />
                         </div>
+                      </div>
                       </div>
                     </div>
                   </>

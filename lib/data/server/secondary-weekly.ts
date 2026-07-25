@@ -7,7 +7,9 @@ import {
   type SecondaryWeeklyIbadahStats,
   type SecondaryWeeklyPayload,
   type SecondaryWeeklyResponse,
+  type SecondaryWeeklySubjectCard,
 } from '@/lib/portal/secondary-weekly-shared';
+import type { EffortLevel, UnderstandingLevel } from '@/lib/portal/secondary-daily-shared';
 
 function normalizeDate(value: unknown): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -72,26 +74,29 @@ async function resolveWeekForDate(
 
 function computeStats(days: SecondaryWeeklyDayRecap[]): SecondaryWeeklyIbadahStats {
   let totalObligatory = 0;
+  let maxObligatory = 0;
   let daysWithDhuha = 0;
   let daysWithTilawah = 0;
   let daysWithDhikr = 0;
 
   for (const d of days) {
-    totalObligatory +=
-      (d.fajrPrayer ? 1 : 0) +
-      (d.asrPrayer ? 1 : 0) +
-      (d.maghribPrayer ? 1 : 0) +
-      (d.ishaPrayer ? 1 : 0) +
-      (d.zuhurPrayer === 'well_done' || d.zuhurPrayer === 'needs_guidance' ? 1 : 0);
-    if (d.dhuhaPrayer === 'yes') daysWithDhuha += 1;
+    if (!d.isOnPeriod) {
+      maxObligatory += 5;
+      totalObligatory +=
+        (d.fajrPrayer ? 1 : 0) +
+        (d.asrPrayer ? 1 : 0) +
+        (d.maghribPrayer ? 1 : 0) +
+        (d.ishaPrayer ? 1 : 0) +
+        (d.zuhurPrayer === 'well_done' || d.zuhurPrayer === 'needs_guidance' ? 1 : 0);
+      if (d.dhuhaPrayer === 'yes') daysWithDhuha += 1;
+      if (d.morningDhikr || d.eveningDhikr) daysWithDhikr += 1;
+    }
     if (d.tilawahDone) daysWithTilawah += 1;
-    if (d.morningDhikr || d.eveningDhikr) daysWithDhikr += 1;
   }
 
-  const daysInWeek = Math.max(days.length, 1);
   return {
     totalObligatoryPrayers: totalObligatory,
-    maxObligatoryPrayers: daysInWeek * 5,
+    maxObligatoryPrayers: Math.max(maxObligatory, 0),
     daysWithDhuha,
     daysWithTilawah,
     daysWithDhikr,
@@ -118,7 +123,8 @@ async function loadDailyRecap(
       evening_dhikr AS "eveningDhikr",
       tilawah_done AS "tilawahDone",
       memorisation_done AS "memorisationDone",
-      energy_level AS "energyLevel"
+      energy_level AS "energyLevel",
+      is_on_period AS "isOnPeriod"
     FROM dr_daily_reports
     WHERE student_id = ${studentId}
       AND report_date >= ${dateFrom}::date
@@ -142,6 +148,7 @@ async function loadDailyRecap(
       tilawahDone: unknown;
       memorisationDone: unknown;
       energyLevel: number | null;
+      isOnPeriod: unknown;
     }[]
   ).map((r) => ({
     reportDate: normalizeDate(r.reportDate),
@@ -163,6 +170,70 @@ async function loadDailyRecap(
     tilawahDone: toBool(r.tilawahDone),
     memorisationDone: toBool(r.memorisationDone),
     energyLevel: r.energyLevel != null ? Number(r.energyLevel) : null,
+    isOnPeriod: toBool(r.isOnPeriod),
+  }));
+}
+
+function parseUnderstanding(v: unknown): UnderstandingLevel | null {
+  if (v === 'fully' || v === 'mostly' || v === 'partially' || v === 'need_help') return v;
+  return null;
+}
+
+function parseEffort(v: unknown): EffortLevel | null {
+  if (
+    v === 'maximum' ||
+    v === 'good' ||
+    v === 'could_do_more' ||
+    v === 'needs_improvement'
+  ) {
+    return v;
+  }
+  return null;
+}
+
+async function loadWeekSubjects(
+  studentId: number,
+  schoolId: number,
+  academicYearId: number,
+  dateFrom: string,
+  dateTo: string,
+): Promise<SecondaryWeeklySubjectCard[]> {
+  const rows = await sql`
+    SELECT
+      s.id AS "sessionId",
+      s.session_date::text AS "reportDate",
+      s.title,
+      sub.name AS "subjectName",
+      sr.understanding,
+      sr.effort,
+      sr.quick_note AS "quickNote"
+    FROM lms_sessions s
+    JOIN lms_courses c ON c.id = s.course_id
+    JOIN lms_subjects sub ON sub.id = c.subject_id
+    JOIN lms_course_enrollments ce
+      ON ce.course_id = c.id AND ce.student_id = ${studentId}
+    LEFT JOIN dr_daily_reports dr
+      ON dr.student_id = ${studentId}
+      AND dr.report_date = s.session_date
+    LEFT JOIN dr_session_reflections sr
+      ON sr.session_id = s.id AND sr.report_id = dr.id
+    WHERE c.school_id = ${schoolId}
+      AND c.academic_year_id = ${academicYearId}
+      AND ce.status = 'active'
+      AND c.deleted_at IS NULL
+      AND s.session_date >= ${dateFrom}::date
+      AND s.session_date <= ${dateTo}::date
+    ORDER BY s.session_date ASC, s.start_time ASC NULLS LAST, s.id ASC
+  `;
+
+  return (rows as Record<string, unknown>[]).map((r) => ({
+    sessionId: Number(r.sessionId),
+    reportDate: normalizeDate(r.reportDate),
+    subjectName: String(r.subjectName ?? ''),
+    title: String(r.title ?? ''),
+    understanding: parseUnderstanding(r.understanding),
+    effort: parseEffort(r.effort),
+    quickNote: (r.quickNote as string | null) ?? null,
   }));
 }
 
@@ -196,6 +267,13 @@ export async function getSecondaryWeeklyByDate(
 
   const dailyRecap = await loadDailyRecap(studentId, week.dateFrom, week.dateTo);
   const stats = computeStats(dailyRecap);
+  const weekSubjects = await loadWeekSubjects(
+    studentId,
+    gate.schoolId,
+    gate.academicYearId,
+    week.dateFrom,
+    week.dateTo,
+  );
 
   const rows = await sql`
     SELECT
@@ -230,6 +308,7 @@ export async function getSecondaryWeeklyByDate(
         payload: emptySecondaryWeeklyPayload(),
         stats,
         dailyRecap,
+        weekSubjects,
         parentIbadahConfirmed: false,
         parentIbadahName: null,
         parentIbadahConfirmedAt: null,
@@ -256,6 +335,7 @@ export async function getSecondaryWeeklyByDate(
       },
       stats,
       dailyRecap,
+      weekSubjects,
       parentIbadahConfirmed: Boolean(r.parentIbadahConfirmed),
       parentIbadahName: (r.parentIbadahName as string | null) ?? null,
       parentIbadahConfirmedAt:

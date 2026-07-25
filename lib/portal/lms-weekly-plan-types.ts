@@ -9,6 +9,16 @@ export type PortalLmsMaterial = {
   mimeType: string | null;
 };
 
+export type PortalLmsPrePostBlock = {
+  enabled: boolean;
+  type: string | null;
+  minutes: number | null;
+  instructions: string | null;
+  url: string | null;
+  fileName: string | null;
+  filePath: string | null;
+};
+
 export type PortalLmsSession = {
   id: number;
   courseId: number;
@@ -23,6 +33,8 @@ export type PortalLmsSession = {
   endTime: string | null;
   periodNumber: number | null;
   materials: PortalLmsMaterial[];
+  preLearning: PortalLmsPrePostBlock | null;
+  postLearning: PortalLmsPrePostBlock | null;
 };
 
 export type PortalLmsWeeklyPlanBundle = {

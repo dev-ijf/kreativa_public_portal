@@ -30,6 +30,17 @@ export type SecondaryWeeklyDayRecap = {
   tilawahDone: boolean;
   memorisationDone: boolean;
   energyLevel: number | null;
+  isOnPeriod: boolean;
+};
+
+export type SecondaryWeeklySubjectCard = {
+  sessionId: number;
+  reportDate: string;
+  subjectName: string;
+  title: string;
+  understanding: 'fully' | 'mostly' | 'partially' | 'need_help' | null;
+  effort: 'maximum' | 'good' | 'could_do_more' | 'needs_improvement' | null;
+  quickNote: string | null;
 };
 
 export type SecondaryWeeklyResponse = {
@@ -42,6 +53,7 @@ export type SecondaryWeeklyResponse = {
   payload: SecondaryWeeklyPayload;
   stats: SecondaryWeeklyIbadahStats;
   dailyRecap: SecondaryWeeklyDayRecap[];
+  weekSubjects: SecondaryWeeklySubjectCard[];
   parentIbadahConfirmed: boolean;
   parentIbadahName: string | null;
   parentIbadahConfirmedAt: string | null;

@@ -1,24 +1,48 @@
-"use client";
+'use client';
 
-import { useActiveChild } from "@/components/portal/state/PortalProvider";
+import { useActiveChild } from '@/components/portal/state/PortalProvider';
 import {
   isDailyReportStudent,
   isSecondaryOrHighSchoolStudent,
-} from "@/lib/portal/is-kindergarten";
-import { DailyReportsPageClient } from "@/components/portal/pages/DailyReportsPageClient";
-import { SecondaryDailyPageClient } from "@/components/portal/pages/SecondaryDailyPageClient";
+} from '@/lib/portal/is-kindergarten';
+import {
+  isTalentaSchool,
+  resolvePortalTenantFromHost,
+} from '@/lib/portal/tenant';
+import { DailyReportsPageClient } from '@/components/portal/pages/DailyReportsPageClient';
+import { HabitsPageClient } from '@/components/portal/pages/HabitsPageClient';
+import { SecondaryDailyPageClient } from '@/components/portal/pages/SecondaryDailyPageClient';
+
+type Props = {
+  tenant?: 'kreativa' | 'talenta';
+};
 
 /**
  * `/habits` entry:
- * - Secondary / HS → student self-report CRUD (Habits-like) — checked first
- *   so Year 1 Secondary (level_order 1, class "1A") is not treated as Primary
- * - KG / Primary → teacher Daily Reports (parent read-view)
+ * - Talenta schools → academic_habits (HabitsPageClient) — 2 tabs only
+ * - Kreativa Secondary / HS → dr_daily_reports (SecondaryDailyPageClient)
+ * - Kreativa KG / Primary → teacher Daily Reports (parent read-view)
  */
-export function HabitsEntryClient() {
+export function HabitsEntryClient({ tenant: tenantProp }: Props) {
   const activeChild = useActiveChild();
+
+  const hostTenant =
+    tenantProp ??
+    (typeof window !== 'undefined'
+      ? resolvePortalTenantFromHost(window.location.hostname)
+      : 'kreativa');
+
+  // Prefer school name so Talenta students never get Kreativa Secondary UI
+  // even when browsing on the kreativaglobal host.
+  const useTalentaHabits =
+    hostTenant === 'talenta' || isTalentaSchool(activeChild?.schoolName);
+
+  if (useTalentaHabits) {
+    return <HabitsPageClient />;
+  }
+
   const child = activeChild ?? {};
 
-  // Secondary first: school name "… Secondary" beats level_order 1–6 Primary heuristic
   if (isSecondaryOrHighSchoolStudent(child)) {
     return <SecondaryDailyPageClient />;
   }

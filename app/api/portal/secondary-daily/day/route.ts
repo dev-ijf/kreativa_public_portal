@@ -55,6 +55,9 @@ function parsePayload(body: Record<string, unknown>): SecondaryDailyPayload | nu
   }
   base.energyLevel = energy;
 
+  if (typeof body.isOnPeriod !== 'boolean') return null;
+  base.isOnPeriod = body.isOnPeriod;
+
   if (!Array.isArray(body.goodDeeds)) return null;
   base.goodDeeds = [];
   for (const raw of body.goodDeeds) {

@@ -6,6 +6,7 @@ import type { Lang } from '@/lib/i18n/translations';
 import { t } from '@/lib/i18n/translations';
 import type {
   PortalLmsMaterial,
+  PortalLmsPrePostBlock,
   PortalLmsSession,
 } from '@/lib/portal/lms-weekly-plan-types';
 import {
@@ -23,6 +24,167 @@ type Props = {
   sessions: PortalLmsSession[];
   dayIndex: number;
 };
+
+const PRE_TYPE_LABELS: Record<string, { en: string; id: string }> = {
+  video: { en: '🎬 Video / Lecture', id: '🎬 Video / Kuliah' },
+  reading: { en: '📖 Reading', id: '📖 Bacaan' },
+  worksheet: { en: '📄 Worksheet', id: '📄 Lembar kerja' },
+  research: { en: '🔍 Research', id: '🔍 Riset' },
+  podcast: { en: '🎧 Podcast / Audio', id: '🎧 Podcast / Audio' },
+  other: { en: '📌 Other', id: '📌 Lainnya' },
+};
+
+const POST_TYPE_LABELS: Record<string, { en: string; id: string }> = {
+  practice: { en: '✏️ Practice problems', id: '✏️ Latihan soal' },
+  reflection: { en: '📝 Reflection writing', id: '📝 Refleksi' },
+  research: { en: '🔍 Further research', id: '🔍 Riset lanjutan' },
+  project: { en: '🛠️ Project work', id: '🛠️ Proyek' },
+  self_quiz: { en: '✅ Self-quiz', id: '✅ Kuis mandiri' },
+  other: { en: '📌 Other', id: '📌 Lainnya' },
+};
+
+function typeLabel(
+  lang: Lang,
+  type: string | null,
+  map: Record<string, { en: string; id: string }>,
+): string | null {
+  if (!type) return null;
+  const entry = map[type];
+  if (!entry) return type;
+  return lang === 'id' ? entry.id : entry.en;
+}
+
+function FieldCaption({
+  label,
+  accentClass,
+}: {
+  label: string;
+  accentClass: string;
+}) {
+  return (
+    <p
+      className={`mb-0.5 text-[10.5px] font-bold uppercase tracking-wide ${accentClass}`}
+    >
+      {label}
+    </p>
+  );
+}
+
+function PrePostBlock({
+  lang,
+  titleKey,
+  block,
+  typeMap,
+  variant,
+}: {
+  lang: Lang;
+  titleKey: 'schedulePreLearning' | 'schedulePostLearning';
+  block: PortalLmsPrePostBlock;
+  typeMap: Record<string, { en: string; id: string }>;
+  variant: 'pre' | 'post';
+}) {
+  const label = typeLabel(lang, block.type, typeMap);
+  const url = block.url?.trim() || null;
+  const fileHref = block.filePath?.trim() || null;
+  const shell =
+    variant === 'pre'
+      ? 'mb-3 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2.5'
+      : 'mb-3 rounded-lg border border-emerald-100 bg-emerald-50/80 px-3 py-2.5';
+  const titleClass =
+    variant === 'pre' ? 'text-amber-800' : 'text-emerald-800';
+  const captionClass =
+    variant === 'pre' ? 'text-amber-700/80' : 'text-emerald-700/80';
+
+  return (
+    <div className={shell}>
+      <p
+        className={`mb-2.5 text-[11px] font-bold uppercase tracking-wide ${titleClass}`}
+      >
+        {t(lang, titleKey)}
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        {label ? (
+          <div>
+            <FieldCaption
+              label={t(lang, 'scheduleFieldType')}
+              accentClass={captionClass}
+            />
+            <p className="mb-0 text-[13px] font-medium text-slate-800">{label}</p>
+          </div>
+        ) : null}
+        {block.minutes != null ? (
+          <div>
+            <FieldCaption
+              label={t(lang, 'scheduleFieldTime')}
+              accentClass={captionClass}
+            />
+            <p className="mb-0 text-[13px] font-medium text-slate-800">
+              {block.minutes} {t(lang, 'scheduleMinutes')}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {block.instructions?.trim() ? (
+        <div className="mt-2.5">
+          <FieldCaption
+            label={t(
+              lang,
+              variant === 'pre'
+                ? 'scheduleFieldGuidingQuestion'
+                : 'scheduleFieldInstructions',
+            )}
+            accentClass={captionClass}
+          />
+          <p className="mb-0 text-[13px] leading-relaxed text-slate-700 whitespace-pre-wrap">
+            {block.instructions.trim()}
+          </p>
+        </div>
+      ) : null}
+
+      {url ? (
+        <div className="mt-2.5">
+          <FieldCaption
+            label={t(lang, 'scheduleFieldLink')}
+            accentClass={captionClass}
+          />
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex break-all text-[12.5px] font-semibold text-sky-700"
+          >
+            {url}
+          </a>
+        </div>
+      ) : null}
+
+      {block.fileName || fileHref ? (
+        <div className="mt-2.5">
+          <FieldCaption
+            label={t(lang, 'scheduleFieldFile')}
+            accentClass={captionClass}
+          />
+          {fileHref ? (
+            <a
+              href={fileHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex text-[12.5px] font-semibold text-sky-700"
+            >
+              {block.fileName || t(lang, 'scheduleOpenLink')}
+            </a>
+          ) : (
+            <p className="mb-0 text-[13px] font-medium text-slate-800">
+              {block.fileName}
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function SessionMaterials({
   lang,
@@ -150,7 +312,9 @@ function SessionAccordion({
   const hasBody =
     Boolean(session.learningObjectives?.trim()) ||
     Boolean(safeHtml) ||
-    session.materials.some((m) => m.url);
+    session.materials.some((m) => m.url) ||
+    Boolean(session.preLearning?.enabled) ||
+    Boolean(session.postLearning?.enabled);
 
   return (
     <li className="relative pb-0.5">
@@ -201,6 +365,16 @@ function SessionAccordion({
 
         {open && hasBody ? (
           <div className="border-t border-white/60 bg-white/70 px-3 py-3">
+            {session.preLearning?.enabled ? (
+              <PrePostBlock
+                lang={lang}
+                titleKey="schedulePreLearning"
+                block={session.preLearning}
+                typeMap={PRE_TYPE_LABELS}
+                variant="pre"
+              />
+            ) : null}
+
             {session.learningObjectives?.trim() ? (
               <div className="mb-3">
                 <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">
@@ -239,6 +413,16 @@ function SessionAccordion({
             ) : null}
 
             <SessionMaterials lang={lang} materials={session.materials} />
+
+            {session.postLearning?.enabled ? (
+              <PrePostBlock
+                lang={lang}
+                titleKey="schedulePostLearning"
+                block={session.postLearning}
+                typeMap={POST_TYPE_LABELS}
+                variant="post"
+              />
+            ) : null}
           </div>
         ) : null}
       </div>

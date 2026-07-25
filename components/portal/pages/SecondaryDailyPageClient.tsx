@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
-import { usePortalState } from "@/components/portal/state/PortalProvider";
+import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
+import { SecondaryWeeklyPanel } from "@/components/portal/habits/SecondaryWeeklyPanel";
+import { isFemaleStudent } from "@/lib/portal/student-gender";
 import {
   PortalMonthCalendar,
   monthRangeISO,
@@ -129,7 +131,10 @@ function PillGroup<T extends string>({
 
 export function SecondaryDailyPageClient() {
   const { lang, activeChildId } = usePortalState();
+  const activeChild = useActiveChild();
+  const showPeriod = isFemaleStudent(activeChild?.gender);
   const [tab, setTab] = useState<"daily" | "weekly" | "summary">("daily");
+  const [energySaving, setEnergySaving] = useState(false);
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth0, setCalMonth0] = useState(now.getMonth());
@@ -413,11 +418,45 @@ export function SecondaryDailyPageClient() {
   };
 
   const section = (title: string, children: React.ReactNode, hint?: string) => (
-    <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
+    <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3 h-full">
       <h3 className="font-bold text-slate-700">{title}</h3>
       {hint ? <p className="text-xs text-slate-500 -mt-1 leading-relaxed">{hint}</p> : null}
       {children}
     </div>
+  );
+
+  const prayerDisabled = isFuture || payload.isOnPeriod;
+
+  const saveEnergyForDate = useCallback(
+    async (date: string, level: number) => {
+      if (!activeChildId || date > todayISO()) return;
+      setEnergySaving(true);
+      try {
+        const params = new URLSearchParams({
+          studentId: String(activeChildId),
+          date,
+        });
+        const res = await fetch(`/api/portal/secondary-daily/day?${params}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { day?: SecondaryDailyDayResponse };
+        const current = data.day?.payload ?? emptySecondaryDailyPayload();
+        const body = {
+          studentId: activeChildId,
+          date,
+          ...current,
+          energyLevel: level,
+        };
+        const put = await fetch("/api/portal/secondary-daily/day", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (put.ok) void loadWeek();
+      } finally {
+        setEnergySaving(false);
+      }
+    },
+    [activeChildId, loadWeek],
   );
 
   return (
@@ -455,43 +494,88 @@ export function SecondaryDailyPageClient() {
 
         {tab === "daily" && activeChildId ? (
           <div className="mt-4 space-y-4">
-            <PortalMonthCalendar
-              lang={lang}
-              calYear={calYear}
-              calMonth0={calMonth0}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onShiftMonth={shiftMonth}
-              days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
-              loading={loadingCal}
-              todayISO={todayISO()}
-              legendKeys={legendKeys}
-            />
+            {/* Mobile: stacked · Desktop: calendar left + form right (like Talenta) */}
+            <div className="md:grid md:grid-cols-[340px_1fr] md:gap-6 md:items-start space-y-4 md:space-y-0">
+              <div className="space-y-3">
+                <PortalMonthCalendar
+                  lang={lang}
+                  calYear={calYear}
+                  calMonth0={calMonth0}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  onShiftMonth={shiftMonth}
+                  days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
+                  loading={loadingCal}
+                  todayISO={todayISO()}
+                  legendKeys={legendKeys}
+                />
 
-            <div className="flex items-center justify-between px-1">
+                <div className="flex items-center justify-between px-1 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-slate-500">{t(lang, "secScoreLabel")}</p>
+                    <p className="text-2xl font-black text-slate-800">{scorePct}%</p>
+                    <p className="text-[11px] text-slate-400 mt-1">{t(lang, "secSaveHint")}</p>
+                  </div>
+                  <div className="text-xs font-bold text-right shrink-0 text-slate-500 min-h-5 max-w-[8rem]">
+                    {saveState === "saving" ? t(lang, "secSaving") : null}
+                    {saveState === "saved" ? t(lang, "secSaved") : null}
+                    {saveState === "error" ? t(lang, "secSaveError") : null}
+                  </div>
+                </div>
+
+                <div className="hidden md:block">
+                  <button
+                    type="button"
+                    disabled={!isDirty || loadingDay || isFuture || saveState === "saving"}
+                    onClick={() => setSaveConfirmOpen(true)}
+                    className={[
+                      "w-full py-3 rounded-2xl font-bold text-sm shadow-md",
+                      isDirty && !isFuture && !loadingDay
+                        ? "bg-primary text-white shadow-primary/25"
+                        : "bg-slate-200 text-slate-400",
+                    ].join(" ")}
+                  >
+                    {t(lang, "secSaveButton")}
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <p className="text-xs text-slate-500">{t(lang, "secScoreLabel")}</p>
-                <p className="text-2xl font-black text-slate-800">{scorePct}%</p>
-                <p className="text-[11px] text-slate-400 mt-1">{t(lang, "secSaveHint")}</p>
-              </div>
-              <div className="text-xs font-bold text-right text-slate-500">
-                {saveState === "saving" ? t(lang, "secSaving") : null}
-                {saveState === "saved" ? t(lang, "secSaved") : null}
-                {saveState === "error" ? t(lang, "secSaveError") : null}
-              </div>
-            </div>
-
             {loadingDay ? (
               <p className="text-center text-sm text-slate-400 py-6">…</p>
             ) : (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {showPeriod ? (
+                  <div className="bg-amber-50 rounded-3xl p-5 shadow-sm border border-amber-100 space-y-2 xl:col-span-2">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={payload.isOnPeriod}
+                        disabled={isFuture}
+                        onChange={(e) =>
+                          setPayload((p) => ({ ...p, isOnPeriod: e.target.checked }))
+                        }
+                        className="h-5 w-5 rounded border-slate-300 text-primary"
+                      />
+                      <span className="text-sm font-bold text-slate-800">
+                        {t(lang, "secPeriodToggle")}
+                      </span>
+                    </label>
+                    {payload.isOnPeriod ? (
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        {t(lang, "secPeriodNote")}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {section(
                   t(lang, "secSectionWajib"),
                   <div className="space-y-2">
                     <ToggleRow
                       checked={payload.fajrPrayer}
                       label={t(lang, "secFajr")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() => setPayload((p) => ({ ...p, fajrPrayer: !p.fajrPrayer }))}
                     />
                     <ToggleRow
@@ -500,7 +584,7 @@ export function SecondaryDailyPageClient() {
                         payload.zuhurPrayer === "needs_guidance"
                       }
                       label={t(lang, "secZuhur")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() =>
                         setPayload((p) => ({
                           ...p,
@@ -514,13 +598,13 @@ export function SecondaryDailyPageClient() {
                     <ToggleRow
                       checked={payload.asrPrayer}
                       label={t(lang, "secAsr")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() => setPayload((p) => ({ ...p, asrPrayer: !p.asrPrayer }))}
                     />
                     <ToggleRow
                       checked={payload.maghribPrayer}
                       label={t(lang, "secMaghrib")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() =>
                         setPayload((p) => ({ ...p, maghribPrayer: !p.maghribPrayer }))
                       }
@@ -528,7 +612,7 @@ export function SecondaryDailyPageClient() {
                     <ToggleRow
                       checked={payload.ishaPrayer}
                       label={t(lang, "secIsha")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() => setPayload((p) => ({ ...p, ishaPrayer: !p.ishaPrayer }))}
                     />
                   </div>,
@@ -540,7 +624,7 @@ export function SecondaryDailyPageClient() {
                     <ToggleRow
                       checked={payload.dhuhaPrayer === "yes"}
                       label={t(lang, "secDhuha")}
-                      disabled={isFuture}
+                      disabled={prayerDisabled}
                       onToggle={() =>
                         setPayload((p) => ({
                           ...p,
@@ -559,7 +643,7 @@ export function SecondaryDailyPageClient() {
                         key={key}
                         checked={payload[key]}
                         label={t(lang, labelKey)}
-                        disabled={isFuture}
+                        disabled={prayerDisabled}
                         onToggle={() => setPayload((p) => ({ ...p, [key]: !p[key] }))}
                       />
                     ))}
@@ -653,6 +737,7 @@ export function SecondaryDailyPageClient() {
                   </div>,
                 )}
 
+                <div className="xl:col-span-2">
                 {section(
                   t(lang, "secSectionSessions"),
                   sessionsMeta.length === 0 ? (
@@ -722,8 +807,9 @@ export function SecondaryDailyPageClient() {
                   ),
                   t(lang, "secSessionsHint"),
                 )}
+                </div>
 
-                <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent">
+                <div className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent xl:col-span-2 md:hidden">
                   <button
                     type="button"
                     disabled={!isDirty || loadingDay || isFuture || saveState === "saving"}
@@ -740,152 +826,54 @@ export function SecondaryDailyPageClient() {
                 </div>
               </div>
             )}
+              </div>
+            </div>
           </div>
         ) : null}
 
         {tab === "weekly" && activeChildId ? (
           <div className="mt-4 space-y-4">
-            <PortalMonthCalendar
-              lang={lang}
-              calYear={calYear}
-              calMonth0={calMonth0}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onShiftMonth={shiftMonth}
-              days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
-              loading={loadingCal}
-              todayISO={todayISO()}
-              legendKeys={legendKeys}
-              showFutureWarning={false}
-            />
-
-            {loadingWeek ? (
-              <p className="text-center text-sm text-slate-400 py-6">…</p>
-            ) : !week ? (
-              <p className="text-center text-sm text-slate-500 py-4">{t(lang, "secWeeklyEmpty")}</p>
-            ) : (
-              <>
-                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-                  <p className="font-bold text-slate-800">
-                    {week.weekLabel || `${week.dateFrom} – ${week.dateTo}`}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {week.dateFrom} → {week.dateTo}
-                    {week.status ? ` · ${week.status}` : ""}
-                  </p>
-                </div>
-
-                <div className="bg-primary rounded-3xl p-5 text-white shadow-lg shadow-primary/25 space-y-3">
-                  <p className="font-bold text-sm">{t(lang, "secWeeklyStatsTitle")}</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-white/80 text-xs">{t(lang, "secWeeklyPrayers")}</p>
-                      <p className="font-black text-lg">
-                        {week.stats.totalObligatoryPrayers}/{week.stats.maxObligatoryPrayers}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-xs">{t(lang, "secWeeklyDhuha")}</p>
-                      <p className="font-black text-lg">{week.stats.daysWithDhuha}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-xs">{t(lang, "secWeeklyTilawah")}</p>
-                      <p className="font-black text-lg">{week.stats.daysWithTilawah}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/80 text-xs">{t(lang, "secWeeklyDhikr")}</p>
-                      <p className="font-black text-lg">{week.stats.daysWithDhikr}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {(
-                  [
-                    ["akhlaqReflection", "secWeeklyAkhlaq", "secWeeklyAkhlaqHint"],
-                    ["bestLearningMoment", "secWeeklyBest", null],
-                    ["mostChallenging", "secWeeklyChallenging", null],
-                    ["unansweredQuestion", "secWeeklyQuestion", null],
-                    ["weeklyGoal", "secWeeklyGoal", null],
-                    ["messageToHomeroom", "secWeeklyMessage", null],
-                  ] as const
-                ).map(([field, labelKey, hintKey]) => (
-                  <div
-                    key={field}
-                    className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-2"
-                  >
-                    <label className="font-bold text-slate-700 text-sm">{t(lang, labelKey)}</label>
-                    {hintKey ? (
-                      <p className="text-xs text-slate-500">{t(lang, hintKey)}</p>
-                    ) : null}
-                    <textarea
-                      rows={3}
-                      value={weekPayload[field] ?? ""}
-                      onChange={(e) =>
-                        setWeekPayload((p) => ({
-                          ...p,
-                          [field]: e.target.value || null,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-slate-200 p-3 text-sm"
-                    />
-                  </div>
-                ))}
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={weekSaveState === "saving"}
-                    onClick={() => void performWeekSave(false)}
-                    className="flex-1 py-3 rounded-2xl font-bold text-sm border-2 border-primary text-primary bg-white"
-                  >
-                    {t(lang, "secWeeklySaveDraft")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={weekSaveState === "saving"}
-                    onClick={() => setWeekConfirmOpen(true)}
-                    className="flex-1 py-3 rounded-2xl font-bold text-sm bg-primary text-white"
-                  >
-                    {t(lang, "secWeeklySubmit")}
-                  </button>
-                </div>
-                <p className="text-center text-xs text-slate-500">
-                  {weekSaveState === "saving" ? t(lang, "secSaving") : null}
-                  {weekSaveState === "saved" ? t(lang, "secSaved") : null}
-                  {weekSaveState === "error" ? t(lang, "secSaveError") : null}
-                </p>
-
-                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 space-y-3">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={parentConfirmed}
-                      onChange={(e) => setParentConfirmed(e.target.checked)}
-                      className="h-5 w-5 rounded border-slate-300 text-primary"
-                    />
-                    <span className="text-sm font-semibold text-slate-700">
-                      {t(lang, "secParentConfirm")}
-                    </span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={t(lang, "secParentNamePlaceholder")}
-                    value={parentName}
-                    onChange={(e) => setParentName(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+            <div className="md:grid md:grid-cols-[340px_1fr] md:gap-6 md:items-start space-y-4 md:space-y-0">
+              <div className="space-y-3">
+                <PortalMonthCalendar
+                  lang={lang}
+                  calYear={calYear}
+                  calMonth0={calMonth0}
+                  selectedDate={selectedDate}
+                  onSelectDate={setSelectedDate}
+                  onShiftMonth={shiftMonth}
+                  days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
+                  loading={loadingCal}
+                  todayISO={todayISO()}
+                  legendKeys={legendKeys}
+                  showFutureWarning={false}
+                />
+              </div>
+              <div>
+                {loadingWeek ? (
+                  <p className="text-center text-sm text-slate-400 py-6">…</p>
+                ) : !week ? (
+                  <p className="text-center text-sm text-slate-500 py-4">{t(lang, "secWeeklyEmpty")}</p>
+                ) : (
+                  <SecondaryWeeklyPanel
+                    lang={lang}
+                    week={week}
+                    weekPayload={weekPayload}
+                    setWeekPayload={setWeekPayload}
+                    weekSaveState={weekSaveState}
+                    onSaveDraft={() => void performWeekSave(false)}
+                    onSubmit={() => setWeekConfirmOpen(true)}
+                    parentConfirmed={parentConfirmed}
+                    setParentConfirmed={setParentConfirmed}
+                    parentName={parentName}
+                    setParentName={setParentName}
+                    onSaveParentConfirm={() => void saveParentConfirm()}
+                    onEnergyChange={(date, level) => void saveEnergyForDate(date, level)}
+                    energySaving={energySaving}
                   />
-                  <button
-                    type="button"
-                    onClick={() => void saveParentConfirm()}
-                    className="w-full py-3 rounded-2xl font-bold text-sm bg-emerald-600 text-white"
-                  >
-                    {week?.parentIbadahConfirmed
-                      ? t(lang, "secParentConfirmed")
-                      : t(lang, "secParentConfirmSave")}
-                  </button>
-                </div>
-              </>
-            )}
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
 

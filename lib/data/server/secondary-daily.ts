@@ -309,6 +309,7 @@ function rowToPayload(
     dhuhaPrayer: parseDhuha(h.dhuhaPrayer),
     zuhurPrayer: parseZuhur(h.zuhurPrayer),
     energyLevel: energy != null && energy >= 1 && energy <= 5 ? energy : null,
+    isOnPeriod: toBool(h.isOnPeriod),
     goodDeeds,
     sessionReflections: sessions.map((s) => ({
       sessionId: s.sessionId,
@@ -357,7 +358,8 @@ export async function getSecondaryDailyByDate(
       memorisation_done AS "memorisationDone",
       dhuha_prayer AS "dhuhaPrayer",
       zuhur_prayer AS "zuhurPrayer",
-      energy_level AS "energyLevel"
+      energy_level AS "energyLevel",
+      is_on_period AS "isOnPeriod"
     FROM dr_daily_reports
     WHERE student_id = ${studentId}
       AND report_date = ${date}::date
@@ -486,6 +488,7 @@ export async function upsertSecondaryDailyDay(
         dhuha_prayer = ${dhuha},
         zuhur_prayer = ${zuhur},
         energy_level = ${payload.energyLevel},
+        is_on_period = ${payload.isOnPeriod},
         status = 'submitted',
         submitted_by = ${viewerUserId},
         submitted_at = COALESCE(submitted_at, now()),
@@ -500,7 +503,7 @@ export async function upsertSecondaryDailyDay(
         fajr_prayer, asr_prayer, maghrib_prayer, isha_prayer,
         tahajud_prayer, morning_dhikr, evening_dhikr,
         tilawah_done, memorisation_done,
-        dhuha_prayer, zuhur_prayer, energy_level,
+        dhuha_prayer, zuhur_prayer, energy_level, is_on_period,
         status, submitted_by, submitted_at
       ) VALUES (
         ${studentId}, ${gate.classId}, ${date}::date,
@@ -508,7 +511,7 @@ export async function upsertSecondaryDailyDay(
         ${payload.fajrPrayer}, ${payload.asrPrayer}, ${payload.maghribPrayer}, ${payload.ishaPrayer},
         ${payload.tahajudPrayer}, ${payload.morningDhikr}, ${payload.eveningDhikr},
         ${payload.tilawahDone}, ${payload.memorisationDone},
-        ${dhuha}, ${zuhur}, ${payload.energyLevel},
+        ${dhuha}, ${zuhur}, ${payload.energyLevel}, ${payload.isOnPeriod},
         'submitted', ${viewerUserId}, now()
       )
       RETURNING id
@@ -603,7 +606,8 @@ export async function getSecondaryDailyCalendarMonth(
       memorisation_done AS "memorisationDone",
       dhuha_prayer AS "dhuhaPrayer",
       zuhur_prayer AS "zuhurPrayer",
-      energy_level AS "energyLevel"
+      energy_level AS "energyLevel",
+      is_on_period AS "isOnPeriod"
     FROM dr_daily_reports
     WHERE student_id = ${studentId}
       AND report_date >= ${from}::date
@@ -650,7 +654,8 @@ export async function getSecondaryDailySummaryRange(
       dr.memorisation_done AS "memorisationDone",
       dr.dhuha_prayer AS "dhuhaPrayer",
       dr.zuhur_prayer AS "zuhurPrayer",
-      dr.energy_level AS "energyLevel"
+      dr.energy_level AS "energyLevel",
+      dr.is_on_period AS "isOnPeriod"
     FROM dr_daily_reports dr
     WHERE dr.student_id = ${studentId}
       AND dr.report_date >= ${from}::date
@@ -711,16 +716,18 @@ export async function getSecondaryDailySummaryRange(
     scoreSum += pct;
     dailyTrend.push({ date: normalizeDate(r.reportDate), scorePct: pct });
 
-    const prayers = [
-      payload.fajrPrayer,
-      payload.asrPrayer,
-      payload.maghribPrayer,
-      payload.ishaPrayer,
-      payload.dhuhaPrayer === 'yes',
-      payload.zuhurPrayer === 'well_done' || payload.zuhurPrayer === 'needs_guidance',
-    ];
-    prayerTotal += prayers.length;
-    prayerDone += prayers.filter(Boolean).length;
+    if (!payload.isOnPeriod) {
+      const prayers = [
+        payload.fajrPrayer,
+        payload.asrPrayer,
+        payload.maghribPrayer,
+        payload.ishaPrayer,
+        payload.dhuhaPrayer === 'yes',
+        payload.zuhurPrayer === 'well_done' || payload.zuhurPrayer === 'needs_guidance',
+      ];
+      prayerTotal += prayers.length;
+      prayerDone += prayers.filter(Boolean).length;
+    }
 
     if (payload.energyLevel != null) {
       energySum += payload.energyLevel;

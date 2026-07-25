@@ -39,6 +39,8 @@ export type PortalChildRow = {
   levelGradeName: string | null;
   levelOrder: number | null;
   schoolName: string;
+  /** core_students.gender — typically L (male) / P (female). */
+  gender: string | null;
 };
 
 async function loadPortalChildren(userId: number, role: string): Promise<PortalChildRow[]> {
@@ -54,7 +56,8 @@ async function loadPortalChildren(userId: number, role: string): Promise<PortalC
         h.level_grade_id AS "levelGradeId",
         lg.name       AS "levelGradeName",
         lg.level_order AS "levelOrder",
-        sc.name       AS "schoolName"
+        sc.name       AS "schoolName",
+        s.gender      AS "gender"
       FROM core_parent_student_relations r
       JOIN core_students s  ON s.id = r.student_id
       JOIN core_schools  sc ON sc.id = s.school_id
@@ -86,7 +89,8 @@ async function loadPortalChildren(userId: number, role: string): Promise<PortalC
       h.level_grade_id AS "levelGradeId",
       lg.name       AS "levelGradeName",
       lg.level_order AS "levelOrder",
-      sc.name       AS "schoolName"
+      sc.name       AS "schoolName",
+      s.gender      AS "gender"
     FROM core_students s
     JOIN core_schools  sc ON sc.id = s.school_id
     LEFT JOIN LATERAL (

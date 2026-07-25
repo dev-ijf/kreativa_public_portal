@@ -2,6 +2,8 @@ import { sql } from '@/lib/db/client';
 import { isStudentVisibleToViewer } from '@/lib/data/server/attendance';
 import {
   HABIT_BOOLEAN_KEYS,
+  HABIT_PERIOD_EXCUSED_KEYS,
+  habitScorePct,
   type HabitBooleanKey,
   type HabitCalendarDay,
   type HabitSummaryResponse,
@@ -48,6 +50,7 @@ export type PortalHabitRow = {
 } & Record<HabitBooleanKey, boolean> & {
   onTimeArrival: OnTimeArrivalValue;
   quranJuzInfo: string | null;
+  isOnPeriod: boolean;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -123,28 +126,19 @@ function mapHabitRow(r: Record<string, unknown>): PortalHabitRow {
     habitDate: normalizeDate(r.habit_date ?? r.habitDate),
     ...bools,
     onTimeArrival: normalizeOnTimeFromDb(r.on_time_arrival ?? r.onTimeArrival),
-    quranJuzInfo: (r.quran_juz_info as string | null) ?? null,
+    quranJuzInfo: (r.quran_juz_info as string | null) ?? (r.quranJuzInfo as string | null) ?? null,
+    isOnPeriod: toBool(r.is_on_period ?? r.isOnPeriod),
     createdAt: r.created_at != null ? String(r.created_at) : null,
     updatedAt: r.updated_at != null ? String(r.updated_at) : null,
   };
 }
 
-function boolScore(row: Pick<PortalHabitRow, HabitBooleanKey>): { num: number; den: number } {
-  let n = 0;
-  for (const k of HABIT_BOOLEAN_KEYS) {
-    if (row[k]) n += 1;
-  }
-  return { num: n, den: HABIT_BOOLEAN_KEYS.length };
-}
-
-function scorePct(row: Pick<PortalHabitRow, HabitBooleanKey>): number {
-  const { num, den } = boolScore(row);
-  if (den === 0) return 0;
-  return Math.round((num / den) * 100);
+function scorePct(row: PortalHabitRow): number {
+  return habitScorePct(row);
 }
 
 function categoryAvg(
-  rows: Pick<PortalHabitRow, HabitBooleanKey | 'onTimeArrival'>[],
+  rows: PortalHabitRow[],
   keys: HabitBooleanKey[],
   includeOnTime: boolean,
 ): number {
@@ -154,6 +148,7 @@ function categoryAvg(
     let n = 0;
     let d = 0;
     for (const k of keys) {
+      if (row.isOnPeriod && HABIT_PERIOD_EXCUSED_KEYS.includes(k)) continue;
       d += 1;
       if (row[k]) n += 1;
     }
@@ -199,7 +194,7 @@ export async function getHabitCalendarMonth(
       habit_date::text AS habit_date,
       fajr, dhuhr, "asr", maghrib, isha, dhuha, tahajud, read_quran, sunnah_fasting,
       wake_up_early, help_parents, pray_with_parents, give_greetings, smile_greet_polite,
-      parent_hug_pray, child_tell_parents
+      parent_hug_pray, child_tell_parents, is_on_period
     FROM academic_habits
     WHERE student_id = ${studentId}
       AND habit_date >= ${from}::date
@@ -239,7 +234,7 @@ export async function getHabitByDate(
       fajr, dhuhr, "asr", maghrib, isha, dhuha, tahajud, read_quran, sunnah_fasting,
       wake_up_early, help_parents, pray_with_parents, give_greetings, smile_greet_polite,
       on_time_arrival, parent_hug_pray, child_tell_parents, quran_juz_info,
-      created_at, updated_at
+      is_on_period, created_at, updated_at
     FROM academic_habits
     WHERE student_id = ${studentId}
       AND habit_date = ${habitDate}::date
@@ -301,14 +296,15 @@ export async function upsertHabitDay(
       student_id, habit_date,
       fajr, dhuhr, "asr", maghrib, isha, dhuha, tahajud, read_quran, sunnah_fasting,
       wake_up_early, help_parents, pray_with_parents, give_greetings, smile_greet_polite,
-      on_time_arrival, parent_hug_pray, child_tell_parents, quran_juz_info
+      on_time_arrival, parent_hug_pray, child_tell_parents, quran_juz_info, is_on_period
     ) VALUES (
       ${studentId}, ${habitDate}::date,
       ${vals.fajr}, ${vals.dhuhr}, ${vals.asr}, ${vals.maghrib}, ${vals.isha},
       ${vals.dhuha}, ${vals.tahajud}, ${vals.read_quran}, ${vals.sunnah_fasting},
       ${vals.wake_up_early}, ${vals.help_parents}, ${vals.pray_with_parents},
       ${vals.give_greetings}, ${vals.smile_greet_polite},
-      ${otdb}, ${vals.parent_hug_pray}, ${vals.child_tell_parents}, ${qinfo}
+      ${otdb}, ${vals.parent_hug_pray}, ${vals.child_tell_parents}, ${qinfo},
+      ${payload.isOnPeriod}
     )
     ON CONFLICT (student_id, habit_date) DO UPDATE SET
       fajr = EXCLUDED.fajr,
@@ -329,13 +325,14 @@ export async function upsertHabitDay(
       parent_hug_pray = EXCLUDED.parent_hug_pray,
       child_tell_parents = EXCLUDED.child_tell_parents,
       quran_juz_info = EXCLUDED.quran_juz_info,
+      is_on_period = EXCLUDED.is_on_period,
       updated_at = now()
     RETURNING
       id, student_id, habit_date::text AS habit_date,
       fajr, dhuhr, "asr", maghrib, isha, dhuha, tahajud, read_quran, sunnah_fasting,
       wake_up_early, help_parents, pray_with_parents, give_greetings, smile_greet_polite,
       on_time_arrival, parent_hug_pray, child_tell_parents, quran_juz_info,
-      created_at, updated_at
+      is_on_period, created_at, updated_at
   `;
 
   if (rows.length === 0) return { ok: false, reason: 'conflict' };
@@ -359,7 +356,7 @@ export async function getHabitsSummaryRange(
       habit_date::text AS habit_date,
       fajr, dhuhr, "asr", maghrib, isha, dhuha, tahajud, read_quran, sunnah_fasting,
       wake_up_early, help_parents, pray_with_parents, give_greetings, smile_greet_polite,
-      on_time_arrival, parent_hug_pray, child_tell_parents
+      on_time_arrival, parent_hug_pray, child_tell_parents, is_on_period
     FROM academic_habits
     WHERE student_id = ${studentId}
       AND habit_date >= ${fromDate}::date
@@ -398,10 +395,13 @@ export async function getHabitsSummaryRange(
 
   const itemRates = HABIT_BOOLEAN_KEYS.map((key) => {
     let c = 0;
+    let den = 0;
     for (const row of mapped) {
+      if (row.isOnPeriod && HABIT_PERIOD_EXCUSED_KEYS.includes(key)) continue;
+      den += 1;
       if (row[key]) c += 1;
     }
-    return { key, pct: Math.round((c / totalDays) * 100) };
+    return { key, pct: den > 0 ? Math.round((c / den) * 100) : 0 };
   });
 
   return {

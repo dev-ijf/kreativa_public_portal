@@ -241,7 +241,21 @@ async function loadSessionsForWeek(
       s.start_time AS "startTime",
       s.end_time AS "endTime",
       s.period_number AS "periodNumber",
-      sub.name AS "subjectName"
+      sub.name AS "subjectName",
+      s.pre_learning_enabled AS "preEnabled",
+      s.pre_learning_type AS "preType",
+      s.pre_learning_minutes AS "preMinutes",
+      s.pre_learning_instructions AS "preInstructions",
+      s.pre_learning_url AS "preUrl",
+      s.pre_learning_file_path AS "preFilePath",
+      s.pre_learning_file_name AS "preFileName",
+      s.post_learning_enabled AS "postEnabled",
+      s.post_learning_type AS "postType",
+      s.post_learning_minutes AS "postMinutes",
+      s.post_learning_instructions AS "postInstructions",
+      s.post_learning_url AS "postUrl",
+      s.post_learning_file_path AS "postFilePath",
+      s.post_learning_file_name AS "postFileName"
     FROM lms_sessions s
     JOIN lms_courses c ON c.id = s.course_id
     JOIN lms_subjects sub ON sub.id = c.subject_id
@@ -271,6 +285,8 @@ async function loadSessionsForWeek(
 
   return sessionRows.map((r) => {
     const sessionDate = normalizeDate(r.sessionDate);
+    const preEnabled = Boolean(r.preEnabled);
+    const postEnabled = Boolean(r.postEnabled);
     return {
       id: Number(r.id),
       courseId: Number(r.courseId),
@@ -287,6 +303,34 @@ async function loadSessionsForWeek(
           ? Number(r.periodNumber)
           : null,
       materials: materialsBySession.get(Number(r.id)) ?? [],
+      preLearning: preEnabled
+        ? {
+            enabled: true,
+            type: (r.preType as string | null) ?? null,
+            minutes:
+              r.preMinutes != null && r.preMinutes !== ''
+                ? Number(r.preMinutes)
+                : null,
+            instructions: (r.preInstructions as string | null) ?? null,
+            url: (r.preUrl as string | null) ?? null,
+            fileName: (r.preFileName as string | null) ?? null,
+            filePath: (r.preFilePath as string | null) ?? null,
+          }
+        : null,
+      postLearning: postEnabled
+        ? {
+            enabled: true,
+            type: (r.postType as string | null) ?? null,
+            minutes:
+              r.postMinutes != null && r.postMinutes !== ''
+                ? Number(r.postMinutes)
+                : null,
+            instructions: (r.postInstructions as string | null) ?? null,
+            url: (r.postUrl as string | null) ?? null,
+            fileName: (r.postFileName as string | null) ?? null,
+            filePath: (r.postFilePath as string | null) ?? null,
+          }
+        : null,
     };
   });
 }

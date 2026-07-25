@@ -35,6 +35,8 @@ function parsePayload(body: Record<string, unknown>): PortalHabitDayPayload | nu
   out.onTimeArrival = parseOnTime(body.onTimeArrival ?? body.on_time_arrival);
   const q = body.quranJuzInfo ?? body.quran_juz_info;
   out.quranJuzInfo = typeof q === 'string' ? q : null;
+  if (typeof body.isOnPeriod !== 'boolean') return null;
+  out.isOnPeriod = body.isOnPeriod;
   return out;
 }
 

@@ -45,6 +45,8 @@ export type SecondaryDailyPayload = {
   dhuhaPrayer: DhuhaPrayer | null;
   zuhurPrayer: ZuhurPrayer | null;
   energyLevel: number | null;
+  /** When true (female students), wajib/sunnah prayer+dhikr are excused from score. */
+  isOnPeriod: boolean;
   goodDeeds: SecondaryGoodDeed[];
   sessionReflections: {
     sessionId: number;
@@ -93,14 +95,27 @@ export function emptySecondaryDailyPayload(): SecondaryDailyPayload {
     dhuhaPrayer: null,
     zuhurPrayer: null,
     energyLevel: null,
+    isOnPeriod: false,
     goodDeeds: [],
     sessionReflections: [],
   };
 }
 
+/** Prayer / dhikr keys excused when isOnPeriod. */
+export const SECONDARY_PERIOD_EXCUSED_BOOLS = [
+  'fajrPrayer',
+  'asrPrayer',
+  'maghribPrayer',
+  'ishaPrayer',
+  'tahajudPrayer',
+  'morningDhikr',
+  'eveningDhikr',
+] as const satisfies readonly (keyof SecondaryDailyPayload)[];
+
 export function secondaryDailyScorePct(p: SecondaryDailyPayload): number {
   let done = 0;
   let total = 0;
+  const excusePrayers = p.isOnPeriod;
 
   const bools: (keyof SecondaryDailyPayload)[] = [
     'fajrPrayer',
@@ -114,13 +129,21 @@ export function secondaryDailyScorePct(p: SecondaryDailyPayload): number {
     'memorisationDone',
   ];
   for (const k of bools) {
+    if (
+      excusePrayers &&
+      (SECONDARY_PERIOD_EXCUSED_BOOLS as readonly string[]).includes(k)
+    ) {
+      continue;
+    }
     total += 1;
     if (p[k] === true) done += 1;
   }
-  total += 1;
-  if (p.dhuhaPrayer === 'yes') done += 1;
-  total += 1;
-  if (p.zuhurPrayer === 'well_done' || p.zuhurPrayer === 'needs_guidance') done += 1;
+  if (!excusePrayers) {
+    total += 1;
+    if (p.dhuhaPrayer === 'yes') done += 1;
+    total += 1;
+    if (p.zuhurPrayer === 'well_done' || p.zuhurPrayer === 'needs_guidance') done += 1;
+  }
   total += 1;
   if (p.energyLevel != null && p.energyLevel >= 1) done += 1;
   total += 1;

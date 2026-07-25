@@ -696,6 +696,7 @@ CREATE TABLE "public"."academic_habits" (
     "parent_hug_pray" bool DEFAULT false,
     "child_tell_parents" bool DEFAULT false,
     "quran_juz_info" text,
+    "is_on_period" bool NOT NULL DEFAULT false,
     CONSTRAINT "academic_habits_student_id_fkey" FOREIGN KEY ("student_id") REFERENCES "public"."core_students"("id"),
     PRIMARY KEY ("id", "habit_date")
 ) PARTITION BY RANGE ("habit_date");
