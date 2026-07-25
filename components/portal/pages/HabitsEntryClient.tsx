@@ -10,21 +10,22 @@ import { SecondaryDailyPageClient } from "@/components/portal/pages/SecondaryDai
 
 /**
  * `/habits` entry:
+ * - Secondary / HS → student self-report CRUD (Habits-like) — checked first
+ *   so Year 1 Secondary (level_order 1, class "1A") is not treated as Primary
  * - KG / Primary → teacher Daily Reports (parent read-view)
- * - Secondary / HS → student self-report CRUD (Habits-like)
  */
 export function HabitsEntryClient() {
   const activeChild = useActiveChild();
   const child = activeChild ?? {};
 
-  if (isDailyReportStudent(child)) {
-    return <DailyReportsPageClient />;
-  }
-
+  // Secondary first: school name "… Secondary" beats level_order 1–6 Primary heuristic
   if (isSecondaryOrHighSchoolStudent(child)) {
     return <SecondaryDailyPageClient />;
   }
 
-  // Fallback: treat unknown levels as Secondary self-report if not KG/Primary
+  if (isDailyReportStudent(child)) {
+    return <DailyReportsPageClient />;
+  }
+
   return <SecondaryDailyPageClient />;
 }

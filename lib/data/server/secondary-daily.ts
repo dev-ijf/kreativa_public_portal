@@ -45,6 +45,8 @@ function toBool(v: unknown): boolean {
 async function getStudentContext(studentId: number): Promise<{
   levelGradeName: string | null;
   levelOrder: number | null;
+  schoolName: string | null;
+  className: string | null;
   schoolId: number;
   classId: number | null;
   academicYearId: number | null;
@@ -52,11 +54,14 @@ async function getStudentContext(studentId: number): Promise<{
   const rows = await sql`
     SELECT
       s.school_id AS "schoolId",
+      sc.name AS "schoolName",
       h.class_id AS "classId",
+      c.name AS "className",
       h.academic_year_id AS "academicYearId",
       lg.name AS "levelGradeName",
       lg.level_order AS "levelOrder"
     FROM core_students s
+    JOIN core_schools sc ON sc.id = s.school_id
     LEFT JOIN LATERAL (
       SELECT ch.class_id, ch.academic_year_id, ch.level_grade_id
       FROM core_student_class_histories ch
@@ -64,6 +69,7 @@ async function getStudentContext(studentId: number): Promise<{
       ORDER BY ch.id DESC
       LIMIT 1
     ) h ON true
+    LEFT JOIN core_classes c ON c.id = h.class_id
     LEFT JOIN core_level_grades lg ON lg.id = h.level_grade_id
     WHERE s.id = ${studentId}
     LIMIT 1
@@ -71,7 +77,9 @@ async function getStudentContext(studentId: number): Promise<{
   const r = rows[0] as
     | {
         schoolId: number;
+        schoolName: string | null;
         classId: number | null;
+        className: string | null;
         academicYearId: number | null;
         levelGradeName: string | null;
         levelOrder: number | null;
@@ -80,6 +88,8 @@ async function getStudentContext(studentId: number): Promise<{
   if (!r) return null;
   return {
     schoolId: Number(r.schoolId),
+    schoolName: r.schoolName ?? null,
+    className: r.className ?? null,
     classId: r.classId != null ? Number(r.classId) : null,
     academicYearId: r.academicYearId != null ? Number(r.academicYearId) : null,
     levelGradeName: r.levelGradeName ?? null,
