@@ -488,53 +488,66 @@ export function SecondaryDailyPageClient() {
                 {section(
                   t(lang, "secSectionWajib"),
                   <div className="space-y-2">
-                    {(
-                      [
-                        ["fajrPrayer", "secFajr"],
-                        ["asrPrayer", "secAsr"],
-                        ["maghribPrayer", "secMaghrib"],
-                        ["ishaPrayer", "secIsha"],
-                      ] as const
-                    ).map(([key, labelKey]) => (
-                      <ToggleRow
-                        key={key}
-                        checked={payload[key]}
-                        label={t(lang, labelKey)}
-                        disabled={isFuture}
-                        onToggle={() => setPayload((p) => ({ ...p, [key]: !p[key] }))}
-                      />
-                    ))}
-                    <div className="pt-2 space-y-2">
-                      <p className="text-xs font-bold text-slate-500 uppercase">{t(lang, "secDhuha")}</p>
-                      <PillGroup
-                        disabled={isFuture}
-                        selected={payload.dhuhaPrayer}
-                        onSelect={(v) => setPayload((p) => ({ ...p, dhuhaPrayer: v }))}
-                        options={[
-                          { value: "yes", label: t(lang, "secDhuhaYes") },
-                          { value: "no", label: t(lang, "secDhuhaNo") },
-                        ]}
-                      />
-                    </div>
-                    <div className="pt-2 space-y-2">
-                      <p className="text-xs font-bold text-slate-500 uppercase">{t(lang, "secZuhur")}</p>
-                      <PillGroup
-                        disabled={isFuture}
-                        selected={payload.zuhurPrayer}
-                        onSelect={(v) => setPayload((p) => ({ ...p, zuhurPrayer: v }))}
-                        options={[
-                          { value: "well_done", label: t(lang, "secZuhurWellDone") },
-                          { value: "needs_guidance", label: t(lang, "secZuhurNeedsGuidance") },
-                          { value: "did_not_pray", label: t(lang, "secZuhurDidNotPray") },
-                        ]}
-                      />
-                    </div>
+                    <ToggleRow
+                      checked={payload.fajrPrayer}
+                      label={t(lang, "secFajr")}
+                      disabled={isFuture}
+                      onToggle={() => setPayload((p) => ({ ...p, fajrPrayer: !p.fajrPrayer }))}
+                    />
+                    <ToggleRow
+                      checked={
+                        payload.zuhurPrayer === "well_done" ||
+                        payload.zuhurPrayer === "needs_guidance"
+                      }
+                      label={t(lang, "secZuhur")}
+                      disabled={isFuture}
+                      onToggle={() =>
+                        setPayload((p) => ({
+                          ...p,
+                          zuhurPrayer:
+                            p.zuhurPrayer === "well_done" || p.zuhurPrayer === "needs_guidance"
+                              ? "did_not_pray"
+                              : "well_done",
+                        }))
+                      }
+                    />
+                    <ToggleRow
+                      checked={payload.asrPrayer}
+                      label={t(lang, "secAsr")}
+                      disabled={isFuture}
+                      onToggle={() => setPayload((p) => ({ ...p, asrPrayer: !p.asrPrayer }))}
+                    />
+                    <ToggleRow
+                      checked={payload.maghribPrayer}
+                      label={t(lang, "secMaghrib")}
+                      disabled={isFuture}
+                      onToggle={() =>
+                        setPayload((p) => ({ ...p, maghribPrayer: !p.maghribPrayer }))
+                      }
+                    />
+                    <ToggleRow
+                      checked={payload.ishaPrayer}
+                      label={t(lang, "secIsha")}
+                      disabled={isFuture}
+                      onToggle={() => setPayload((p) => ({ ...p, ishaPrayer: !p.ishaPrayer }))}
+                    />
                   </div>,
                 )}
 
                 {section(
                   t(lang, "secSectionSunnah"),
                   <div className="space-y-2">
+                    <ToggleRow
+                      checked={payload.dhuhaPrayer === "yes"}
+                      label={t(lang, "secDhuha")}
+                      disabled={isFuture}
+                      onToggle={() =>
+                        setPayload((p) => ({
+                          ...p,
+                          dhuhaPrayer: p.dhuhaPrayer === "yes" ? "no" : "yes",
+                        }))
+                      }
+                    />
                     {(
                       [
                         ["tahajudPrayer", "secTahajud"],
