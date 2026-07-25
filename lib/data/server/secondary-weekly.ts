@@ -195,6 +195,7 @@ async function loadWeekSubjects(
   studentId: number,
   schoolId: number,
   academicYearId: number,
+  classId: number,
   dateFrom: string,
   dateTo: string,
 ): Promise<SecondaryWeeklySubjectCard[]> {
@@ -219,6 +220,7 @@ async function loadWeekSubjects(
       ON sr.session_id = s.id AND sr.report_id = dr.id
     WHERE c.school_id = ${schoolId}
       AND c.academic_year_id = ${academicYearId}
+      AND c.class_id = ${classId}
       AND ce.status = 'active'
       AND c.deleted_at IS NULL
       AND s.session_date >= ${dateFrom}::date
@@ -251,10 +253,11 @@ export async function getSecondaryWeeklyByDate(
 > {
   if (!isValidISODate(date)) return { ok: false, reason: 'bad_date' };
 
-  const visible = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  const [visible, gate] = await Promise.all([
+    isStudentVisibleToViewer(viewerUserId, viewerRole, studentId),
+    assertSecondaryDailyStudent(studentId),
+  ]);
   if (!visible) return { ok: false, reason: 'forbidden' };
-
-  const gate = await assertSecondaryDailyStudent(studentId);
   if (!gate.ok) {
     return {
       ok: false,
@@ -265,34 +268,36 @@ export async function getSecondaryWeeklyByDate(
   const week = await resolveWeekForDate(gate.schoolId, gate.academicYearId, date);
   if (!week) return { ok: false, reason: 'no_week' };
 
-  const dailyRecap = await loadDailyRecap(studentId, week.dateFrom, week.dateTo);
+  const [dailyRecap, weekSubjects, rows] = await Promise.all([
+    loadDailyRecap(studentId, week.dateFrom, week.dateTo),
+    loadWeekSubjects(
+      studentId,
+      gate.schoolId,
+      gate.academicYearId,
+      gate.classId,
+      week.dateFrom,
+      week.dateTo,
+    ),
+    sql`
+      SELECT
+        id,
+        status,
+        akhlaq_reflection AS "akhlaqReflection",
+        best_learning_moment AS "bestLearningMoment",
+        most_challenging AS "mostChallenging",
+        unanswered_question AS "unansweredQuestion",
+        weekly_goal AS "weeklyGoal",
+        message_to_homeroom AS "messageToHomeroom",
+        parent_ibadah_confirmed AS "parentIbadahConfirmed",
+        parent_ibadah_name AS "parentIbadahName",
+        parent_ibadah_confirmed_at AS "parentIbadahConfirmedAt"
+      FROM dr_weekly_reflections
+      WHERE student_id = ${studentId}
+        AND week_config_id = ${week.id}
+      LIMIT 1
+    `,
+  ]);
   const stats = computeStats(dailyRecap);
-  const weekSubjects = await loadWeekSubjects(
-    studentId,
-    gate.schoolId,
-    gate.academicYearId,
-    week.dateFrom,
-    week.dateTo,
-  );
-
-  const rows = await sql`
-    SELECT
-      id,
-      status,
-      akhlaq_reflection AS "akhlaqReflection",
-      best_learning_moment AS "bestLearningMoment",
-      most_challenging AS "mostChallenging",
-      unanswered_question AS "unansweredQuestion",
-      weekly_goal AS "weeklyGoal",
-      message_to_homeroom AS "messageToHomeroom",
-      parent_ibadah_confirmed AS "parentIbadahConfirmed",
-      parent_ibadah_name AS "parentIbadahName",
-      parent_ibadah_confirmed_at AS "parentIbadahConfirmedAt"
-    FROM dr_weekly_reflections
-    WHERE student_id = ${studentId}
-      AND week_config_id = ${week.id}
-    LIMIT 1
-  `;
 
   const r = rows[0] as Record<string, unknown> | undefined;
   if (!r) {

@@ -332,10 +332,11 @@ export async function getSecondaryDailyByDate(
 > {
   if (!isValidISODate(date)) return { ok: false, reason: 'bad_date' };
 
-  const visible = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  const [visible, gate] = await Promise.all([
+    isStudentVisibleToViewer(viewerUserId, viewerRole, studentId),
+    assertSecondaryDailyStudent(studentId),
+  ]);
   if (!visible) return { ok: false, reason: 'forbidden' };
-
-  const gate = await assertSecondaryDailyStudent(studentId);
   if (!gate.ok) {
     return {
       ok: false,
@@ -368,13 +369,16 @@ export async function getSecondaryDailyByDate(
 
   const h = headerRows[0] as Record<string, unknown> | undefined;
   const reportId = h?.id != null ? Number(h.id) : null;
-  const sessions = await loadSessionsForDay(
-    studentId,
-    gate.schoolId,
-    gate.academicYearId,
-    date,
-    reportId,
-  );
+  const [sessions, goodDeeds] = await Promise.all([
+    loadSessionsForDay(
+      studentId,
+      gate.schoolId,
+      gate.academicYearId,
+      date,
+      reportId,
+    ),
+    reportId != null ? loadGoodDeeds(reportId) : Promise.resolve([]),
+  ]);
 
   if (!h) {
     const payload = emptySecondaryDailyPayload();
@@ -402,7 +406,6 @@ export async function getSecondaryDailyByDate(
     };
   }
 
-  const goodDeeds = await loadGoodDeeds(reportId!);
   const payload = rowToPayload(h, goodDeeds, sessions);
 
   return {

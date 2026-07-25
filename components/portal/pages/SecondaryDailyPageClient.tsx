@@ -5,6 +5,10 @@ import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
 import { SecondaryWeeklyPanel } from "@/components/portal/habits/SecondaryWeeklyPanel";
+import {
+  SecondaryDailyFormSkeleton,
+  SecondaryWeeklyPanelSkeleton,
+} from "@/components/portal/habits/HabitsLoadingSkeleton";
 import { isFemaleStudent } from "@/lib/portal/student-gender";
 import {
   PortalMonthCalendar,
@@ -156,8 +160,27 @@ export function SecondaryDailyPageClient() {
   const [parentName, setParentName] = useState("");
   const [parentConfirmed, setParentConfirmed] = useState(false);
   const lastHydratedJson = useRef("");
+  const dayAbortRef = useRef<AbortController | null>(null);
+  const weekAbortRef = useRef<AbortController | null>(null);
+  const summaryAbortRef = useRef<AbortController | null>(null);
 
   const isFuture = selectedDate > todayISO();
+
+  const selectDate = useCallback(
+    (date: string) => {
+      setSelectedDate(date);
+      if (tab === "daily") setLoadingDay(true);
+      if (tab === "weekly") setLoadingWeek(true);
+    },
+    [tab],
+  );
+
+  const switchTab = useCallback((next: "daily" | "weekly" | "summary") => {
+    if (next === "daily") setLoadingDay(true);
+    if (next === "weekly") setLoadingWeek(true);
+    if (next === "summary") setLoadingSummary(true);
+    setTab(next);
+  }, []);
 
   const loadCalendar = useCallback(async () => {
     if (!activeChildId) {
@@ -185,13 +208,18 @@ export function SecondaryDailyPageClient() {
 
   const loadDay = useCallback(async () => {
     if (!activeChildId) return;
+    dayAbortRef.current?.abort();
+    const ac = new AbortController();
+    dayAbortRef.current = ac;
     setLoadingDay(true);
     try {
       const params = new URLSearchParams({
         studentId: String(activeChildId),
         date: selectedDate,
       });
-      const res = await fetch(`/api/portal/secondary-daily/day?${params}`);
+      const res = await fetch(`/api/portal/secondary-daily/day?${params}`, {
+        signal: ac.signal,
+      });
       if (!res.ok) {
         setPayload(emptySecondaryDailyPayload());
         setSessionsMeta([]);
@@ -204,8 +232,10 @@ export function SecondaryDailyPageClient() {
       setPayload(day.payload);
       setSessionsMeta(day.sessions);
       lastHydratedJson.current = JSON.stringify(day.payload);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
     } finally {
-      setLoadingDay(false);
+      if (!ac.signal.aborted) setLoadingDay(false);
     }
   }, [activeChildId, selectedDate]);
 
@@ -214,6 +244,9 @@ export function SecondaryDailyPageClient() {
       setSummary(null);
       return;
     }
+    summaryAbortRef.current?.abort();
+    const ac = new AbortController();
+    summaryAbortRef.current = ac;
     setLoadingSummary(true);
     try {
       const { from, to } = monthRangeISO(calYear, calMonth0);
@@ -222,14 +255,18 @@ export function SecondaryDailyPageClient() {
         from,
         to,
       });
-      const res = await fetch(`/api/portal/secondary-daily/summary?${params}`);
+      const res = await fetch(`/api/portal/secondary-daily/summary?${params}`, {
+        signal: ac.signal,
+      });
       if (!res.ok) {
         setSummary(null);
         return;
       }
       setSummary((await res.json()) as SecondaryDailySummaryResponse);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
     } finally {
-      setLoadingSummary(false);
+      if (!ac.signal.aborted) setLoadingSummary(false);
     }
   }, [activeChildId, calYear, calMonth0]);
 
@@ -238,13 +275,18 @@ export function SecondaryDailyPageClient() {
       setWeek(null);
       return;
     }
+    weekAbortRef.current?.abort();
+    const ac = new AbortController();
+    weekAbortRef.current = ac;
     setLoadingWeek(true);
     try {
       const params = new URLSearchParams({
         studentId: String(activeChildId),
         date: selectedDate,
       });
-      const res = await fetch(`/api/portal/secondary-weekly/week?${params}`);
+      const res = await fetch(`/api/portal/secondary-weekly/week?${params}`, {
+        signal: ac.signal,
+      });
       if (!res.ok) {
         setWeek(null);
         return;
@@ -261,8 +303,10 @@ export function SecondaryDailyPageClient() {
       setWeekPayload(data.week.payload);
       setParentConfirmed(data.week.parentIbadahConfirmed);
       setParentName(data.week.parentIbadahName ?? "");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
     } finally {
-      setLoadingWeek(false);
+      if (!ac.signal.aborted) setLoadingWeek(false);
     }
   }, [activeChildId, selectedDate]);
 
@@ -271,8 +315,8 @@ export function SecondaryDailyPageClient() {
   }, [loadCalendar]);
 
   useEffect(() => {
-    void loadDay();
-  }, [loadDay]);
+    if (tab === "daily") void loadDay();
+  }, [tab, loadDay]);
 
   useEffect(() => {
     if (tab === "summary") void loadSummary();
@@ -481,7 +525,7 @@ export function SecondaryDailyPageClient() {
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
+              onClick={() => switchTab(id)}
               className={[
                 "flex-1 py-2.5 rounded-xl font-bold text-sm",
                 tab === id ? "bg-primary text-white" : "bg-slate-100 text-slate-700",
@@ -502,7 +546,7 @@ export function SecondaryDailyPageClient() {
                   calYear={calYear}
                   calMonth0={calMonth0}
                   selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
+                  onSelectDate={selectDate}
                   onShiftMonth={shiftMonth}
                   days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
                   loading={loadingCal}
@@ -513,7 +557,11 @@ export function SecondaryDailyPageClient() {
                 <div className="flex items-center justify-between px-1 gap-3">
                   <div className="min-w-0">
                     <p className="text-xs text-slate-500">{t(lang, "secScoreLabel")}</p>
-                    <p className="text-2xl font-black text-slate-800">{scorePct}%</p>
+                    {loadingDay ? (
+                      <div className="h-8 w-16 mt-1 rounded-lg bg-slate-200/80 animate-pulse" />
+                    ) : (
+                      <p className="text-2xl font-black text-slate-800">{scorePct}%</p>
+                    )}
                     <p className="text-[11px] text-slate-400 mt-1">{t(lang, "secSaveHint")}</p>
                   </div>
                   <div className="text-xs font-bold text-right shrink-0 text-slate-500 min-h-5 max-w-[8rem]">
@@ -542,7 +590,7 @@ export function SecondaryDailyPageClient() {
 
               <div>
             {loadingDay ? (
-              <p className="text-center text-sm text-slate-400 py-6">…</p>
+              <SecondaryDailyFormSkeleton />
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {showPeriod ? (
@@ -840,7 +888,7 @@ export function SecondaryDailyPageClient() {
                   calYear={calYear}
                   calMonth0={calMonth0}
                   selectedDate={selectedDate}
-                  onSelectDate={setSelectedDate}
+                  onSelectDate={selectDate}
                   onShiftMonth={shiftMonth}
                   days={calendarDays.map((d) => ({ date: d.date, hasEntry: d.hasEntry }))}
                   loading={loadingCal}
@@ -851,7 +899,7 @@ export function SecondaryDailyPageClient() {
               </div>
               <div>
                 {loadingWeek ? (
-                  <p className="text-center text-sm text-slate-400 py-6">…</p>
+                  <SecondaryWeeklyPanelSkeleton />
                 ) : !week ? (
                   <p className="text-center text-sm text-slate-500 py-4">{t(lang, "secWeeklyEmpty")}</p>
                 ) : (
@@ -880,7 +928,17 @@ export function SecondaryDailyPageClient() {
         {tab === "summary" && activeChildId ? (
           <div className="mt-4 space-y-4">
             {loadingSummary ? (
-              <p className="text-center text-sm text-slate-400 py-6">…</p>
+              <div className="space-y-4" aria-busy="true">
+                <div className="grid grid-cols-2 gap-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="h-24 rounded-3xl bg-slate-200/80 animate-pulse"
+                    />
+                  ))}
+                </div>
+                <div className="h-40 rounded-3xl bg-slate-200/80 animate-pulse" />
+              </div>
             ) : !summary || summary.totalDays === 0 ? (
               <p className="text-center text-sm text-slate-500 py-4">{t(lang, "secSummaryEmpty")}</p>
             ) : (
