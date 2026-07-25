@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import {
   Award,
   BookOpen,
@@ -18,8 +19,8 @@ import {
   Receipt,
   User,
 } from 'lucide-react';
-import { signOut } from 'next-auth/react';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
+import { ConfirmDialog } from '@/components/portal/ConfirmDialog';
 import { isDailyReportStudent } from '@/lib/portal/is-kindergarten';
 import { t } from '@/lib/i18n/translations';
 import { useSidebar } from './SidebarProvider';
@@ -45,6 +46,7 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
   const { lang, setLang } = usePortalState();
   const activeChild = useActiveChild();
   const { expanded, toggle } = useSidebar();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const navItems: NavItem[] = [
     { href: '/', icon: <Home size={20} />, labelKey: 'quickMenus', labelOverride: lang === 'en' ? 'Home' : 'Beranda' },
@@ -94,8 +96,8 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
             </button>
           </div>
 
-          {/* Logo */}
-          <div className="px-4 pb-4 flex justify-center">
+          {/* Logo + app name */}
+          <div className="px-4 pb-4 flex flex-col items-center">
             <Link href="/" className="block w-full">
               <div className="relative h-28 w-full">
                 <Image
@@ -108,6 +110,9 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
                 />
               </div>
             </Link>
+            <p className="mt-2 text-base font-bold text-white text-center leading-tight">
+              {t(lang, 'appName')}
+            </p>
           </div>
 
           {/* Greeting */}
@@ -180,11 +185,11 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
 
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={() => setLogoutOpen(true)}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors text-sm font-medium text-red-300 hover:bg-white/10 hover:text-red-200"
             >
               <LogOut size={20} />
-              <span>{lang === 'en' ? 'Logout' : 'Keluar'}</span>
+              <span>{t(lang, 'logout')}</span>
             </button>
           </div>
         </div>
@@ -201,6 +206,20 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
           <PanelLeftOpen size={20} />
         </button>
       )}
+
+      <ConfirmDialog
+        open={logoutOpen}
+        title={t(lang, 'logoutConfirmTitle')}
+        message={t(lang, 'logoutConfirmMessage')}
+        cancelLabel={t(lang, 'logoutConfirmCancel')}
+        confirmLabel={t(lang, 'logoutConfirmOk')}
+        confirmDanger
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={() => {
+          setLogoutOpen(false);
+          signOut({ callbackUrl: '/login' });
+        }}
+      />
     </>
   );
 }

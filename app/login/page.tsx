@@ -1,6 +1,13 @@
 import { Suspense } from 'react';
 import { LoginPageClient } from '@/components/portal/pages/LoginPageClient';
-import { getPortalThemeForRequest, getDarkBgLogoUrl, getBrowserTitle, getGlobalSetting } from '@/lib/data/server/portal-theme';
+import {
+  getPortalThemeForRequest,
+  getDarkBgLogoUrl,
+  getBrowserTitle,
+  getGlobalSetting,
+  getOnePortalUrl,
+  getWhatsAppMeUrl,
+} from '@/lib/data/server/portal-theme';
 
 export default async function Page() {
   const [theme, globalBg] = await Promise.all([
@@ -22,6 +29,9 @@ export default async function Page() {
         portalTitle={getBrowserTitle(theme)}
         welcomeText={theme.welcome_text}
         secondaryColor={theme.secondary_color}
+        whatsappNumber={theme.whatsapp_number}
+        onePortalUrl={getOnePortalUrl(theme.host_domain)}
+        whatsappUrl={getWhatsAppMeUrl(theme.whatsapp_number)}
       />
     </Suspense>
   );

@@ -16,6 +16,7 @@ export type PortalThemeResolved = {
   secondary_color: string | null;
   secondary_logo_url: string | null;
   secondary_title: string | null;
+  whatsapp_number: string | null;
 };
 
 const FALLBACK_LOGO = '/assets/tenant/kreativa-logo.png';
@@ -33,6 +34,7 @@ const FALLBACK_THEME: PortalThemeResolved = {
   secondary_color: null,
   secondary_logo_url: null,
   secondary_title: null,
+  whatsapp_number: null,
 };
 
 export function normalizePortalHostname(hostHeader: string | null | undefined): string {
@@ -77,6 +79,28 @@ export function getBrowserTitle(theme: PortalThemeResolved): string {
   return theme.secondary_title?.trim() || theme.portal_title;
 }
 
+/**
+ * Derive ONE portal URL from parents host_domain
+ * (e.g. parents.kreativaglobal.sch.id → https://one.kreativaglobal.sch.id).
+ */
+export function getOnePortalUrl(hostDomain: string): string {
+  const host = normalizePortalHostname(hostDomain);
+  if (!host || host === 'default') {
+    return 'https://one.kreativaglobal.sch.id';
+  }
+  if (host.startsWith('parents.')) {
+    return `https://one.${host.slice('parents.'.length)}`;
+  }
+  return `https://one.${host}`;
+}
+
+/** Digits-only WhatsApp number for wa.me links, or null if missing. */
+export function getWhatsAppMeUrl(whatsappNumber: string | null | undefined): string | null {
+  const digits = whatsappNumber?.replace(/\D/g, '') ?? '';
+  if (!digits) return null;
+  return `https://wa.me/${digits}`;
+}
+
 type ThemeRow = {
   id: number;
   host_domain: string;
@@ -89,6 +113,7 @@ type ThemeRow = {
   secondary_color: string | null;
   secondary_logo_url: string | null;
   secondary_title: string | null;
+  whatsapp_number: string | null;
 };
 
 async function fetchThemeByHostname(hostname: string): Promise<ThemeRow | null> {
@@ -105,7 +130,8 @@ async function fetchThemeByHostname(hostname: string): Promise<ThemeRow | null> 
       favicon_url,
       secondary_color,
       secondary_logo_url,
-      secondary_title
+      secondary_title,
+      whatsapp_number
     FROM core_portal_themes
     WHERE host_domain = ${hostname}
     LIMIT 1
@@ -127,6 +153,7 @@ function resolveTheme(row: ThemeRow | null): PortalThemeResolved {
     secondary_color: row.secondary_color?.trim() || null,
     secondary_logo_url: row.secondary_logo_url?.trim() || null,
     secondary_title: row.secondary_title?.trim() || null,
+    whatsapp_number: row.whatsapp_number?.trim() || null,
   };
 }
 

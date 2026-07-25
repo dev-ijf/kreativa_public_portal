@@ -183,10 +183,20 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
       <div className="md:hidden">
         <TopHero>
           <div className="pt-4">
-            <div className="flex justify-between items-start px-4 mb-4 text-white">
-              <div className="flex flex-col items-start">
-                <div className="h-10 w-[140px] relative mb-4">
-                  <Image src={logoUrl} alt={logoAlt} fill sizes="140px" className="object-contain" priority />
+            <div className="flex justify-between items-start pl-2 pr-4 mb-4 text-white">
+              <div className="flex flex-col items-start min-w-0">
+                <div className="flex items-center mb-3">
+                  <Image
+                    src={logoUrl}
+                    alt={logoAlt}
+                    width={160}
+                    height={80}
+                    className="h-20 w-auto object-contain object-left shrink-0"
+                    priority
+                  />
+                  <p className="text-base font-bold text-white leading-tight -ml-1">
+                    {t(stableLang, 'appName')}
+                  </p>
                 </div>
                 <p className="text-sm opacity-90">{t(stableLang, 'greeting')}</p>
                 <h1 className="text-xl font-bold">{displayName}</h1>
