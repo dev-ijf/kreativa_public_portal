@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
-import { usePortalState } from "@/components/portal/state/PortalProvider";
+import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
 import {
   PortalMonthCalendar,
   monthRangeISO,
@@ -14,9 +14,13 @@ import { ParentCornerSection } from "@/components/portal/daily-reports/ParentCor
 import type {
   DailyReportCalendarDay,
   DailyReportFull,
+  DailyReportHomeworkItem,
+  DailyReportSubjectHistoryItem,
+  DailyReportSubjectOption,
   DailyReportSummaryResponse,
 } from "@/lib/portal/daily-reports-shared";
 import { MOOD_EMOJI, MOOD_KEYS } from "@/lib/portal/daily-reports-shared";
+import { isPrimaryStudent } from "@/lib/portal/is-kindergarten";
 import { t, type Lang } from "@/lib/i18n/translations";
 
 const DR_LEGEND_KEYS = {
@@ -34,14 +38,34 @@ const DR_LEGEND_KEYS = {
   futureDate: "drFutureDate" as const,
 };
 
+const ATL_LABELS: Record<string, string> = {
+  thinking: "Thinking",
+  social: "Social",
+  communication: "Communication",
+  self_management: "Self-management",
+  research: "Research",
+};
+
 function moodLabel(mood: string, lang: Lang): string {
   const key = MOOD_KEYS[mood as keyof typeof MOOD_KEYS];
   return key ? t(lang, key) : mood;
 }
 
+function subjectDisplayName(
+  name: string,
+  nameId: string | null,
+  lang: Lang,
+): string {
+  if (lang === "id" && nameId) return nameId;
+  return name;
+}
+
 export function DailyReportsPageClient() {
   const { lang, activeChildId } = usePortalState();
-  const [tab, setTab] = useState<"daily" | "summary">("daily");
+  const activeChild = useActiveChild();
+  const isPrimaryChild = isPrimaryStudent(activeChild ?? {});
+
+  const [tab, setTab] = useState<"daily" | "summary" | "bySubject">("daily");
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
   const [calMonth0, setCalMonth0] = useState(now.getMonth());
@@ -52,6 +76,12 @@ export function DailyReportsPageClient() {
   const [loadingDay, setLoadingDay] = useState(false);
   const [summary, setSummary] = useState<DailyReportSummaryResponse | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [homework, setHomework] = useState<DailyReportHomeworkItem[]>([]);
+  const [subjectOptions, setSubjectOptions] = useState<DailyReportSubjectOption[]>([]);
+  const [selectedLaId, setSelectedLaId] = useState<number | null>(null);
+  const [subjectHistory, setSubjectHistory] = useState<DailyReportSubjectHistoryItem[]>([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const loadCalendar = useCallback(async () => {
     if (!activeChildId) {
@@ -124,6 +154,74 @@ export function DailyReportsPageClient() {
     }
   }, [activeChildId, calYear, calMonth0]);
 
+  const loadHomework = useCallback(async () => {
+    if (!activeChildId) {
+      setHomework([]);
+      return;
+    }
+    const res = await fetch(
+      `/api/portal/daily-reports/homework?studentId=${activeChildId}`,
+    );
+    if (!res.ok) {
+      setHomework([]);
+      return;
+    }
+    const data = (await res.json()) as { items?: DailyReportHomeworkItem[] };
+    setHomework(Array.isArray(data.items) ? data.items : []);
+  }, [activeChildId]);
+
+  const loadSubjectOptions = useCallback(async () => {
+    if (!activeChildId) {
+      setSubjectOptions([]);
+      setSelectedLaId(null);
+      return;
+    }
+    setLoadingSubjects(true);
+    try {
+      const res = await fetch(
+        `/api/portal/daily-reports/subjects?studentId=${activeChildId}`,
+      );
+      if (!res.ok) {
+        setSubjectOptions([]);
+        setSelectedLaId(null);
+        return;
+      }
+      const data = (await res.json()) as { subjects?: DailyReportSubjectOption[] };
+      const list = Array.isArray(data.subjects) ? data.subjects : [];
+      setSubjectOptions(list);
+      setSelectedLaId((prev) =>
+        prev && list.some((s) => s.learningAreaId === prev)
+          ? prev
+          : list[0]?.learningAreaId ?? null,
+      );
+    } finally {
+      setLoadingSubjects(false);
+    }
+  }, [activeChildId]);
+
+  const loadSubjectHistory = useCallback(async () => {
+    if (!activeChildId || !selectedLaId) {
+      setSubjectHistory([]);
+      return;
+    }
+    setLoadingHistory(true);
+    try {
+      const params = new URLSearchParams({
+        studentId: String(activeChildId),
+        learningAreaId: String(selectedLaId),
+      });
+      const res = await fetch(`/api/portal/daily-reports/subjects/history?${params}`);
+      if (!res.ok) {
+        setSubjectHistory([]);
+        return;
+      }
+      const data = (await res.json()) as { items?: DailyReportSubjectHistoryItem[] };
+      setSubjectHistory(Array.isArray(data.items) ? data.items : []);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [activeChildId, selectedLaId]);
+
   useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
@@ -133,8 +231,26 @@ export function DailyReportsPageClient() {
   }, [loadDay]);
 
   useEffect(() => {
+    void loadHomework();
+  }, [loadHomework]);
+
+  useEffect(() => {
+    if (tab === "bySubject" && !isPrimaryChild && report?.schoolLevel !== "primary") {
+      setTab("daily");
+    }
+  }, [tab, isPrimaryChild, report?.schoolLevel]);
+
+  useEffect(() => {
     if (tab === "summary") void loadSummary();
   }, [tab, loadSummary]);
+
+  useEffect(() => {
+    if (tab === "bySubject") void loadSubjectOptions();
+  }, [tab, loadSubjectOptions]);
+
+  useEffect(() => {
+    if (tab === "bySubject") void loadSubjectHistory();
+  }, [tab, loadSubjectHistory]);
 
   const shiftMonth = (delta: number) => {
     const d = new Date(calYear, calMonth0 + delta, 1);
@@ -148,6 +264,7 @@ export function DailyReportsPageClient() {
   );
 
   const isFuture = selectedDate > todayISO();
+  const showBySubject = isPrimaryChild || report?.schoolLevel === "primary";
 
   return (
     <div className="min-h-screen bg-slate-50 pb-6">
@@ -173,6 +290,18 @@ export function DailyReportsPageClient() {
           >
             {t(lang, "habitsDailyTab")}
           </button>
+          {showBySubject ? (
+            <button
+              type="button"
+              onClick={() => setTab("bySubject")}
+              className={[
+                "flex-1 py-2.5 rounded-xl font-bold text-sm",
+                tab === "bySubject" ? "bg-primary text-white" : "bg-slate-100 text-slate-700",
+              ].join(" ")}
+            >
+              {t(lang, "drBySubjectTab")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setTab("summary")}
@@ -187,6 +316,27 @@ export function DailyReportsPageClient() {
 
         {tab === "daily" && activeChildId ? (
           <div className="mt-4 space-y-4">
+            {homework.length > 0 ? (
+              <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100">
+                <h3 className="font-bold text-slate-800 text-sm mb-3">
+                  📌 {t(lang, "drUpcomingHomework")}
+                </h3>
+                <ul className="space-y-3">
+                  {homework.map((hw, i) => (
+                    <li key={`${hw.subjectName}-${hw.homeworkDueDate}-${i}`} className="text-sm">
+                      <p className="font-bold text-slate-900">
+                        {subjectDisplayName(hw.subjectName, hw.subjectNameId, lang)}
+                      </p>
+                      <p className="text-slate-600 whitespace-pre-wrap mt-0.5">{hw.homework}</p>
+                      <p className="text-xs text-amber-700 font-semibold mt-1">
+                        📅 {hw.homeworkDueDate}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
             <PortalMonthCalendar
               lang={lang}
               calYear={calYear}
@@ -218,9 +368,94 @@ export function DailyReportsPageClient() {
                     setReport(next);
                     void loadCalendar();
                     void loadSummary();
+                    void loadHomework();
                   }}
                 />
               </>
+            )}
+          </div>
+        ) : null}
+
+        {tab === "bySubject" && activeChildId ? (
+          <div className="mt-4 space-y-4">
+            <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100">
+              <h3 className="font-bold text-slate-800 text-sm mb-3">
+                {t(lang, "drBySubjectTitle")}
+              </h3>
+              {loadingSubjects ? (
+                <p className="text-sm text-slate-400">…</p>
+              ) : subjectOptions.length === 0 ? (
+                <p className="text-sm text-slate-500">{t(lang, "drBySubjectNoSubjects")}</p>
+              ) : (
+                <select
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white"
+                  value={selectedLaId ?? ""}
+                  onChange={(e) =>
+                    setSelectedLaId(e.target.value ? Number(e.target.value) : null)
+                  }
+                >
+                  <option value="">{t(lang, "drBySubjectPick")}</option>
+                  {subjectOptions.map((s) => (
+                    <option key={s.learningAreaId} value={s.learningAreaId}>
+                      {subjectDisplayName(s.name, s.nameId, lang)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {loadingHistory ? (
+              <p className="text-center text-sm text-slate-400 py-6">…</p>
+            ) : !selectedLaId ? null : subjectHistory.length === 0 ? (
+              <p className="text-center text-sm text-slate-500 py-4">
+                {t(lang, "drBySubjectEmpty")}
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {subjectHistory.map((item, i) => (
+                  <li
+                    key={`${item.reportDate}-${i}`}
+                    className="bg-white rounded-3xl p-4 shadow-sm border border-slate-100 space-y-2"
+                  >
+                    <p className="text-sm font-bold text-slate-900">{item.reportDate}</p>
+                    {item.topic ? (
+                      <p className="text-sm text-slate-700">
+                        <span className="font-semibold">{t(lang, "drSubjectTopic")}: </span>
+                        {item.topic}
+                      </p>
+                    ) : null}
+                    {item.activities ? (
+                      <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                        {item.activities}
+                      </p>
+                    ) : null}
+                    {item.homeworkGiven && item.homework ? (
+                      <p className="text-sm text-slate-700">
+                        <span className="font-semibold">{t(lang, "drSubjectHomework")}: </span>
+                        {item.homework}
+                        {item.homeworkDueDate ? ` — ${item.homeworkDueDate}` : ""}
+                      </p>
+                    ) : null}
+                    {item.atlSkills.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {item.atlSkills.map((sk) => (
+                          <span
+                            key={sk}
+                            className="rounded-full bg-sky-50 text-sky-800 border border-sky-100 px-2 py-0.5 text-[11px] font-semibold"
+                          >
+                            {ATL_LABELS[sk] ?? sk}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.privateNote ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                        🔒 {item.privateNote}
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         ) : null}

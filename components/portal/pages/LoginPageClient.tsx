@@ -174,18 +174,6 @@ export function LoginPageClient({
         <p className="text-white/60 text-xs text-center mt-8 relative z-10 px-2">
           {COPYRIGHT_TEXT}
         </p>
-
-        {whatsappUrl ? (
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="fixed bottom-6 right-6 z-30 flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#1ebe57] transition-colors"
-            aria-label="WhatsApp"
-          >
-            <WhatsAppIcon />
-          </a>
-        ) : null}
       </div>
 
       {/* ═══════ DESKTOP (>= lg) ═══════ */}
@@ -296,6 +284,18 @@ export function LoginPageClient({
         </div>
 
       </div>
+
+      {whatsappUrl ? (
+        <a
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-6 right-6 z-30 flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#1ebe57] transition-colors"
+          aria-label="WhatsApp"
+        >
+          <WhatsAppIcon />
+        </a>
+      ) : null}
     </div>
   );
 }

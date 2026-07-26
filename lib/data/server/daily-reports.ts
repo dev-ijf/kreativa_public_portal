@@ -15,7 +15,10 @@ import type {
   DailyReportObserveDomain,
   DailyReportSchoolLevel,
   DailyReportStudentMedia,
+  DailyReportHomeworkItem,
   DailyReportSubject,
+  DailyReportSubjectHistoryItem,
+  DailyReportSubjectOption,
   DailyReportSummaryResponse,
   DailyReportTilawah,
 } from '@/lib/portal/daily-reports-shared';
@@ -300,36 +303,89 @@ export async function getDailyReportByDate(
   if (schoolLevel === 'primary') {
     const subjectRows = await sql`
       SELECT
-        subject_name AS "subjectName",
-        topic,
-        teacher_note AS "teacherNote",
-        daily_score AS "dailyScore",
-        score_label AS "scoreLabel",
-        homework,
-        homework_due_date::text AS "homeworkDueDate"
-      FROM dr_daily_report_subjects
-      WHERE report_id = ${reportId}
-      ORDER BY sort_order, id
+        ds.id AS "subjectId",
+        ds.learning_area_id AS "learningAreaId",
+        COALESCE(la.name, ds.subject_name) AS "subjectName",
+        la.name_id AS "subjectNameId",
+        ds.topic,
+        ds.activities,
+        ds.teacher_note AS "teacherNote",
+        ds.note_to_parents AS "noteToParents",
+        ds.daily_score AS "dailyScore",
+        ds.score_label AS "scoreLabel",
+        ds.homework_given AS "homeworkGiven",
+        ds.homework,
+        ds.homework_due_date::text AS "homeworkDueDate",
+        pn.note AS "privateNote",
+        COALESCE(
+          (SELECT ARRAY_AGG(atl.skill ORDER BY atl.skill)
+           FROM dr_subject_atl_skills atl WHERE atl.subject_id = ds.id),
+          '{}'::varchar[]
+        ) AS "atlSkills",
+        COALESCE(
+          (SELECT ARRAY_AGG(mc.name ORDER BY mc.sort_order)
+           FROM dr_subject_characters sc
+           JOIN dr_muslim_characters mc ON mc.id = sc.character_id
+           WHERE sc.subject_id = ds.id),
+          '{}'::varchar[]
+        ) AS "characters"
+      FROM dr_daily_report_subjects ds
+      LEFT JOIN dr_learning_areas la ON la.id = ds.learning_area_id
+      LEFT JOIN dr_subject_private_notes pn
+        ON pn.subject_id = ds.id AND pn.student_id = ${studentId}
+      WHERE ds.report_id = ${reportId}
+        AND (
+          ds.audience_type = 'all'
+          OR EXISTS (
+            SELECT 1 FROM dr_subject_audiences sa
+            WHERE sa.subject_id = ds.id AND sa.student_id = ${studentId}
+          )
+        )
+      ORDER BY ds.sort_order, ds.id
     `;
+
+    const toStringArray = (v: unknown): string[] => {
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      if (typeof v === 'string') {
+        return v.replace(/[{}]/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+      }
+      return [];
+    };
 
     subjects = (
       subjectRows as {
         subjectName: string;
+        subjectNameId: string | null;
+        learningAreaId: number | null;
         topic: string | null;
+        activities: string | null;
         teacherNote: string | null;
+        noteToParents: string | null;
         dailyScore: number | null;
         scoreLabel: string | null;
+        homeworkGiven: boolean | null;
         homework: string | null;
         homeworkDueDate: string | null;
+        privateNote: string | null;
+        atlSkills: unknown;
+        characters: unknown;
       }[]
     ).map((r) => ({
       subjectName: r.subjectName,
+      subjectNameId: r.subjectNameId ?? null,
+      learningAreaId: r.learningAreaId != null ? Number(r.learningAreaId) : null,
       topic: r.topic ?? null,
+      activities: r.activities ?? null,
       teacherNote: r.teacherNote ?? null,
+      noteToParents: r.noteToParents ?? null,
       dailyScore: r.dailyScore != null ? Number(r.dailyScore) : null,
       scoreLabel: r.scoreLabel ?? null,
+      homeworkGiven: Boolean(r.homeworkGiven) || Boolean(r.homework?.trim()),
       homework: r.homework ?? null,
       homeworkDueDate: r.homeworkDueDate ? normalizeDate(r.homeworkDueDate) : null,
+      atlSkills: toStringArray(r.atlSkills),
+      characters: toStringArray(r.characters),
+      privateNote: r.privateNote ?? null,
     }));
 
     const observeRows = await sql`
@@ -767,6 +823,237 @@ export async function getDailyReportSummaryRange(
     moods: (moodRows as DailyReportSummaryResponse['moods']).map((r) => ({
       mood: String(r.mood),
       count: Number(r.count),
+    })),
+  };
+}
+
+function toStringArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String).filter(Boolean);
+  if (typeof v === 'string') {
+    return v
+      .replace(/[{}]/g, '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export async function getUpcomingHomework(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+): Promise<
+  | { ok: true; items: DailyReportHomeworkItem[] }
+  | { ok: false; reason: 'forbidden' | 'unsupported_level' | 'not_found' }
+> {
+  const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  if (!ok) return { ok: false, reason: 'forbidden' };
+
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) {
+    return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
+  }
+  const info = await getStudentLevelInfo(studentId);
+  if (!info || !isPrimaryStudent(info)) {
+    return { ok: true, items: [] };
+  }
+
+  const rows = await sql`
+    SELECT
+      COALESCE(la.name, ds.subject_name) AS "subjectName",
+      la.name_id AS "subjectNameId",
+      ds.homework,
+      ds.homework_due_date::text AS "homeworkDueDate",
+      dr.report_date::text AS "assignedDate"
+    FROM dr_daily_report_subjects ds
+    JOIN dr_daily_reports dr ON dr.id = ds.report_id
+    LEFT JOIN dr_learning_areas la ON la.id = ds.learning_area_id
+    WHERE dr.student_id = ${studentId}
+      AND dr.status != 'draft'
+      AND ds.homework_given = true
+      AND ds.homework IS NOT NULL
+      AND TRIM(ds.homework) <> ''
+      AND ds.homework_due_date >= CURRENT_DATE
+      AND (
+        ds.audience_type = 'all'
+        OR EXISTS (
+          SELECT 1 FROM dr_subject_audiences sa
+          WHERE sa.subject_id = ds.id AND sa.student_id = ${studentId}
+        )
+      )
+    ORDER BY ds.homework_due_date ASC
+    LIMIT 5
+  `;
+
+  return {
+    ok: true,
+    items: (
+      rows as {
+        subjectName: string;
+        subjectNameId: string | null;
+        homework: string;
+        homeworkDueDate: string;
+        assignedDate: string;
+      }[]
+    ).map((r) => ({
+      subjectName: r.subjectName,
+      subjectNameId: r.subjectNameId ?? null,
+      homework: r.homework,
+      homeworkDueDate: normalizeDate(r.homeworkDueDate),
+      assignedDate: normalizeDate(r.assignedDate),
+    })),
+  };
+}
+
+export async function getStudentSubjectOptions(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+): Promise<
+  | { ok: true; subjects: DailyReportSubjectOption[] }
+  | { ok: false; reason: 'forbidden' | 'unsupported_level' | 'not_found' }
+> {
+  const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  if (!ok) return { ok: false, reason: 'forbidden' };
+
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) {
+    return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
+  }
+  const info = await getStudentLevelInfo(studentId);
+  if (!info || !isPrimaryStudent(info)) {
+    return { ok: true, subjects: [] };
+  }
+
+  const rows = await sql`
+    SELECT DISTINCT
+      la.id AS "learningAreaId",
+      la.name,
+      la.name_id AS "nameId",
+      la.sort_order AS "sortOrder"
+    FROM dr_daily_report_subjects ds
+    JOIN dr_learning_areas la ON la.id = ds.learning_area_id
+    JOIN dr_daily_reports dr ON dr.id = ds.report_id
+    WHERE dr.student_id = ${studentId}
+      AND dr.status != 'draft'
+      AND (
+        ds.audience_type = 'all'
+        OR EXISTS (
+          SELECT 1 FROM dr_subject_audiences sa
+          WHERE sa.subject_id = ds.id AND sa.student_id = ${studentId}
+        )
+      )
+    ORDER BY la.sort_order, la.name
+  `;
+
+  return {
+    ok: true,
+    subjects: (
+      rows as {
+        learningAreaId: number;
+        name: string;
+        nameId: string | null;
+      }[]
+    ).map((r) => ({
+      learningAreaId: Number(r.learningAreaId),
+      name: r.name,
+      nameId: r.nameId ?? null,
+    })),
+  };
+}
+
+export async function getSubjectHistory(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+  learningAreaId: number,
+): Promise<
+  | { ok: true; items: DailyReportSubjectHistoryItem[] }
+  | { ok: false; reason: 'forbidden' | 'unsupported_level' | 'not_found' | 'bad_request' }
+> {
+  if (!Number.isFinite(learningAreaId) || learningAreaId <= 0) {
+    return { ok: false, reason: 'bad_request' };
+  }
+
+  const ok = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  if (!ok) return { ok: false, reason: 'forbidden' };
+
+  const level = await assertDailyReportStudent(studentId);
+  if (!level.ok) {
+    return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
+  }
+  const info = await getStudentLevelInfo(studentId);
+  if (!info || !isPrimaryStudent(info)) {
+    return { ok: true, items: [] };
+  }
+
+  const rows = await sql`
+    SELECT
+      dr.report_date::text AS "reportDate",
+      ds.topic,
+      ds.activities,
+      ds.homework_given AS "homeworkGiven",
+      ds.homework,
+      ds.homework_due_date::text AS "homeworkDueDate",
+      ds.note_to_parents AS "noteToParents",
+      pn.note AS "privateNote",
+      COALESCE(
+        (SELECT ARRAY_AGG(atl.skill ORDER BY atl.skill)
+         FROM dr_subject_atl_skills atl WHERE atl.subject_id = ds.id),
+        '{}'::varchar[]
+      ) AS "atlSkills",
+      COALESCE(
+        (SELECT ARRAY_AGG(mc.name ORDER BY mc.sort_order)
+         FROM dr_subject_characters sc
+         JOIN dr_muslim_characters mc ON mc.id = sc.character_id
+         WHERE sc.subject_id = ds.id),
+        '{}'::varchar[]
+      ) AS "characters"
+    FROM dr_daily_report_subjects ds
+    JOIN dr_daily_reports dr ON dr.id = ds.report_id
+    LEFT JOIN dr_subject_private_notes pn
+      ON pn.subject_id = ds.id AND pn.student_id = ${studentId}
+    WHERE dr.student_id = ${studentId}
+      AND ds.learning_area_id = ${learningAreaId}
+      AND dr.status != 'draft'
+      AND (
+        ds.audience_type = 'all'
+        OR EXISTS (
+          SELECT 1 FROM dr_subject_audiences sa
+          WHERE sa.subject_id = ds.id AND sa.student_id = ${studentId}
+        )
+      )
+    ORDER BY dr.report_date DESC
+    LIMIT 40
+  `;
+
+  return {
+    ok: true,
+    items: (
+      rows as {
+        reportDate: string;
+        topic: string | null;
+        activities: string | null;
+        homeworkGiven: boolean | null;
+        homework: string | null;
+        homeworkDueDate: string | null;
+        noteToParents: string | null;
+        privateNote: string | null;
+        atlSkills: unknown;
+        characters: unknown;
+      }[]
+    ).map((r) => ({
+      reportDate: normalizeDate(r.reportDate),
+      topic: r.topic ?? null,
+      activities: r.activities ?? null,
+      homeworkGiven: Boolean(r.homeworkGiven) || Boolean(r.homework?.trim()),
+      homework: r.homework ?? null,
+      homeworkDueDate: r.homeworkDueDate ? normalizeDate(r.homeworkDueDate) : null,
+      atlSkills: toStringArray(r.atlSkills),
+      characters: toStringArray(r.characters),
+      privateNote: r.privateNote ?? null,
+      noteToParents: r.noteToParents ?? null,
     })),
   };
 }

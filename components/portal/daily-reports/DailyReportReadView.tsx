@@ -35,6 +35,18 @@ function displayName(name: string, nameId: string | null, lang: Lang): string {
   return name;
 }
 
+const ATL_LABELS: Record<string, string> = {
+  thinking: "Thinking",
+  social: "Social",
+  communication: "Communication",
+  self_management: "Self-management",
+  research: "Research",
+};
+
+function atlSkillLabel(skill: string): string {
+  return ATL_LABELS[skill] ?? skill;
+}
+
 const TILAWAH_METHOD_LABELS: Record<DailyReportTilawah["method"], string> = {
   quran: "Quran",
   iqra: "Iqra",
@@ -380,41 +392,89 @@ export function DailyReportReadView({ report, lang }: Props) {
           headerClassName="bg-gradient-to-r from-indigo-500 to-blue-600"
         >
           <ul className="space-y-4">
-            {report.subjects.map((s, i) => (
-              <li
-                key={i}
-                className="space-y-2 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
-              >
-                <p className="text-[15px] font-bold text-slate-900">{s.subjectName}</p>
-                <ReadOnlyField label={t(lang, "drSubjectTopic")} value={s.topic} />
-                {s.dailyScore != null || s.scoreLabel ? (
+            {report.subjects.map((s, i) => {
+              const subjectLabel = displayName(s.subjectName, s.subjectNameId, lang);
+              const atlLabels = s.atlSkills.map(atlSkillLabel);
+              const noteValue = s.noteToParents || s.teacherNote;
+              return (
+                <li
+                  key={i}
+                  className="space-y-2 pb-4 border-b border-slate-100 last:border-0 last:pb-0"
+                >
+                  <p className="text-[15px] font-bold text-slate-900">{subjectLabel}</p>
+                  <ReadOnlyField label={t(lang, "drSubjectTopic")} value={s.topic} />
                   <ReadOnlyField
-                    label={t(lang, "drSubjectScore")}
-                    value={
-                      [s.dailyScore != null ? String(s.dailyScore) : null, s.scoreLabel]
-                        .filter(Boolean)
-                        .join(" · ") || null
-                    }
+                    label={t(lang, "drSubjectActivities")}
+                    value={s.activities}
+                    multiline
                   />
-                ) : null}
-                <ReadOnlyField
-                  label={t(lang, "drSubjectNote")}
-                  value={s.teacherNote}
-                  multiline
-                />
-                <ReadOnlyField
-                  label={t(lang, "drSubjectHomework")}
-                  value={s.homework}
-                  multiline
-                />
-                {s.homeworkDueDate ? (
-                  <ReadOnlyField
-                    label={t(lang, "drSubjectHomeworkDue")}
-                    value={s.homeworkDueDate}
-                  />
-                ) : null}
-              </li>
-            ))}
+                  {s.dailyScore != null || s.scoreLabel ? (
+                    <ReadOnlyField
+                      label={t(lang, "drSubjectScore")}
+                      value={
+                        [s.dailyScore != null ? String(s.dailyScore) : null, s.scoreLabel]
+                          .filter(Boolean)
+                          .join(" · ") || null
+                      }
+                    />
+                  ) : null}
+                  {s.homeworkGiven || s.homework ? (
+                    <>
+                      <ReadOnlyField
+                        label={t(lang, "drSubjectHomework")}
+                        value={s.homework}
+                        multiline
+                      />
+                      {s.homeworkDueDate ? (
+                        <ReadOnlyField
+                          label={t(lang, "drSubjectHomeworkDue")}
+                          value={s.homeworkDueDate}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+                  {atlLabels.length > 0 ? (
+                    <div>
+                      <FieldLabel>{t(lang, "drSubjectAtl")}</FieldLabel>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {atlLabels.map((label) => (
+                          <span
+                            key={label}
+                            className="rounded-full bg-sky-50 text-sky-800 border border-sky-100 px-2.5 py-0.5 text-xs font-semibold"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {s.characters.length > 0 ? (
+                    <div>
+                      <FieldLabel>{t(lang, "drSubjectCharacters")}</FieldLabel>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {s.characters.map((c) => (
+                          <span
+                            key={c}
+                            className="rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100 px-2.5 py-0.5 text-xs font-semibold"
+                          >
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  <ReadOnlyField label={t(lang, "drSubjectNote")} value={noteValue} multiline />
+                  {s.privateNote ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-amber-800 mb-1">
+                        {t(lang, "drSubjectPrivateNote").replace("{name}", report.studentName)}
+                      </p>
+                      <p className="text-sm text-amber-950 whitespace-pre-wrap">{s.privateNote}</p>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </ReportSectionShell>
       ) : null}

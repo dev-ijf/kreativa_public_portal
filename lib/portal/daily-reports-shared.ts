@@ -65,12 +65,47 @@ export type DailyReportMemorize = {
 
 export type DailyReportSubject = {
   subjectName: string;
+  subjectNameId: string | null;
+  learningAreaId: number | null;
   topic: string | null;
+  activities: string | null;
   teacherNote: string | null;
+  noteToParents: string | null;
   dailyScore: number | null;
   scoreLabel: string | null;
+  homeworkGiven: boolean;
   homework: string | null;
   homeworkDueDate: string | null;
+  atlSkills: string[];
+  characters: string[];
+  privateNote: string | null;
+};
+
+export type DailyReportHomeworkItem = {
+  subjectName: string;
+  subjectNameId: string | null;
+  homework: string;
+  homeworkDueDate: string;
+  assignedDate: string;
+};
+
+export type DailyReportSubjectOption = {
+  learningAreaId: number;
+  name: string;
+  nameId: string | null;
+};
+
+export type DailyReportSubjectHistoryItem = {
+  reportDate: string;
+  topic: string | null;
+  activities: string | null;
+  homeworkGiven: boolean;
+  homework: string | null;
+  homeworkDueDate: string | null;
+  atlSkills: string[];
+  characters: string[];
+  privateNote: string | null;
+  noteToParents: string | null;
 };
 
 export type DailyReportObserveOption = {
