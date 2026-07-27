@@ -50,7 +50,7 @@ export function ReportSectionShell({
   children,
 }: Props) {
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden break-inside-avoid md:mb-4 md:inline-block md:w-full">
       <div className={`px-4 py-3 text-white ${headerClassName}`}>
         <h3 className="font-bold text-sm flex items-center gap-2">
           {icon ? <span aria-hidden>{icon}</span> : null}

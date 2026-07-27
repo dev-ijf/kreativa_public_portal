@@ -329,8 +329,10 @@ export function DailyReportReadView({ report, lang }: Props) {
 
   const selectedLearningAreas = report.learningAreas.filter((la) => la.selected || la.rating != null);
 
+  // Mobile: stacked. Desktop: CSS columns (masonry) so short cards fill gaps
+  // instead of aligning to the tallest card in the same grid row.
   return (
-    <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 md:items-start">
+    <div className="space-y-4 md:space-y-0 md:columns-2 md:gap-4">
       {report.classReport ? (
         <ClassReportSection classReport={report.classReport} lang={lang} />
       ) : null}
