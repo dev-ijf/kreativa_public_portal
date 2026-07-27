@@ -44,26 +44,41 @@ function normalizeSchoolLevel(raw: unknown): DailyReportSchoolLevel {
 async function getStudentLevelInfo(studentId: number): Promise<{
   levelGradeName: string | null;
   levelOrder: number | null;
+  schoolName: string | null;
+  className: string | null;
 } | null> {
   const rows = await sql`
-    SELECT lg.name AS "levelGradeName", lg.level_order AS "levelOrder"
+    SELECT
+      lg.name AS "levelGradeName",
+      lg.level_order AS "levelOrder",
+      sc.name AS "schoolName",
+      cc.name AS "className"
     FROM core_students s
+    LEFT JOIN core_schools sc ON sc.id = s.school_id
     LEFT JOIN LATERAL (
-      SELECT ch.level_grade_id
+      SELECT ch.level_grade_id, ch.class_id
       FROM core_student_class_histories ch
       WHERE ch.student_id = s.id AND ch.status = 'active'
       ORDER BY ch.id DESC
       LIMIT 1
     ) h ON true
     LEFT JOIN core_level_grades lg ON lg.id = h.level_grade_id
+    LEFT JOIN core_classes cc ON cc.id = h.class_id
     WHERE s.id = ${studentId}
     LIMIT 1
   `;
-  const r = rows[0] as { levelGradeName?: string | null; levelOrder?: number | null } | undefined;
+  const r = rows[0] as {
+    levelGradeName?: string | null;
+    levelOrder?: number | null;
+    schoolName?: string | null;
+    className?: string | null;
+  } | undefined;
   if (!r) return null;
   return {
     levelGradeName: r.levelGradeName ?? null,
     levelOrder: r.levelOrder != null ? Number(r.levelOrder) : null,
+    schoolName: r.schoolName ?? null,
+    className: r.className ?? null,
   };
 }
 
@@ -201,7 +216,7 @@ export async function getDailyReportByDate(
       dr.class_id                 AS "classId"
     FROM dr_daily_reports dr
     JOIN core_students cs ON cs.id = dr.student_id
-    JOIN core_classes cc ON cc.id = dr.class_id
+    LEFT JOIN core_classes cc ON cc.id = dr.class_id
     LEFT JOIN dr_play_centres pc ON pc.id = dr.play_centre_id
     WHERE dr.student_id = ${studentId}
       AND dr.report_date = ${date}::date

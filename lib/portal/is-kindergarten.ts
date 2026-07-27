@@ -96,9 +96,23 @@ function isSecondaryCampusOrLevel(child: DailyReportLevelCheckInput): boolean {
   );
 }
 
+/** Campus name indicates Kindergarten / Early Years. */
+function isKindergartenSchoolName(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const n = String(name).trim();
+  if (isSecondaryOrHsSchoolName(n)) return false;
+  return (
+    /\bkindergarten\b/i.test(n) ||
+    /\bearly\s*years?\b/i.test(n) ||
+    /\btk\b/i.test(n) ||
+    /\bnursery\b/i.test(n)
+  );
+}
+
 /** True when the student is in kindergarten (TK / EY / K1–K2 / level_order ≤ 0). */
 export function isKindergartenStudent(child: KindergartenCheckInput): boolean {
   if (isSecondaryCampusOrLevel(child)) return false;
+  if (isKindergartenSchoolName(child.schoolName)) return true;
   if (child.levelOrder != null && child.levelOrder <= 0) return true;
   return isKgLevelName(child.levelGradeName) || isTkLevelName(child.levelGradeName);
 }

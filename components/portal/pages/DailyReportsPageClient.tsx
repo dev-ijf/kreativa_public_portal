@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
@@ -82,6 +82,7 @@ export function DailyReportsPageClient() {
   const [subjectHistory, setSubjectHistory] = useState<DailyReportSubjectHistoryItem[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const autoSelectedKeyRef = useRef<string | null>(null);
 
   const loadCalendar = useCallback(async () => {
     if (!activeChildId) {
@@ -223,8 +224,33 @@ export function DailyReportsPageClient() {
   }, [activeChildId, selectedLaId]);
 
   useEffect(() => {
+    autoSelectedKeyRef.current = null;
+    setSelectedDate(todayISO());
+  }, [activeChildId]);
+
+  useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
+
+  // If today has no report, open the latest submitted day in the month once.
+  useEffect(() => {
+    if (loadingCal || !activeChildId || calendarDays.length === 0) return;
+    const key = `${activeChildId}-${calYear}-${calMonth0}`;
+    if (autoSelectedKeyRef.current === key) return;
+
+    const today = todayISO();
+    const todayHasReport = calendarDays.some((d) => d.date === today && d.hasReport);
+    autoSelectedKeyRef.current = key;
+    if (todayHasReport) {
+      if (selectedDate !== today) setSelectedDate(today);
+      return;
+    }
+
+    const latest = [...calendarDays].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (latest?.date && latest.date !== selectedDate) {
+      setSelectedDate(latest.date);
+    }
+  }, [loadingCal, calendarDays, activeChildId, calYear, calMonth0, selectedDate]);
 
   useEffect(() => {
     void loadDay();
@@ -337,42 +363,49 @@ export function DailyReportsPageClient() {
               </div>
             ) : null}
 
-            <PortalMonthCalendar
-              lang={lang}
-              calYear={calYear}
-              calMonth0={calMonth0}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onShiftMonth={shiftMonth}
-              days={calendarEntries}
-              loading={loadingCal}
-              todayISO={todayISO()}
-              legendKeys={DR_LEGEND_KEYS}
-            />
-
-            {loadingDay ? (
-              <p className="text-center text-sm text-slate-400 py-6">…</p>
-            ) : isFuture ? null : !report ? (
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
-                <p className="text-sm text-slate-500">{t(lang, "drEmptyDay")}</p>
-              </div>
-            ) : (
-              <>
-                <DailyReportReadView report={report} lang={lang} />
-                <ParentCornerSection
-                  report={report}
+            {/* Mobile: stacked · Desktop: calendar left + report right */}
+            <div className="md:grid md:grid-cols-[340px_1fr] md:gap-6 md:items-start space-y-4 md:space-y-0">
+              <div className="space-y-3 md:sticky md:top-20">
+                <PortalMonthCalendar
                   lang={lang}
-                  studentId={activeChildId}
+                  calYear={calYear}
+                  calMonth0={calMonth0}
                   selectedDate={selectedDate}
-                  onUpdated={(next) => {
-                    setReport(next);
-                    void loadCalendar();
-                    void loadSummary();
-                    void loadHomework();
-                  }}
+                  onSelectDate={setSelectedDate}
+                  onShiftMonth={shiftMonth}
+                  days={calendarEntries}
+                  loading={loadingCal}
+                  todayISO={todayISO()}
+                  legendKeys={DR_LEGEND_KEYS}
                 />
-              </>
-            )}
+              </div>
+
+              <div className="space-y-4 min-w-0">
+                {loadingDay ? (
+                  <p className="text-center text-sm text-slate-400 py-6">…</p>
+                ) : isFuture ? null : !report ? (
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
+                    <p className="text-sm text-slate-500">{t(lang, "drEmptyDay")}</p>
+                  </div>
+                ) : (
+                  <>
+                    <DailyReportReadView report={report} lang={lang} />
+                    <ParentCornerSection
+                      report={report}
+                      lang={lang}
+                      studentId={activeChildId}
+                      selectedDate={selectedDate}
+                      onUpdated={(next) => {
+                        setReport(next);
+                        void loadCalendar();
+                        void loadSummary();
+                        void loadHomework();
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
 
