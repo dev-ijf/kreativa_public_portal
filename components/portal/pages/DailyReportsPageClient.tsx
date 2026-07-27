@@ -363,8 +363,8 @@ export function DailyReportsPageClient() {
               </div>
             ) : null}
 
-            {/* Mobile: stacked · Desktop: calendar left + report right */}
-            <div className="md:grid md:grid-cols-[340px_1fr] md:gap-6 md:items-start space-y-4 md:space-y-0">
+            {/* Mobile: stacked · Desktop: calendar | report col | report col */}
+            <div className="md:grid md:grid-cols-[280px_1fr] md:gap-4 md:items-start space-y-4 md:space-y-0">
               <div className="space-y-3 md:sticky md:top-20">
                 <PortalMonthCalendar
                   lang={lang}

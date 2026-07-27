@@ -330,7 +330,7 @@ export function DailyReportReadView({ report, lang }: Props) {
   const selectedLearningAreas = report.learningAreas.filter((la) => la.selected || la.rating != null);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 md:items-start">
       {report.classReport ? (
         <ClassReportSection classReport={report.classReport} lang={lang} />
       ) : null}
