@@ -6,6 +6,59 @@ function Bone({ className }: { className?: string }) {
   );
 }
 
+/** Daily Reports — day tab content skeleton (right of calendar). */
+export function DailyReportsDaySkeleton() {
+  return (
+    <div className="space-y-4 md:columns-2 md:gap-4 md:space-y-0" aria-busy="true" aria-live="polite">
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden break-inside-avoid md:mb-4 md:inline-block md:w-full"
+        >
+          <Bone className="h-11 w-full rounded-none" />
+          <div className="p-4 space-y-3">
+            <Bone className="h-3 w-24" />
+            <Bone className="h-10 w-full rounded-2xl" />
+            <Bone className="h-10 w-full rounded-2xl" />
+            <Bone className="h-8 w-2/3 rounded-2xl" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Daily Reports — summary tab content skeleton (right of calendar). */
+export function DailyReportsSummarySkeleton() {
+  return (
+    <div className="space-y-4 md:columns-2 md:gap-4 md:space-y-0" aria-busy="true" aria-live="polite">
+      <div className="break-inside-avoid md:mb-4 md:inline-block md:w-full space-y-2">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-2"
+          >
+            <Bone className="h-3 w-20 mx-auto" />
+            <Bone className="h-8 w-12 mx-auto" />
+          </div>
+        ))}
+      </div>
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 break-inside-avoid md:mb-4 md:inline-block md:w-full space-y-4">
+        <Bone className="h-5 w-40" />
+        <Bone className="h-3 w-full" />
+        <Bone className="h-2 w-full rounded-full" />
+        <Bone className="h-3 w-3/4" />
+        <Bone className="h-2 w-3/4 rounded-full" />
+      </div>
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 break-inside-avoid md:mb-4 md:inline-block md:w-full space-y-3">
+        <Bone className="h-5 w-36" />
+        <Bone className="h-8 w-full rounded-2xl" />
+        <Bone className="h-8 w-full rounded-2xl" />
+      </div>
+    </div>
+  );
+}
+
 /** Right-column skeleton for Secondary Daily habits form. */
 export function SecondaryDailyFormSkeleton() {
   return (

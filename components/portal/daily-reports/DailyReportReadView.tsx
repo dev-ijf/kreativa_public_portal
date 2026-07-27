@@ -576,6 +576,28 @@ export function DailyReportReadView({ report, lang }: Props) {
         </ReportSectionShell>
       ) : null}
 
+      {report.schoolLevel === "kindergarten" &&
+      (report.sleepTime || report.wakeTime || report.readingTogether) ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionHomeRoutine")}
+          icon="🏠"
+          headerClassName="bg-gradient-to-r from-teal-500 to-cyan-600"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <ReadOnlyField label={t(lang, "drSleepTime")} value={report.sleepTime} />
+            <ReadOnlyField label={t(lang, "drWakeTime")} value={report.wakeTime} />
+          </div>
+          <ReadOnlyPills
+            label={t(lang, "drReadingTogether")}
+            options={[
+              { value: "yes", label: lang === "id" ? "Ya" : "Yes" },
+              { value: "no", label: lang === "id" ? "Tidak" : "No" },
+            ]}
+            selected={report.readingTogether ? "yes" : "no"}
+          />
+        </ReportSectionShell>
+      ) : null}
+
       {!isPrimary ? (
         <ReportSectionShell
           title={t(lang, "drSectionMood")}

@@ -50,17 +50,45 @@ export async function PATCH(request: Request) {
         ? body.parent_read_confirmed
         : undefined;
 
+  const sleepTime =
+    body.sleepTime !== undefined
+      ? typeof body.sleepTime === 'string'
+        ? body.sleepTime
+        : body.sleepTime === null
+          ? null
+          : undefined
+      : undefined;
+  const wakeTime =
+    body.wakeTime !== undefined
+      ? typeof body.wakeTime === 'string'
+        ? body.wakeTime
+        : body.wakeTime === null
+          ? null
+          : undefined
+      : undefined;
+  const readingTogether =
+    typeof body.readingTogether === 'boolean' ? body.readingTogether : undefined;
+
   if (!Number.isFinite(studentId) || !date) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
-  if (parentMessage === undefined && parentReadConfirmed === undefined) {
+  if (
+    parentMessage === undefined &&
+    parentReadConfirmed === undefined &&
+    sleepTime === undefined &&
+    wakeTime === undefined &&
+    readingTogether === undefined
+  ) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
   const result = await updateDailyReportParentCorner(userId, role, studentId, date, {
     parentMessage,
     parentReadConfirmed,
+    sleepTime,
+    wakeTime,
+    readingTogether,
   });
 
   if (!result.ok) {

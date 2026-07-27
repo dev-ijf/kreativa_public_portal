@@ -152,6 +152,10 @@ export type DailyReportFull = {
   waterIntake: 'good' | 'not_enough' | null;
   healthNote: string | null;
   mood: 'very_happy' | 'happy' | 'neutral' | 'sad' | 'fussy' | null;
+  /** KG parent routine (HH:MM) */
+  sleepTime: string | null;
+  wakeTime: string | null;
+  readingTogether: boolean;
   shineMoment: string | null;
   teacherNarrative: string | null;
   homeGuidance: string | null;

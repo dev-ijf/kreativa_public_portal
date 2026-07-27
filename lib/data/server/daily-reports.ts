@@ -204,6 +204,9 @@ export async function getDailyReportByDate(
       dr.water_intake             AS "waterIntake",
       dr.health_note              AS "healthNote",
       dr.mood,
+      to_char(dr.sleep_time, 'HH24:MI') AS "sleepTime",
+      to_char(dr.wake_time, 'HH24:MI')  AS "wakeTime",
+      COALESCE(dr.reading_together, false) AS "readingTogether",
       dr.shine_moment             AS "shineMoment",
       dr.teacher_narrative        AS "teacherNarrative",
       dr.home_guidance            AS "homeGuidance",
@@ -623,6 +626,9 @@ export async function getDailyReportByDate(
     waterIntake: (h.waterIntake as DailyReportFull['waterIntake']) ?? null,
     healthNote: (h.healthNote as string | null) ?? null,
     mood: (h.mood as DailyReportFull['mood']) ?? null,
+    sleepTime: (h.sleepTime as string | null) ?? null,
+    wakeTime: (h.wakeTime as string | null) ?? null,
+    readingTogether: Boolean(h.readingTogether),
     shineMoment: (h.shineMoment as string | null) ?? null,
     teacherNarrative: (h.teacherNarrative as string | null) ?? null,
     homeGuidance: (h.homeGuidance as string | null) ?? null,
@@ -665,7 +671,16 @@ export async function getDailyReportByDate(
 export type ParentCornerUpdate = {
   parentMessage?: string | null;
   parentReadConfirmed?: boolean;
+  sleepTime?: string | null;
+  wakeTime?: string | null;
+  readingTogether?: boolean;
 };
+
+function normalizeTimeHHMM(v: string | null | undefined): string | null {
+  if (v == null || v === '') return null;
+  const m = String(v).match(/^(\d{2}:\d{2})/);
+  return m ? m[1] : null;
+}
 
 export async function updateDailyReportParentCorner(
   viewerUserId: number,
@@ -693,6 +708,9 @@ export async function updateDailyReportParentCorner(
     return { ok: false, reason: level.reason === 'not_found' ? 'not_found' : 'unsupported_level' };
   }
 
+  const studentInfo = await getStudentLevelInfo(studentId);
+  const isKg = studentInfo ? isKindergartenStudent(studentInfo) : false;
+
   const existing = await sql`
     SELECT id
     FROM dr_daily_reports
@@ -711,6 +729,46 @@ export async function updateDailyReportParentCorner(
       : undefined;
 
   const readConfirmed = input.parentReadConfirmed;
+  const sleepTime =
+    isKg && input.sleepTime !== undefined ? normalizeTimeHHMM(input.sleepTime) : undefined;
+  const wakeTime =
+    isKg && input.wakeTime !== undefined ? normalizeTimeHHMM(input.wakeTime) : undefined;
+  const readingTogether =
+    isKg && input.readingTogether !== undefined ? Boolean(input.readingTogether) : undefined;
+
+  if (sleepTime !== undefined || wakeTime !== undefined || readingTogether !== undefined) {
+    const [cur] = await sql`
+      SELECT
+        to_char(sleep_time, 'HH24:MI') AS "sleepTime",
+        to_char(wake_time, 'HH24:MI') AS "wakeTime",
+        COALESCE(reading_together, false) AS "readingTogether"
+      FROM dr_daily_reports
+      WHERE id = ${row.id}
+      LIMIT 1
+    `;
+    const nextSleep =
+      sleepTime !== undefined
+        ? sleepTime
+        : ((cur as { sleepTime?: string | null } | undefined)?.sleepTime ?? null);
+    const nextWake =
+      wakeTime !== undefined
+        ? wakeTime
+        : ((cur as { wakeTime?: string | null } | undefined)?.wakeTime ?? null);
+    const nextReading =
+      readingTogether !== undefined
+        ? readingTogether
+        : Boolean((cur as { readingTogether?: boolean } | undefined)?.readingTogether);
+    await sql`
+      UPDATE dr_daily_reports
+      SET
+        sleep_time = ${nextSleep}::time,
+        wake_time = ${nextWake}::time,
+        reading_together = ${nextReading},
+        updated_at = now()
+      WHERE id = ${row.id}
+        AND student_id = ${studentId}
+    `;
+  }
 
   if (message !== undefined && readConfirmed === true) {
     await sql`

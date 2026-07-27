@@ -38,20 +38,45 @@ export function ParentCornerSection({
   onUpdated,
   disabled,
 }: Props) {
+  const isKg = report.schoolLevel === "kindergarten";
   const [message, setMessage] = useState(report.parentMessage ?? "");
   const [readConfirmed, setReadConfirmed] = useState(report.parentReadConfirmed);
+  const [sleepTime, setSleepTime] = useState(report.sleepTime ?? "");
+  const [wakeTime, setWakeTime] = useState(report.wakeTime ?? "");
+  const [readingTogether, setReadingTogether] = useState(Boolean(report.readingTogether));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const lastSaved = useRef(JSON.stringify({ message: report.parentMessage ?? "", readConfirmed: report.parentReadConfirmed }));
+  const lastSaved = useRef(
+    JSON.stringify({
+      message: report.parentMessage ?? "",
+      readConfirmed: report.parentReadConfirmed,
+      sleepTime: report.sleepTime ?? "",
+      wakeTime: report.wakeTime ?? "",
+      readingTogether: Boolean(report.readingTogether),
+    })
+  );
 
   useEffect(() => {
     setMessage(report.parentMessage ?? "");
     setReadConfirmed(report.parentReadConfirmed);
+    setSleepTime(report.sleepTime ?? "");
+    setWakeTime(report.wakeTime ?? "");
+    setReadingTogether(Boolean(report.readingTogether));
     lastSaved.current = JSON.stringify({
       message: report.parentMessage ?? "",
       readConfirmed: report.parentReadConfirmed,
+      sleepTime: report.sleepTime ?? "",
+      wakeTime: report.wakeTime ?? "",
+      readingTogether: Boolean(report.readingTogether),
     });
-  }, [report.id, report.parentMessage, report.parentReadConfirmed]);
+  }, [
+    report.id,
+    report.parentMessage,
+    report.parentReadConfirmed,
+    report.sleepTime,
+    report.wakeTime,
+    report.readingTogether,
+  ]);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -63,8 +88,16 @@ export function ParentCornerSection({
   }, [confirmOpen]);
 
   const isDirty = useMemo(() => {
-    return JSON.stringify({ message, readConfirmed }) !== lastSaved.current;
-  }, [message, readConfirmed]);
+    return (
+      JSON.stringify({
+        message,
+        readConfirmed,
+        sleepTime,
+        wakeTime,
+        readingTogether,
+      }) !== lastSaved.current
+    );
+  }, [message, readConfirmed, sleepTime, wakeTime, readingTogether]);
 
   const teacherDisplay = report.teacherNames.length
     ? report.teacherNames.join(", ")
@@ -84,6 +117,13 @@ export function ParentCornerSection({
           date: selectedDate,
           parentMessage: message,
           parentReadConfirmed: readConfirmed,
+          ...(isKg
+            ? {
+                sleepTime: sleepTime || null,
+                wakeTime: wakeTime || null,
+                readingTogether,
+              }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -94,9 +134,15 @@ export function ParentCornerSection({
       onUpdated(data.report);
       setMessage(data.report.parentMessage ?? "");
       setReadConfirmed(data.report.parentReadConfirmed);
+      setSleepTime(data.report.sleepTime ?? "");
+      setWakeTime(data.report.wakeTime ?? "");
+      setReadingTogether(Boolean(data.report.readingTogether));
       lastSaved.current = JSON.stringify({
         message: data.report.parentMessage ?? "",
         readConfirmed: data.report.parentReadConfirmed,
+        sleepTime: data.report.sleepTime ?? "",
+        wakeTime: data.report.wakeTime ?? "",
+        readingTogether: Boolean(data.report.readingTogether),
       });
       setSaveState("saved");
       window.setTimeout(() => setSaveState("idle"), 1500);
@@ -105,10 +151,70 @@ export function ParentCornerSection({
       setSaveState("error");
       return false;
     }
-  }, [studentId, selectedDate, message, readConfirmed, onUpdated]);
+  }, [
+    studentId,
+    selectedDate,
+    message,
+    readConfirmed,
+    sleepTime,
+    wakeTime,
+    readingTogether,
+    isKg,
+    onUpdated,
+  ]);
 
   return (
     <>
+      {isKg ? (
+        <ReportSectionShell
+          title={t(lang, "drSectionHomeRoutine")}
+          icon="🏠"
+          headerClassName="bg-gradient-to-r from-teal-500 to-cyan-600"
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <FieldLabel htmlFor="dr-sleep">{t(lang, "drSleepTime")}</FieldLabel>
+              <input
+                id="dr-sleep"
+                type="time"
+                value={sleepTime}
+                disabled={disabled}
+                onChange={(e) => setSleepTime(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-[15px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+              />
+            </div>
+            <div>
+              <FieldLabel htmlFor="dr-wake">{t(lang, "drWakeTime")}</FieldLabel>
+              <input
+                id="dr-wake"
+                type="time"
+                value={wakeTime}
+                disabled={disabled}
+                onChange={(e) => setWakeTime(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-[15px] text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+              />
+            </div>
+          </div>
+          <label
+            className={[
+              "flex items-start gap-3 p-4 rounded-2xl border border-slate-200 bg-slate-50 transition-colors",
+              disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/30",
+            ].join(" ")}
+          >
+            <input
+              type="checkbox"
+              checked={readingTogether}
+              disabled={disabled}
+              onChange={(e) => setReadingTogether(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 rounded-md border-slate-300 text-primary focus:ring-primary/30"
+            />
+            <span className="text-[15px] font-semibold text-slate-900 leading-snug">
+              {t(lang, "drReadingTogether")}
+            </span>
+          </label>
+        </ReportSectionShell>
+      ) : null}
+
       <ReportSectionShell
         title={t(lang, "drSectionParentCorner")}
         icon="👪"

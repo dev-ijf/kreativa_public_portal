@@ -11,6 +11,10 @@ import {
 } from "@/components/portal/shared/PortalMonthCalendar";
 import { DailyReportReadView } from "@/components/portal/daily-reports/DailyReportReadView";
 import { ParentCornerSection } from "@/components/portal/daily-reports/ParentCornerSection";
+import {
+  DailyReportsDaySkeleton,
+  DailyReportsSummarySkeleton,
+} from "@/components/portal/habits/HabitsLoadingSkeleton";
 import type {
   DailyReportCalendarDay,
   DailyReportFull,
@@ -382,7 +386,7 @@ export function DailyReportsPageClient() {
 
               <div className="space-y-4 min-w-0">
                 {loadingDay ? (
-                  <p className="text-center text-sm text-slate-400 py-6">…</p>
+                  <DailyReportsDaySkeleton />
                 ) : isFuture ? null : !report ? (
                   <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
                     <p className="text-sm text-slate-500">{t(lang, "drEmptyDay")}</p>
@@ -494,95 +498,101 @@ export function DailyReportsPageClient() {
         ) : null}
 
         {tab === "summary" && activeChildId ? (
-          <div className="mt-4 space-y-4">
-            <PortalMonthCalendar
-              lang={lang}
-              calYear={calYear}
-              calMonth0={calMonth0}
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
-              onShiftMonth={shiftMonth}
-              days={calendarEntries}
-              loading={loadingCal}
-              todayISO={todayISO()}
-              legendKeys={DR_LEGEND_KEYS}
-              showFutureWarning={false}
-            />
+          <div className="mt-4 md:grid md:grid-cols-[280px_1fr] md:gap-4 md:items-start space-y-4 md:space-y-0">
+            <div className="space-y-3 md:sticky md:top-20">
+              <PortalMonthCalendar
+                lang={lang}
+                calYear={calYear}
+                calMonth0={calMonth0}
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                onShiftMonth={shiftMonth}
+                days={calendarEntries}
+                loading={loadingCal}
+                todayISO={todayISO()}
+                legendKeys={DR_LEGEND_KEYS}
+                showFutureWarning={false}
+              />
+            </div>
 
-            {loadingSummary ? (
-              <p className="text-center text-sm text-slate-400 py-6">…</p>
-            ) : !summary || summary.daysReported === 0 ? (
-              <p className="text-center text-sm text-slate-500 py-4">{t(lang, "drSummaryEmpty")}</p>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      {t(lang, "drSummaryDays")}
-                    </p>
-                    <p className="text-2xl font-black text-slate-800 mt-1">{summary.daysReported}</p>
+            <div className="min-w-0">
+              {loadingSummary ? (
+                <DailyReportsSummarySkeleton />
+              ) : !summary || summary.daysReported === 0 ? (
+                <p className="text-center text-sm text-slate-500 py-4">{t(lang, "drSummaryEmpty")}</p>
+              ) : (
+                <div className="space-y-4 md:space-y-0 md:columns-2 md:gap-4">
+                  <div className="grid grid-cols-3 gap-2 break-inside-avoid md:mb-4 md:inline-block md:w-full md:grid-cols-1">
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">
+                        {t(lang, "drSummaryDays")}
+                      </p>
+                      <p className="text-2xl font-black text-slate-800 mt-1">{summary.daysReported}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">
+                        {t(lang, "drSummaryRead")}
+                      </p>
+                      <p className="text-2xl font-black text-slate-800 mt-1">{summary.daysReadByParent}</p>
+                    </div>
+                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">
+                        {t(lang, "drSummaryReadRate")}
+                      </p>
+                      <p className="text-2xl font-black text-primary mt-1">{summary.readRatePct}%</p>
+                    </div>
                   </div>
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      {t(lang, "drSummaryRead")}
-                    </p>
-                    <p className="text-2xl font-black text-slate-800 mt-1">{summary.daysReadByParent}</p>
-                  </div>
-                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">
-                      {t(lang, "drSummaryReadRate")}
-                    </p>
-                    <p className="text-2xl font-black text-primary mt-1">{summary.readRatePct}%</p>
-                  </div>
+
+                  {summary.learningAreas.length > 0 ? (
+                    <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 break-inside-avoid md:mb-4 md:inline-block md:w-full">
+                      <h3 className="font-bold text-slate-700 mb-4">{t(lang, "drSummaryLearningAreas")}</h3>
+                      <ul className="space-y-3">
+                        {summary.learningAreas.map((la) => (
+                          <li key={la.name}>
+                            <div className="flex justify-between text-xs font-medium text-slate-600 mb-1 gap-2">
+                              <span className="min-w-0 truncate">
+                                {lang === "id" && la.nameId ? la.nameId : la.name}
+                              </span>
+                              <span className="shrink-0">
+                                {la.avgRating.toFixed(1)} ★ ({la.totalObservations})
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-primary transition-all"
+                                style={{ width: `${Math.round((la.avgRating / 3) * 100)}%` }}
+                              />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {summary.moods.length > 0 ? (
+                    <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 break-inside-avoid md:mb-4 md:inline-block md:w-full">
+                      <h3 className="font-bold text-slate-700 mb-4">{t(lang, "drSummaryMoods")}</h3>
+                      <ul className="space-y-2">
+                        {summary.moods.map((m) => (
+                          <li
+                            key={m.mood}
+                            className="flex items-center justify-between text-sm text-slate-600"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span aria-hidden>
+                                {MOOD_EMOJI[m.mood as keyof typeof MOOD_EMOJI] ?? "•"}
+                              </span>
+                              {moodLabel(m.mood, lang)}
+                            </span>
+                            <span className="font-bold text-slate-800">{m.count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
-
-                {summary.learningAreas.length > 0 ? (
-                  <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-                    <h3 className="font-bold text-slate-700 mb-4">{t(lang, "drSummaryLearningAreas")}</h3>
-                    <ul className="space-y-3">
-                      {summary.learningAreas.map((la) => (
-                        <li key={la.name}>
-                          <div className="flex justify-between text-xs font-medium text-slate-600 mb-1">
-                            <span>{lang === "id" && la.nameId ? la.nameId : la.name}</span>
-                            <span>
-                              {la.avgRating.toFixed(1)} ★ ({la.totalObservations})
-                            </span>
-                          </div>
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-primary transition-all"
-                              style={{ width: `${Math.round((la.avgRating / 3) * 100)}%` }}
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {summary.moods.length > 0 ? (
-                  <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-                    <h3 className="font-bold text-slate-700 mb-4">{t(lang, "drSummaryMoods")}</h3>
-                    <ul className="space-y-2">
-                      {summary.moods.map((m) => (
-                        <li
-                          key={m.mood}
-                          className="flex items-center justify-between text-sm text-slate-600"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span aria-hidden>
-                              {MOOD_EMOJI[m.mood as keyof typeof MOOD_EMOJI] ?? "•"}
-                            </span>
-                            {moodLabel(m.mood, lang)}
-                          </span>
-                          <span className="font-bold text-slate-800">{m.count}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </>
-            )}
+              )}
+            </div>
           </div>
         ) : null}
       </div>
