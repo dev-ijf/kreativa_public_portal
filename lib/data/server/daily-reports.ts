@@ -237,6 +237,9 @@ export async function getDailyReportByDate(
       ? await getTeacherNamesForClass(classId, studentId)
       : [];
 
+  // Avoid null schoolId params (Neon: "could not determine data type of parameter").
+  const schoolIdFilter = schoolId ?? -1;
+
   const charRows = await sql`
     SELECT
       mc.name,
@@ -247,23 +250,44 @@ export async function getDailyReportByDate(
       ) AS selected
     FROM dr_muslim_characters mc
     WHERE mc.is_active = true
-      AND (mc.school_id IS NULL OR mc.school_id = ${schoolId})
+      AND (mc.school_id IS NULL OR mc.school_id = ${schoolIdFilter})
     ORDER BY mc.sort_order
   `;
 
-  const playCentreRows =
-    schoolLevel === 'kindergarten'
-      ? await sql`
-          SELECT
-            pc.name,
-            pc.name_id AS "nameId",
-            (pc.id = ${playCentreId}) AS selected
-          FROM dr_play_centres pc
-          WHERE pc.is_active = true
-            AND (pc.school_id = ${schoolId} OR ${schoolId} IS NULL)
-          ORDER BY pc.sort_order
-        `
-      : [];
+  // Neon cannot infer types for null params in `pc.id = ${null}` / `${schoolId} IS NULL`.
+  // Use a non-matching sentinel id when unset, and branch school filter in JS.
+  let playCentreRows: { name: string; nameId: string | null; selected: boolean }[] = [];
+  if (schoolLevel === 'kindergarten') {
+    const selectedPlayCentreId = playCentreId ?? -1;
+    const pcRows =
+      schoolId == null
+        ? await sql`
+            SELECT
+              pc.name,
+              pc.name_id AS "nameId",
+              (pc.id = ${selectedPlayCentreId}) AS selected
+            FROM dr_play_centres pc
+            WHERE pc.is_active = true
+            ORDER BY pc.sort_order
+          `
+        : await sql`
+            SELECT
+              pc.name,
+              pc.name_id AS "nameId",
+              (pc.id = ${selectedPlayCentreId}) AS selected
+            FROM dr_play_centres pc
+            WHERE pc.is_active = true
+              AND pc.school_id = ${schoolId}
+            ORDER BY pc.sort_order
+          `;
+    playCentreRows = (
+      pcRows as { name: string; nameId: string | null; selected: boolean }[]
+    ).map((r) => ({
+      name: r.name,
+      nameId: r.nameId ?? null,
+      selected: Boolean(r.selected),
+    }));
+  }
 
   const laRows = await sql`
     SELECT
@@ -276,7 +300,7 @@ export async function getDailyReportByDate(
       ON rla.area_id = la.id AND rla.report_id = ${reportId}
     WHERE la.is_active = true
       AND (la.school_level = ${schoolLevel} OR la.school_level = 'all')
-      AND (la.school_id IS NULL OR la.school_id = ${schoolId})
+      AND (la.school_id IS NULL OR la.school_id = ${schoolIdFilter})
     ORDER BY la.sort_order
   `;
 
@@ -421,7 +445,7 @@ export async function getDailyReportByDate(
       JOIN dr_observe_options o ON o.domain_id = d.id AND o.is_active = true
       WHERE d.is_active = true
         AND (d.school_level = 'primary' OR d.school_level = 'all')
-        AND (d.school_id IS NULL OR d.school_id = ${schoolId})
+        AND (d.school_id IS NULL OR d.school_id = ${schoolIdFilter})
       ORDER BY d.sort_order, o.sort_order, o.id
     `;
 
@@ -616,13 +640,7 @@ export async function getDailyReportByDate(
         selected: Boolean(r.selected),
       }),
     ),
-    playCentres: (playCentreRows as { name: string; nameId: string | null; selected: boolean }[]).map(
-      (r) => ({
-        name: r.name,
-        nameId: r.nameId,
-        selected: Boolean(r.selected),
-      }),
-    ),
+    playCentres: playCentreRows,
     learningAreas: (
       laRows as { name: string; nameId: string | null; selected: boolean; rating: number | null }[]
     ).map((r) => ({

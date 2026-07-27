@@ -22,17 +22,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
-  const result = await getDailyReportByDate(userId, role, studentId, date);
+  try {
+    const result = await getDailyReportByDate(userId, role, studentId, date);
 
-  if (!result.ok) {
-    if (result.reason === 'bad_date') {
-      return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+    if (!result.ok) {
+      if (result.reason === 'bad_date') {
+        return NextResponse.json({ error: 'Bad request' }, { status: 400 });
+      }
+      if (result.reason === 'forbidden' || result.reason === 'unsupported_level') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      return NextResponse.json({ report: null }, { status: 200 });
     }
-    if (result.reason === 'forbidden' || result.reason === 'unsupported_level') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    return NextResponse.json({ report: null }, { status: 200 });
+
+    return NextResponse.json({ report: result.report });
+  } catch (err) {
+    console.error('[daily-reports/day]', { studentId, date, err });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-
-  return NextResponse.json({ report: result.report });
 }
