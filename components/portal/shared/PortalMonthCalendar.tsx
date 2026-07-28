@@ -169,7 +169,7 @@ export function PortalMonthCalendar({
                     "h-11 rounded-xl flex flex-col items-center justify-center text-sm font-bold relative transition-colors",
                     fut ? "text-slate-300 cursor-not-allowed bg-slate-50/60" : "",
                     !fut && sel
-                      ? "bg-primary text-white shadow-md shadow-primary/25 ring-2 ring-primary/35 z-[1]"
+                      ? "bg-primary/10 text-primary border border-primary/40 z-[1]"
                       : "",
                     !fut && !sel && hasData
                       ? "bg-emerald-50 text-emerald-950 ring-1 ring-emerald-200/90 hover:bg-emerald-100/90"
@@ -182,7 +182,9 @@ export function PortalMonthCalendar({
                     <span
                       className={[
                         "rounded-full mt-0.5 shrink-0",
-                        sel ? "h-1.5 w-1.5 bg-white" : "h-2 w-2 bg-emerald-600 ring-2 ring-emerald-200/80",
+                        sel
+                          ? "h-1.5 w-1.5 bg-primary"
+                          : "h-2 w-2 bg-emerald-600 ring-2 ring-emerald-200/80",
                       ].join(" ")}
                       aria-hidden
                     />
@@ -207,7 +209,7 @@ export function PortalMonthCalendar({
           <ul className="space-y-1.5 text-[10px] text-slate-500 leading-snug">
             <li className="flex gap-2 items-start">
               <span
-                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-primary shadow-sm ring-1 ring-primary/30"
+                className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/40"
                 aria-hidden
               />
               <span>{t(lang, legendKeys.selected)}</span>
