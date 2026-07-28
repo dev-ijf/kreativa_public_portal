@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import type { ClassReportInfo, ClassReportMedia } from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
-import { FieldCaption, FieldLabel, ReportSectionShell } from "./ReportSectionShell";
+import {
+  FieldCaption,
+  FieldLabel,
+  ReportSectionShell,
+  VALUE_BADGE_SELECTED,
+} from "./ReportSectionShell";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -396,7 +401,9 @@ export function ClassReportSection({ classReport, lang }: Props) {
         {theme ? (
           <div>
             <FieldLabel>{t(lang, "drClassTheme")}</FieldLabel>
-            <span className="inline-block bg-sky-50 text-sky-700 border border-sky-200 rounded-full px-3 py-1 text-sm font-semibold">
+            <span
+              className={`inline-block rounded-full px-3 py-1 text-sm border ${VALUE_BADGE_SELECTED}`}
+            >
               {theme}
             </span>
           </div>

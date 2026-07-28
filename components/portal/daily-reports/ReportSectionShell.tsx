@@ -80,6 +80,13 @@ export function StarRating({ rating, max = 3 }: { rating: number | null; max?: n
   );
 }
 
+/** Soft tinted chip — same as Kreativa Muslim Character (not solid header color). */
+export const VALUE_BADGE_SELECTED =
+  "font-semibold bg-primary/10 text-primary border-primary/40";
+export const VALUE_BADGE_IDLE =
+  "font-normal bg-white text-slate-400 border-slate-200";
+export const VALUE_BADGE_BASE = "px-3 py-1.5 rounded-full text-sm border";
+
 export function ReadOnlyPills({
   options,
   selected,
@@ -97,10 +104,8 @@ export function ReadOnlyPills({
           <span
             key={opt.value}
             className={[
-              "px-3 py-1.5 rounded-full text-sm border",
-              selected === opt.value
-                ? "font-semibold bg-primary text-white border-primary"
-                : "font-normal bg-white text-slate-400 border-slate-200",
+              VALUE_BADGE_BASE,
+              selected === opt.value ? VALUE_BADGE_SELECTED : VALUE_BADGE_IDLE,
             ].join(" ")}
           >
             {opt.label}
@@ -126,10 +131,8 @@ export function ReadOnlyMultiPills({
           <span
             key={opt.label}
             className={[
-              "px-3 py-1.5 rounded-full text-sm border",
-              opt.selected
-                ? "font-semibold bg-primary/10 text-primary border-primary/40"
-                : "font-normal bg-white text-slate-400 border-slate-200",
+              VALUE_BADGE_BASE,
+              opt.selected ? VALUE_BADGE_SELECTED : VALUE_BADGE_IDLE,
             ].join(" ")}
           >
             {opt.label}

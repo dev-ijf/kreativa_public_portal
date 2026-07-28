@@ -22,6 +22,7 @@ import {
   ReadOnlyPills,
   ReportSectionShell,
   StarRating,
+  VALUE_BADGE_SELECTED,
 } from "@/components/portal/daily-reports/ReportSectionShell";
 import { ClassReportSection } from "@/components/portal/daily-reports/ClassReportSection";
 
@@ -449,7 +450,7 @@ export function DailyReportReadView({ report, lang }: Props) {
                         {atlLabels.map((label) => (
                           <span
                             key={label}
-                            className="rounded-full bg-sky-50 text-sky-800 border border-sky-100 px-2.5 py-0.5 text-xs font-semibold"
+                            className={`rounded-full px-2.5 py-0.5 text-xs border ${VALUE_BADGE_SELECTED}`}
                           >
                             {label}
                           </span>
@@ -464,7 +465,7 @@ export function DailyReportReadView({ report, lang }: Props) {
                         {s.characters.map((c) => (
                           <span
                             key={c}
-                            className="rounded-full bg-emerald-50 text-emerald-800 border border-emerald-100 px-2.5 py-0.5 text-xs font-semibold"
+                            className={`rounded-full px-2.5 py-0.5 text-xs border ${VALUE_BADGE_SELECTED}`}
                           >
                             {c}
                           </span>
@@ -627,7 +628,7 @@ export function DailyReportReadView({ report, lang }: Props) {
                 className={[
                   "flex flex-col items-center justify-center px-1 py-2 rounded-2xl border text-center min-w-0",
                   report.mood === m.value
-                    ? "bg-primary/10 border-primary text-primary"
+                    ? "bg-primary/10 border-primary/40 text-primary"
                     : "bg-white border-slate-200 text-slate-400",
                 ].join(" ")}
               >
