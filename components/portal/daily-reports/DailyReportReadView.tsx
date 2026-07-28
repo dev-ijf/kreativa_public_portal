@@ -373,7 +373,8 @@ export function DailyReportReadView({ report, lang }: Props) {
         <MemorizeSection memorize={report.memorize} lang={lang} />
       ) : null}
 
-      {!isPrimary && (playCentreOptions.length > 0 || report.playCentreHighlights) ? (
+      {!isPrimary &&
+      (playCentreOptions.length > 0 || hasRichNoteContent(report.playCentreHighlights)) ? (
         <ReportSectionShell
           title={t(lang, "drSectionPlayCentre")}
           icon="🎨"
@@ -392,6 +393,7 @@ export function DailyReportReadView({ report, lang }: Props) {
             label={t(lang, "drActivityHighlights")}
             value={report.playCentreHighlights}
             multiline
+            html
           />
         </ReportSectionShell>
       ) : null}
