@@ -5,11 +5,12 @@ import Image from "next/image";
 import type { ClassReportInfo, ClassReportMedia } from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
 import {
-  FieldCaption,
   FieldLabel,
   ReportSectionShell,
   VALUE_BADGE_SELECTED,
 } from "./ReportSectionShell";
+import { RichNoteHtml } from "./RichNoteHtml";
+import { hasRichNoteContent } from "@/lib/portal/rich-note-html";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,7 +389,8 @@ export function ClassReportSection({ classReport, lang }: Props) {
   const { theme, teacherNote, media } = classReport;
   const imgs = imageItems(media);
 
-  const hasContent = theme || teacherNote || media.length > 0;
+  const noteHasContent = hasRichNoteContent(teacherNote);
+  const hasContent = theme || noteHasContent || media.length > 0;
   if (!hasContent) return null;
 
   return (
@@ -410,10 +412,10 @@ export function ClassReportSection({ classReport, lang }: Props) {
         ) : null}
 
         {/* Class teacher note */}
-        {teacherNote ? (
+        {noteHasContent ? (
           <div>
             <FieldLabel>{t(lang, "drClassTeacherNote")}</FieldLabel>
-            <FieldCaption>{teacherNote}</FieldCaption>
+            <RichNoteHtml value={teacherNote} muted />
           </div>
         ) : null}
 

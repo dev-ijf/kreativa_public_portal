@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { RichNoteHtml } from "@/components/portal/daily-reports/RichNoteHtml";
+import { hasRichNoteContent } from "@/lib/portal/rich-note-html";
 
 /** Small uppercase label above a field value. */
 export function FieldLabel({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
@@ -189,16 +191,26 @@ export function ReadOnlyField({
   label,
   value,
   multiline,
+  html,
 }: {
   label: string;
   value: string | null;
   multiline?: boolean;
+  /** When true, render TipTap/HTML via RichNoteHtml (sanitized). */
+  html?: boolean;
 }) {
   if (!value) return null;
+  if (html && !hasRichNoteContent(value)) return null;
   return (
     <div>
       <FieldLabel>{label}</FieldLabel>
-      {multiline ? <FieldValueBlock>{value}</FieldValueBlock> : <FieldValue>{value}</FieldValue>}
+      {html ? (
+        <RichNoteHtml value={value} />
+      ) : multiline ? (
+        <FieldValueBlock>{value}</FieldValueBlock>
+      ) : (
+        <FieldValue>{value}</FieldValue>
+      )}
     </div>
   );
 }

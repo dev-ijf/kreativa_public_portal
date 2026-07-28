@@ -25,6 +25,7 @@ import {
   VALUE_BADGE_SELECTED,
 } from "@/components/portal/daily-reports/ReportSectionShell";
 import { ClassReportSection } from "@/components/portal/daily-reports/ClassReportSection";
+import { hasRichNoteContent } from "@/lib/portal/rich-note-html";
 
 type Props = {
   report: DailyReportFull;
@@ -689,7 +690,8 @@ export function DailyReportReadView({ report, lang }: Props) {
 
       {isPrimary ? <StudentMediaSection media={report.studentMedia} lang={lang} /> : null}
 
-      {report.teacherHighlight || report.teacherFollowup ? (
+      {hasRichNoteContent(report.teacherHighlight) ||
+      hasRichNoteContent(report.teacherFollowup) ? (
         <ReportSectionShell
           title={t(lang, "drSectionTeacherNotes")}
           icon="📝"
@@ -698,11 +700,13 @@ export function DailyReportReadView({ report, lang }: Props) {
             label={t(lang, "drTeacherHighlight")}
             value={report.teacherHighlight}
             multiline
+            html
           />
           <ReadOnlyField
             label={t(lang, "drTeacherFollowup")}
             value={report.teacherFollowup}
             multiline
+            html
           />
         </ReportSectionShell>
       ) : null}
