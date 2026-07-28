@@ -1,8 +1,17 @@
 export type PortalTenantId = 'kreativa' | 'talenta';
 
+const GA_MEASUREMENT_IDS: Record<PortalTenantId, string> = {
+  kreativa: 'G-8LG66QLGLE',
+  talenta: 'G-432WYS41W1',
+};
+
 /** Client-side tenant from hostname (middleware sets x-tenant-id the same way). */
 export function resolvePortalTenantFromHost(hostname: string): PortalTenantId {
   return hostname.includes('talentajuara') ? 'talenta' : 'kreativa';
+}
+
+export function getGaMeasurementId(tenant: PortalTenantId): string {
+  return GA_MEASUREMENT_IDS[tenant];
 }
 
 /**
