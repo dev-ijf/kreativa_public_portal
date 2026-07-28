@@ -81,7 +81,6 @@ function TilawahSection({ tilawah, lang }: TilawahSectionProps) {
     <ReportSectionShell
       title={t(lang, "drSectionTilawah")}
       icon="📖"
-      headerClassName="bg-gradient-to-r from-teal-600 to-green-600"
     >
       <ReadOnlyPills
         label={t(lang, "drTilawahMethod")}
@@ -133,7 +132,6 @@ function MemorizeSection({ memorize, lang }: MemorizeSectionProps) {
     <ReportSectionShell
       title={t(lang, "drSectionMemorize")}
       icon="🌙"
-      headerClassName="bg-gradient-to-r from-purple-700 to-violet-600"
     >
       {memorize.length === 0 ? (
         <FieldCaption>{t(lang, "drMemorizeEmpty")}</FieldCaption>
@@ -180,7 +178,6 @@ function StudentMediaSection({
     <ReportSectionShell
       title={t(lang, "drSectionStudentMedia")}
       icon="📷"
-      headerClassName="bg-gradient-to-r from-sky-600 to-blue-600"
     >
       <div className="grid grid-cols-2 gap-2">
         {media.map((item) => {
@@ -263,7 +260,6 @@ function DailyWorshipSection({ report, lang }: Props) {
     <ReportSectionShell
       title={t(lang, "drSectionDailyWorship")}
       icon="🕌"
-      headerClassName="bg-gradient-to-r from-emerald-600 to-green-600"
     >
       {(!isPrimary || report.focusPrayer) && (
         <ReadOnlyField label={t(lang, "drFocusPrayer")} value={report.focusPrayer} />
@@ -329,6 +325,20 @@ export function DailyReportReadView({ report, lang }: Props) {
 
   const selectedLearningAreas = report.learningAreas.filter((la) => la.selected || la.rating != null);
 
+  // KG stores Toilet as an observe domain (ERP showToiletSection); Primary uses full Observations.
+  const toiletDomain = !isPrimary
+    ? report.observeDomains.find(
+        (d) => /toilet/i.test(d.name) || (d.nameId != null && /toilet/i.test(d.nameId)),
+      )
+    : undefined;
+  const toiletOptions =
+    toiletDomain?.options
+      .filter((o) => o.selected)
+      .map((o) => ({
+        label: displayName(o.name, o.nameId, lang),
+        selected: true as const,
+      })) ?? [];
+
   // Mobile: stacked. Desktop: CSS columns (masonry) so short cards fill gaps
   // instead of aligning to the tallest card in the same grid row.
   return (
@@ -342,7 +352,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionMuslimCharacter")}
           icon="⭐"
           subtitle={t(lang, "drMuslimCharacterHint")}
-          headerClassName="bg-gradient-to-r from-indigo-600 to-violet-600"
         >
           <ReadOnlyMultiPills
             options={
@@ -366,7 +375,6 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReportSectionShell
           title={t(lang, "drSectionPlayCentre")}
           icon="🎨"
-          headerClassName="bg-gradient-to-r from-violet-600 to-purple-600"
         >
           {playCentreOptions.length > 0 ? (
             <ReadOnlyPills
@@ -391,7 +399,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionSubjects")}
           icon="📘"
           subtitle={t(lang, "drSubjectsHint")}
-          headerClassName="bg-gradient-to-r from-indigo-500 to-blue-600"
         >
           <ul className="space-y-4">
             {report.subjects.map((s, i) => {
@@ -486,7 +493,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionLearningAreas")}
           icon="📚"
           subtitle={t(lang, "drLearningAreasHint")}
-          headerClassName="bg-gradient-to-r from-rose-500 to-pink-500"
         >
           <ReadOnlyLearningAreaList
             items={isPrimary ? selectedLearningAreas : report.learningAreas}
@@ -500,7 +506,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionVocabulary")}
           icon="💬"
           subtitle={t(lang, "drVocabularySubtitle")}
-          headerClassName="bg-gradient-to-r from-teal-500 to-cyan-500"
         >
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -532,7 +537,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionObservations")}
           icon="👁"
           subtitle={t(lang, "drObservationsHint")}
-          headerClassName="bg-gradient-to-r from-amber-500 to-orange-500"
         >
           <ul className="space-y-5">
             {report.observeDomains
@@ -556,11 +560,24 @@ export function DailyReportReadView({ report, lang }: Props) {
         </ReportSectionShell>
       ) : null}
 
+      {!isPrimary && toiletOptions.length > 0 ? (
+        <ReportSectionShell
+          title={
+            toiletDomain
+              ? displayName(toiletDomain.name, toiletDomain.nameId, lang)
+              : t(lang, "drSectionToilet")
+          }
+          icon="🚽"
+          subtitle={t(lang, "drToiletHint")}
+        >
+          <ReadOnlyMultiPills options={toiletOptions} />
+        </ReportSectionShell>
+      ) : null}
+
       {!isPrimary ? (
         <ReportSectionShell
           title={t(lang, "drSectionMeals")}
           icon="🍱"
-          headerClassName="bg-gradient-to-r from-amber-500 to-orange-500"
         >
           <ReadOnlyPills
             label={t(lang, "drLunch")}
@@ -581,7 +598,6 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReportSectionShell
           title={t(lang, "drSectionHomeRoutine")}
           icon="🏠"
-          headerClassName="bg-gradient-to-r from-teal-500 to-cyan-600"
         >
           <div className="grid grid-cols-2 gap-3">
             <ReadOnlyField label={t(lang, "drSleepTime")} value={report.sleepTime} />
@@ -602,7 +618,6 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReportSectionShell
           title={t(lang, "drSectionMood")}
           icon="💙"
-          headerClassName="bg-gradient-to-r from-blue-600 to-indigo-600"
         >
           <FieldCaption className="text-center mb-3">{t(lang, "drMoodQuestion")}</FieldCaption>
           <div className="grid grid-cols-5 gap-1.5">
@@ -633,7 +648,6 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReportSectionShell
           title={t(lang, "drSectionNarrative")}
           icon="✨"
-          headerClassName="bg-gradient-to-r from-violet-500 to-fuchsia-500"
         >
           <ReadOnlyField
             label={t(lang, "drShineMoment")}
@@ -658,7 +672,6 @@ export function DailyReportReadView({ report, lang }: Props) {
           title={t(lang, "drSectionHomeTips")}
           icon="🏠"
           subtitle={t(lang, "drHomeTipsHint")}
-          headerClassName="bg-gradient-to-r from-emerald-500 to-teal-500"
         >
           <ul className="space-y-2">
             {report.homeTips.map((tip, i) => (
@@ -679,7 +692,6 @@ export function DailyReportReadView({ report, lang }: Props) {
         <ReportSectionShell
           title={t(lang, "drSectionTeacherNotes")}
           icon="📝"
-          headerClassName="bg-gradient-to-r from-fuchsia-500 to-orange-400"
         >
           <ReadOnlyField
             label={t(lang, "drTeacherHighlight")}

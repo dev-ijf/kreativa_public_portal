@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
@@ -86,6 +87,8 @@ export function DailyReportsPageClient() {
   const [subjectHistory, setSubjectHistory] = useState<DailyReportSubjectHistoryItem[]>([]);
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const refreshingAllRef = useRef(false);
   const autoSelectedKeyRef = useRef<string | null>(null);
 
   const loadCalendar = useCallback(async () => {
@@ -282,6 +285,33 @@ export function DailyReportsPageClient() {
     if (tab === "bySubject") void loadSubjectHistory();
   }, [tab, loadSubjectHistory]);
 
+  const refreshAll = useCallback(async () => {
+    if (!activeChildId || refreshingAllRef.current) return;
+    refreshingAllRef.current = true;
+    setRefreshingAll(true);
+    try {
+      await Promise.all([
+        loadCalendar(),
+        loadDay(),
+        loadHomework(),
+        loadSummary(),
+        loadSubjectOptions(),
+      ]);
+      await loadSubjectHistory();
+    } finally {
+      refreshingAllRef.current = false;
+      setRefreshingAll(false);
+    }
+  }, [
+    activeChildId,
+    loadCalendar,
+    loadDay,
+    loadHomework,
+    loadSummary,
+    loadSubjectOptions,
+    loadSubjectHistory,
+  ]);
+
   const shiftMonth = (delta: number) => {
     const d = new Date(calYear, calMonth0 + delta, 1);
     setCalYear(d.getFullYear());
@@ -298,7 +328,27 @@ export function DailyReportsPageClient() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-6">
-      <Header title={t(lang, "dailyReports")} backHref="/" />
+      <Header
+        title={t(lang, "dailyReports")}
+        backHref="/"
+        rightSlot={
+          <button
+            type="button"
+            onClick={() => void refreshAll()}
+            disabled={!activeChildId || refreshingAll}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+            aria-label={t(lang, "drRefreshAll")}
+            title={t(lang, "drRefreshAll")}
+          >
+            <RefreshCw
+              size={16}
+              className={refreshingAll ? "animate-spin" : undefined}
+              aria-hidden
+            />
+            <span className="hidden sm:inline">{t(lang, "drRefreshAll")}</span>
+          </button>
+        }
+      />
       <ChildSelector />
       <p className="px-4 text-center text-xs text-slate-500 -mt-1 mb-1">
         {t(lang, "dailyReportsSubtitle")}

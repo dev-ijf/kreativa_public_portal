@@ -169,7 +169,6 @@ export function ParentCornerSection({
         <ReportSectionShell
           title={t(lang, "drSectionHomeRoutine")}
           icon="🏠"
-          headerClassName="bg-gradient-to-r from-teal-500 to-cyan-600"
         >
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -218,7 +217,6 @@ export function ParentCornerSection({
       <ReportSectionShell
         title={t(lang, "drSectionParentCorner")}
         icon="👪"
-        headerClassName="bg-gradient-to-r from-purple-600 to-violet-700"
       >
         <div>
           <FieldLabel htmlFor="dr-parent-msg">{t(lang, "drParentMessageLabel")}</FieldLabel>

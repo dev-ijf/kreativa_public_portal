@@ -430,55 +430,6 @@ export async function getDailyReportByDate(
       privateNote: r.privateNote ?? null,
     }));
 
-    const observeRows = await sql`
-      SELECT
-        d.id AS "domainId",
-        d.name AS "domainName",
-        d.name_id AS "domainNameId",
-        d.sort_order AS "domainSort",
-        o.id AS "optionId",
-        o.name AS "optionName",
-        o.name_id AS "optionNameId",
-        o.sort_order AS "optionSort",
-        EXISTS (
-          SELECT 1 FROM dr_report_observe_options ro
-          WHERE ro.report_id = ${reportId} AND ro.option_id = o.id
-        ) AS selected
-      FROM dr_observe_domains d
-      JOIN dr_observe_options o ON o.domain_id = d.id AND o.is_active = true
-      WHERE d.is_active = true
-        AND (d.school_level = 'primary' OR d.school_level = 'all')
-        AND (d.school_id IS NULL OR d.school_id = ${schoolIdFilter})
-      ORDER BY d.sort_order, o.sort_order, o.id
-    `;
-
-    const domainMap = new Map<number, DailyReportObserveDomain>();
-    for (const row of observeRows as {
-      domainId: number;
-      domainName: string;
-      domainNameId: string | null;
-      optionName: string;
-      optionNameId: string | null;
-      selected: boolean;
-    }[]) {
-      const domainId = Number(row.domainId);
-      let domain = domainMap.get(domainId);
-      if (!domain) {
-        domain = {
-          name: row.domainName,
-          nameId: row.domainNameId,
-          options: [],
-        };
-        domainMap.set(domainId, domain);
-      }
-      domain.options.push({
-        name: row.optionName,
-        nameId: row.optionNameId,
-        selected: Boolean(row.selected),
-      });
-    }
-    observeDomains = Array.from(domainMap.values());
-
     const tipRows = await sql`
       SELECT t.name, t.name_id AS "nameId"
       FROM dr_report_home_tips rht
@@ -520,6 +471,59 @@ export async function getDailyReportByDate(
       caption: m.caption ?? null,
       sortOrder: Number(m.sortOrder),
     }));
+  }
+
+  // KG: Toilet & Physical Independence; Primary: Daily Observations.
+  // Both use the same observe-domain chip tables, filtered by school_level.
+  {
+    const observeRows = await sql`
+      SELECT
+        d.id AS "domainId",
+        d.name AS "domainName",
+        d.name_id AS "domainNameId",
+        d.sort_order AS "domainSort",
+        o.id AS "optionId",
+        o.name AS "optionName",
+        o.name_id AS "optionNameId",
+        o.sort_order AS "optionSort",
+        EXISTS (
+          SELECT 1 FROM dr_report_observe_options ro
+          WHERE ro.report_id = ${reportId} AND ro.option_id = o.id
+        ) AS selected
+      FROM dr_observe_domains d
+      JOIN dr_observe_options o ON o.domain_id = d.id AND o.is_active = true
+      WHERE d.is_active = true
+        AND (d.school_level = ${schoolLevel} OR d.school_level = 'all')
+        AND (d.school_id IS NULL OR d.school_id = ${schoolIdFilter})
+      ORDER BY d.sort_order, o.sort_order, o.id
+    `;
+
+    const domainMap = new Map<number, DailyReportObserveDomain>();
+    for (const row of observeRows as {
+      domainId: number;
+      domainName: string;
+      domainNameId: string | null;
+      optionName: string;
+      optionNameId: string | null;
+      selected: boolean;
+    }[]) {
+      const domainId = Number(row.domainId);
+      let domain = domainMap.get(domainId);
+      if (!domain) {
+        domain = {
+          name: row.domainName,
+          nameId: row.domainNameId,
+          options: [],
+        };
+        domainMap.set(domainId, domain);
+      }
+      domain.options.push({
+        name: row.optionName,
+        nameId: row.optionNameId,
+        selected: Boolean(row.selected),
+      });
+    }
+    observeDomains = Array.from(domainMap.values());
   }
 
   const classReportRows = await sql`

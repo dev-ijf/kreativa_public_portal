@@ -391,7 +391,6 @@ export function ClassReportSection({ classReport, lang }: Props) {
       <ReportSectionShell
         title={t(lang, "drSectionClassActivity")}
         icon="📸"
-        headerClassName="bg-gradient-to-r from-sky-500 to-blue-600"
       >
         {/* Theme chip */}
         {theme ? (

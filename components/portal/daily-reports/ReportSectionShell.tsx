@@ -38,7 +38,8 @@ type Props = {
   title: string;
   icon?: string;
   subtitle?: string;
-  headerClassName: string;
+  /** Solid brand tone for all sections / jenjang. Override only if needed. */
+  headerClassName?: string;
   children: ReactNode;
 };
 
@@ -46,7 +47,7 @@ export function ReportSectionShell({
   title,
   icon,
   subtitle,
-  headerClassName,
+  headerClassName = "bg-primary",
   children,
 }: Props) {
   return (
