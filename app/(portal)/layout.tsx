@@ -4,9 +4,14 @@ import { AuthProvider } from '@/components/providers/AuthProvider';
 import { PortalProvider } from '@/components/portal/state/PortalProvider';
 import { SidebarProvider } from '@/components/portal/sidebar/SidebarProvider';
 import { Sidebar } from '@/components/portal/sidebar/Sidebar';
+import { WhatsAppBubble } from '@/components/portal/WhatsAppBubble';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { getPortalChildren } from '@/lib/data/server/children';
-import { getPortalThemeForRequest, getDarkBgLogoUrl } from '@/lib/data/server/portal-theme';
+import {
+  getPortalThemeForRequest,
+  getDarkBgLogoUrl,
+  getWhatsAppMeUrl,
+} from '@/lib/data/server/portal-theme';
 import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
 import { getAppModules } from '@/lib/data/server/modules';
 import { buildModuleActiveMap } from '@/lib/portal/menu-config';
@@ -16,6 +21,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const cookieStore = await cookies();
   const initialLang = parsePortalLangCookie(cookieStore.get(PORTAL_LANG_COOKIE)?.value);
   const theme = await getPortalThemeForRequest();
+  const whatsappUrl = getWhatsAppMeUrl(theme.whatsapp_number);
 
   const [portalChildren, modules] = await Promise.all([
     session?.user?.userId
@@ -39,6 +45,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
               </div>
             </div>
           </div>
+          <WhatsAppBubble href={whatsappUrl} liftForCart />
         </SidebarProvider>
       </PortalProvider>
     </AuthProvider>
