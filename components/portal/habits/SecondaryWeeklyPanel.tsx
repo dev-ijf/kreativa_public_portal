@@ -12,6 +12,7 @@ import type {
   SecondaryWeeklyResponse,
 } from '@/lib/portal/secondary-weekly-shared';
 import { addDaysISO } from '@/lib/portal/weekly-plan-utils';
+import { Textarea, TEXTAREA_NOTE_MAX } from '@/components/ui/Textarea';
 
 type WeekSubTab = 'ibadah' | 'academic' | 'reflection' | 'goals';
 
@@ -73,12 +74,13 @@ function TextField({
         {label}
       </label>
       {hint ? <p className="text-xs text-slate-500">{hint}</p> : null}
-      <textarea
+      <Textarea
         rows={rows}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        maxLength={TEXTAREA_NOTE_MAX}
+        onChange={(e) => onChange(e.target.value.slice(0, TEXTAREA_NOTE_MAX))}
         placeholder={hint}
-        className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+        className="rounded-xl border border-slate-200 p-3 text-sm"
       />
     </div>
   );

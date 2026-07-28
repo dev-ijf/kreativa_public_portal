@@ -5,6 +5,7 @@ import { BarChart2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
+import { Textarea, TEXTAREA_NOTE_MAX } from "@/components/ui/Textarea";
 import {
   HABIT_BOOLEAN_KEYS,
   HABIT_PERIOD_EXCUSED_KEYS,
@@ -654,14 +655,21 @@ export function HabitsPageClient() {
                           {t(lang, "habitsQuranJuzLabel")}
                         </label>
                         <p className="text-xs text-slate-500">{t(lang, "habitsQuranJuzHint")}</p>
-                        <textarea
+                        <Textarea
                           id="quran-juz"
                           rows={2}
                           disabled={isFuture(selectedDate)}
                           placeholder={t(lang, "habitsQuranJuzPlaceholder")}
                           value={payload.quranJuzInfo ?? ""}
-                          onChange={(e) => setPayload((p) => ({ ...p, quranJuzInfo: e.target.value.trim() ? e.target.value : null }))}
-                          className="w-full rounded-xl border border-slate-200 p-3 text-sm disabled:opacity-40"
+                          maxLength={TEXTAREA_NOTE_MAX}
+                          onChange={(e) => {
+                            const next = e.target.value.slice(0, TEXTAREA_NOTE_MAX);
+                            setPayload((p) => ({
+                              ...p,
+                              quranJuzInfo: next.trim() ? next : null,
+                            }));
+                          }}
+                          className="rounded-xl border border-slate-200 p-3 text-sm disabled:opacity-40"
                         />
                       </div>
 
@@ -725,14 +733,21 @@ export function HabitsPageClient() {
                           <label className="font-semibold text-slate-700 text-sm" htmlFor="quran-juz-desktop">
                             {t(lang, "habitsQuranJuzLabel")}
                           </label>
-                          <textarea
+                          <Textarea
                             id="quran-juz-desktop"
                             rows={2}
                             disabled={isFuture(selectedDate)}
                             placeholder={t(lang, "habitsQuranJuzPlaceholder")}
                             value={payload.quranJuzInfo ?? ""}
-                            onChange={(e) => setPayload((p) => ({ ...p, quranJuzInfo: e.target.value.trim() ? e.target.value : null }))}
-                            className="w-full rounded-lg border border-slate-200 p-2 text-sm disabled:opacity-40 mt-1"
+                            maxLength={TEXTAREA_NOTE_MAX}
+                            onChange={(e) => {
+                              const next = e.target.value.slice(0, TEXTAREA_NOTE_MAX);
+                              setPayload((p) => ({
+                                ...p,
+                                quranJuzInfo: next.trim() ? next : null,
+                              }));
+                            }}
+                            className="rounded-lg border border-slate-200 p-2 text-sm disabled:opacity-40 mt-1"
                           />
                         </div>
                       </div>

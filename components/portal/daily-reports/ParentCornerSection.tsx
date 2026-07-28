@@ -9,6 +9,8 @@ import {
   FieldValue,
   ReportSectionShell,
 } from "@/components/portal/daily-reports/ReportSectionShell";
+import { Textarea } from "@/components/ui/Textarea";
+import { clampTextareaNote, TEXTAREA_NOTE_MAX } from "@/lib/portal/textarea-limits";
 
 type Props = {
   report: DailyReportFull;
@@ -39,7 +41,7 @@ export function ParentCornerSection({
   disabled,
 }: Props) {
   const isKg = report.schoolLevel === "kindergarten";
-  const [message, setMessage] = useState(report.parentMessage ?? "");
+  const [message, setMessage] = useState(() => clampTextareaNote(report.parentMessage));
   const [readConfirmed, setReadConfirmed] = useState(report.parentReadConfirmed);
   const [sleepTime, setSleepTime] = useState(report.sleepTime ?? "");
   const [wakeTime, setWakeTime] = useState(report.wakeTime ?? "");
@@ -48,7 +50,7 @@ export function ParentCornerSection({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const lastSaved = useRef(
     JSON.stringify({
-      message: report.parentMessage ?? "",
+      message: clampTextareaNote(report.parentMessage),
       readConfirmed: report.parentReadConfirmed,
       sleepTime: report.sleepTime ?? "",
       wakeTime: report.wakeTime ?? "",
@@ -57,13 +59,13 @@ export function ParentCornerSection({
   );
 
   useEffect(() => {
-    setMessage(report.parentMessage ?? "");
+    setMessage(clampTextareaNote(report.parentMessage));
     setReadConfirmed(report.parentReadConfirmed);
     setSleepTime(report.sleepTime ?? "");
     setWakeTime(report.wakeTime ?? "");
     setReadingTogether(Boolean(report.readingTogether));
     lastSaved.current = JSON.stringify({
-      message: report.parentMessage ?? "",
+      message: clampTextareaNote(report.parentMessage),
       readConfirmed: report.parentReadConfirmed,
       sleepTime: report.sleepTime ?? "",
       wakeTime: report.wakeTime ?? "",
@@ -220,14 +222,15 @@ export function ParentCornerSection({
       >
         <div>
           <FieldLabel htmlFor="dr-parent-msg">{t(lang, "drParentMessageLabel")}</FieldLabel>
-          <textarea
+          <Textarea
             id="dr-parent-msg"
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => setMessage(clampTextareaNote(e.target.value))}
             disabled={disabled}
             placeholder={t(lang, "drParentMessagePlaceholder")}
             rows={4}
-            className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-[15px] font-normal text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
+            maxLength={TEXTAREA_NOTE_MAX}
+            className="rounded-2xl border border-slate-200 px-3 py-2.5 text-[15px] font-normal text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
           />
         </div>
 

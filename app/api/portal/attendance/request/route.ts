@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { insertAttendanceEntry } from '@/lib/data/server/attendance';
+import { clampTextareaNote } from '@/lib/portal/textarea-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +36,15 @@ export async function POST(request: Request) {
 
   const noteCombined =
     typeof body.note === 'string' && body.note.trim()
-      ? body.note.trim()
+      ? clampTextareaNote(body.note.trim())
       : '';
   const noteEn =
     typeof body.noteEn === 'string' && body.noteEn.trim()
-      ? body.noteEn.trim()
+      ? clampTextareaNote(body.noteEn.trim())
       : noteCombined;
   const noteId =
     typeof body.noteId === 'string' && body.noteId.trim()
-      ? body.noteId.trim()
+      ? clampTextareaNote(body.noteId.trim())
       : noteCombined;
 
   if (!Number.isFinite(studentId) || !attendanceDate || !status) {

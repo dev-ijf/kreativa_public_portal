@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { updateDailyReportParentCorner } from '@/lib/data/server/daily-reports';
+import { clampTextareaNote } from '@/lib/portal/textarea-limits';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,7 @@ export async function PATCH(request: Request) {
         ? body.reportDate.slice(0, 10)
         : '';
 
-  const parentMessage =
+  const parentMessageRaw =
     body.parentMessage !== undefined
       ? typeof body.parentMessage === 'string'
         ? body.parentMessage
@@ -42,6 +43,12 @@ export async function PATCH(request: Request) {
             ? null
             : undefined
         : undefined;
+  const parentMessage =
+    parentMessageRaw === undefined
+      ? undefined
+      : parentMessageRaw === null
+        ? null
+        : clampTextareaNote(parentMessageRaw);
 
   const parentReadConfirmed =
     typeof body.parentReadConfirmed === 'boolean'

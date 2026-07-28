@@ -5,6 +5,7 @@ import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { useActiveChild, usePortalState } from "@/components/portal/state/PortalProvider";
 import { SecondaryWeeklyPanel } from "@/components/portal/habits/SecondaryWeeklyPanel";
+import { Textarea, TEXTAREA_NOTE_MAX } from "@/components/ui/Textarea";
 import {
   SecondaryDailyFormSkeleton,
   SecondaryWeeklyPanelSkeleton,
@@ -835,17 +836,19 @@ export function SecondaryDailyPageClient() {
                               <label className="text-xs font-bold text-slate-500 uppercase">
                                 {t(lang, "secQuickNote")}
                               </label>
-                              <textarea
+                              <Textarea
                                 rows={2}
                                 disabled={isFuture}
                                 placeholder={t(lang, "secQuickNotePlaceholder")}
                                 value={s.quickNote ?? ""}
-                                onChange={(e) =>
+                                maxLength={TEXTAREA_NOTE_MAX}
+                                onChange={(e) => {
+                                  const next = e.target.value.slice(0, TEXTAREA_NOTE_MAX);
                                   updateSession(s.sessionId, {
-                                    quickNote: e.target.value || null,
-                                  })
-                                }
-                                className="w-full rounded-xl border border-slate-200 p-3 text-sm bg-white"
+                                    quickNote: next || null,
+                                  });
+                                }}
+                                className="rounded-xl border border-slate-200 p-3 text-sm bg-white"
                               />
                             </div>
                           </li>

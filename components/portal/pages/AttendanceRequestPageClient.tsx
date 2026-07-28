@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Header } from "@/components/portal/Header";
 import { ChildSelector } from "@/components/portal/ChildSelector";
 import { usePortalState, useActiveChild } from "@/components/portal/state/PortalProvider";
+import { Textarea, TEXTAREA_NOTE_MAX } from "@/components/ui/Textarea";
 import { t } from "@/lib/i18n/translations";
 
 export function AttendanceRequestPageClient() {
@@ -141,12 +142,15 @@ export function AttendanceRequestPageClient() {
                 <label htmlFor="req-note" className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-2">
                   {t(lang, "attendanceRequestNote")}
                 </label>
-                <textarea
+                <Textarea
                   id="req-note"
                   value={requestNote}
-                  onChange={(e) => setRequestNote(e.target.value)}
+                  onChange={(e) =>
+                    setRequestNote(e.target.value.slice(0, TEXTAREA_NOTE_MAX))
+                  }
                   rows={4}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  maxLength={TEXTAREA_NOTE_MAX}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
                   aria-label={t(lang, "attendanceRequestNote")}
                 />
               </div>
