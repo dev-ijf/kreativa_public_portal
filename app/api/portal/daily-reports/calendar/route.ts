@@ -25,11 +25,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 });
   }
 
-  const days = await getDailyReportCalendarMonth(userId, role, studentId, year, month - 1);
+  const result = await getDailyReportCalendarMonth(userId, role, studentId, year, month - 1);
 
-  if (days === null) {
+  if (result === null) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ days });
+  return NextResponse.json({
+    days: result.days,
+    suggestedDate: result.suggestedDate,
+  });
 }

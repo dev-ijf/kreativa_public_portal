@@ -20,6 +20,7 @@ import type {
   DailyReportCalendarDay,
   DailyReportFull,
   DailyReportHomeworkItem,
+  DailyReportParentPatch,
   DailyReportSubjectHistoryItem,
   DailyReportSubjectOption,
   DailyReportSummaryResponse,
@@ -88,14 +89,21 @@ export function DailyReportsPageClient() {
   const [loadingSubjects, setLoadingSubjects] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [dateReady, setDateReady] = useState(false);
   const refreshingAllRef = useRef(false);
   const autoSelectedKeyRef = useRef<string | null>(null);
+  const calAbortRef = useRef<AbortController | null>(null);
+  const dayAbortRef = useRef<AbortController | null>(null);
 
   const loadCalendar = useCallback(async () => {
     if (!activeChildId) {
       setCalendarDays([]);
+      setDateReady(false);
       return;
     }
+    calAbortRef.current?.abort();
+    const ac = new AbortController();
+    calAbortRef.current = ac;
     setLoadingCal(true);
     try {
       const params = new URLSearchParams({
@@ -103,40 +111,67 @@ export function DailyReportsPageClient() {
         year: String(calYear),
         month: String(calMonth0 + 1),
       });
-      const res = await fetch(`/api/portal/daily-reports/calendar?${params}`);
+      const res = await fetch(`/api/portal/daily-reports/calendar?${params}`, {
+        signal: ac.signal,
+      });
       if (!res.ok) {
         setCalendarDays([]);
+        setDateReady(true);
         return;
       }
-      const data = (await res.json()) as { days?: DailyReportCalendarDay[] };
-      setCalendarDays(Array.isArray(data.days) ? data.days : []);
+      const data = (await res.json()) as {
+        days?: DailyReportCalendarDay[];
+        suggestedDate?: string;
+      };
+      const days = Array.isArray(data.days) ? data.days : [];
+      setCalendarDays(days);
+
+      const key = `${activeChildId}-${calYear}-${calMonth0}`;
+      if (autoSelectedKeyRef.current !== key) {
+        autoSelectedKeyRef.current = key;
+        const next =
+          typeof data.suggestedDate === "string" && data.suggestedDate
+            ? data.suggestedDate
+            : todayISO();
+        setSelectedDate(next);
+      }
+      setDateReady(true);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setCalendarDays([]);
+      setDateReady(true);
     } finally {
-      setLoadingCal(false);
+      if (!ac.signal.aborted) setLoadingCal(false);
     }
   }, [activeChildId, calYear, calMonth0]);
 
   const loadDay = useCallback(async () => {
-    if (!activeChildId) {
-      setReport(null);
-      return;
-    }
+    if (!activeChildId || !dateReady) return;
+    dayAbortRef.current?.abort();
+    const ac = new AbortController();
+    dayAbortRef.current = ac;
     setLoadingDay(true);
     try {
       const params = new URLSearchParams({
         studentId: String(activeChildId),
         date: selectedDate,
       });
-      const res = await fetch(`/api/portal/daily-reports/day?${params}`);
+      const res = await fetch(`/api/portal/daily-reports/day?${params}`, {
+        signal: ac.signal,
+      });
       if (!res.ok) {
         setReport(null);
         return;
       }
       const data = (await res.json()) as { report: DailyReportFull | null };
       setReport(data.report ?? null);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      setReport(null);
     } finally {
-      setLoadingDay(false);
+      if (!ac.signal.aborted) setLoadingDay(false);
     }
-  }, [activeChildId, selectedDate]);
+  }, [activeChildId, selectedDate, dateReady]);
 
   const loadSummary = useCallback(async () => {
     if (!activeChildId) {
@@ -163,7 +198,7 @@ export function DailyReportsPageClient() {
   }, [activeChildId, calYear, calMonth0]);
 
   const loadHomework = useCallback(async () => {
-    if (!activeChildId) {
+    if (!activeChildId || !isPrimaryChild) {
       setHomework([]);
       return;
     }
@@ -176,7 +211,7 @@ export function DailyReportsPageClient() {
     }
     const data = (await res.json()) as { items?: DailyReportHomeworkItem[] };
     setHomework(Array.isArray(data.items) ? data.items : []);
-  }, [activeChildId]);
+  }, [activeChildId, isPrimaryChild]);
 
   const loadSubjectOptions = useCallback(async () => {
     if (!activeChildId) {
@@ -232,40 +267,24 @@ export function DailyReportsPageClient() {
 
   useEffect(() => {
     autoSelectedKeyRef.current = null;
+    setDateReady(false);
     setSelectedDate(todayISO());
+    setReport(null);
+    setHomework([]);
   }, [activeChildId]);
 
   useEffect(() => {
     void loadCalendar();
   }, [loadCalendar]);
 
-  // If today has no report, open the latest submitted day in the month once.
-  useEffect(() => {
-    if (loadingCal || !activeChildId || calendarDays.length === 0) return;
-    const key = `${activeChildId}-${calYear}-${calMonth0}`;
-    if (autoSelectedKeyRef.current === key) return;
-
-    const today = todayISO();
-    const todayHasReport = calendarDays.some((d) => d.date === today && d.hasReport);
-    autoSelectedKeyRef.current = key;
-    if (todayHasReport) {
-      if (selectedDate !== today) setSelectedDate(today);
-      return;
-    }
-
-    const latest = [...calendarDays].sort((a, b) => b.date.localeCompare(a.date))[0];
-    if (latest?.date && latest.date !== selectedDate) {
-      setSelectedDate(latest.date);
-    }
-  }, [loadingCal, calendarDays, activeChildId, calYear, calMonth0, selectedDate]);
-
   useEffect(() => {
     void loadDay();
   }, [loadDay]);
 
   useEffect(() => {
-    void loadHomework();
-  }, [loadHomework]);
+    if (isPrimaryChild) void loadHomework();
+    else setHomework([]);
+  }, [loadHomework, isPrimaryChild]);
 
   useEffect(() => {
     if (tab === "bySubject" && !isPrimaryChild && report?.schoolLevel !== "primary") {
@@ -290,20 +309,22 @@ export function DailyReportsPageClient() {
     refreshingAllRef.current = true;
     setRefreshingAll(true);
     try {
-      await Promise.all([
-        loadCalendar(),
-        loadDay(),
-        loadHomework(),
-        loadSummary(),
-        loadSubjectOptions(),
-      ]);
-      await loadSubjectHistory();
+      const tasks: Promise<unknown>[] = [loadCalendar(), loadDay()];
+      if (isPrimaryChild) tasks.push(loadHomework());
+      if (tab === "summary") tasks.push(loadSummary());
+      if (tab === "bySubject") {
+        tasks.push(loadSubjectOptions());
+      }
+      await Promise.all(tasks);
+      if (tab === "bySubject") await loadSubjectHistory();
     } finally {
       refreshingAllRef.current = false;
       setRefreshingAll(false);
     }
   }, [
     activeChildId,
+    isPrimaryChild,
+    tab,
     loadCalendar,
     loadDay,
     loadHomework,
@@ -311,6 +332,14 @@ export function DailyReportsPageClient() {
     loadSubjectOptions,
     loadSubjectHistory,
   ]);
+
+  const applyParentPatch = useCallback(
+    (patch: DailyReportParentPatch) => {
+      setReport((prev) => (prev ? { ...prev, ...patch } : prev));
+      void loadCalendar();
+    },
+    [loadCalendar],
+  );
 
   const shiftMonth = (delta: number) => {
     const d = new Date(calYear, calMonth0 + delta, 1);
@@ -435,28 +464,30 @@ export function DailyReportsPageClient() {
               </div>
 
               <div className="space-y-4 min-w-0">
-                {loadingDay ? (
+                {loadingDay && !report ? (
                   <DailyReportsDaySkeleton />
                 ) : isFuture ? null : !report ? (
                   <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 text-center">
                     <p className="text-sm text-slate-500">{t(lang, "drEmptyDay")}</p>
                   </div>
                 ) : (
-                  <>
+                  <div
+                    className={[
+                      "space-y-4",
+                      loadingDay ? "opacity-70 transition-opacity" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
                     <DailyReportReadView report={report} lang={lang} />
                     <ParentCornerSection
                       report={report}
                       lang={lang}
                       studentId={activeChildId}
                       selectedDate={selectedDate}
-                      onUpdated={(next) => {
-                        setReport(next);
-                        void loadCalendar();
-                        void loadSummary();
-                        void loadHomework();
-                      }}
+                      onUpdated={applyParentPatch}
                     />
-                  </>
+                  </div>
                 )}
               </div>
             </div>

@@ -111,5 +111,5 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Conflict' }, { status: 409 });
   }
 
-  return NextResponse.json({ report: result.report });
+  return NextResponse.json({ patch: result.patch });
 }

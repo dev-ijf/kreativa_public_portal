@@ -48,6 +48,51 @@ export async function cacheSetJson(key: string, value: unknown): Promise<void> {
   }
 }
 
+/** Cache JSON with TTL seconds (Upstash `EX`). Best-effort; no-op without Redis. */
+export async function cacheSetJsonTtl(
+  key: string,
+  value: unknown,
+  ttlSeconds: number,
+): Promise<void> {
+  const r = getRedis();
+  if (!r) return;
+  const ex = Math.max(1, Math.floor(ttlSeconds));
+  try {
+    await r.set(key, JSON.stringify(value), { ex });
+  } catch {
+    /* cache best-effort */
+  }
+}
+
+export async function cacheDel(key: string): Promise<void> {
+  const r = getRedis();
+  if (!r) return;
+  try {
+    await r.del(key);
+  } catch {
+    /* cache best-effort */
+  }
+}
+
+/** Delete every key matching a Redis SCAN pattern (e.g. `dr:cal:123:*`). */
+export async function cacheDelByPattern(pattern: string): Promise<void> {
+  const r = getRedis();
+  if (!r) return;
+  try {
+    let cursor: number | string = 0;
+    do {
+      const [next, keys] = (await r.scan(cursor, { match: pattern, count: 64 })) as [
+        number | string,
+        string[],
+      ];
+      cursor = next;
+      if (keys.length > 0) await r.del(...keys);
+    } while (String(cursor) !== '0');
+  } catch {
+    /* cache best-effort */
+  }
+}
+
 /** Diagnostik: cek koneksi Redis, PING, test SET/GET/DEL round-trip. */
 export async function redisDiagnostic(): Promise<Record<string, unknown>> {
   const urlSource = process.env.UPSTASH_REDIS_REST_URL?.trim()

@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { DailyReportFull } from "@/lib/portal/daily-reports-shared";
+import type {
+  DailyReportFull,
+  DailyReportParentPatch,
+} from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
 import {
   FieldCaption,
@@ -17,7 +20,7 @@ type Props = {
   lang: Lang;
   studentId: number;
   selectedDate: string;
-  onUpdated: (report: DailyReportFull) => void;
+  onUpdated: (patch: DailyReportParentPatch) => void;
   disabled?: boolean;
 };
 
@@ -110,6 +113,27 @@ export function ParentCornerSection({
 
   const performSave = useCallback(async () => {
     setSaveState("saving");
+    const optimistic: DailyReportParentPatch = {
+      parentMessage: message.trim() || null,
+      parentReadConfirmed: readConfirmed,
+      parentReadAt: readConfirmed
+        ? report.parentReadAt ?? new Date().toISOString()
+        : null,
+      sleepTime: isKg ? sleepTime || null : report.sleepTime,
+      wakeTime: isKg ? wakeTime || null : report.wakeTime,
+      readingTogether: isKg ? readingTogether : report.readingTogether,
+      status: readConfirmed ? "read" : "submitted",
+    };
+    // Optimistic merge so UI feels instant.
+    onUpdated(optimistic);
+    lastSaved.current = JSON.stringify({
+      message: optimistic.parentMessage ?? "",
+      readConfirmed: optimistic.parentReadConfirmed,
+      sleepTime: optimistic.sleepTime ?? "",
+      wakeTime: optimistic.wakeTime ?? "",
+      readingTogether: Boolean(optimistic.readingTogether),
+    });
+
     try {
       const res = await fetch("/api/portal/daily-reports/parent", {
         method: "PATCH",
@@ -132,19 +156,20 @@ export function ParentCornerSection({
         setSaveState("error");
         return false;
       }
-      const data = (await res.json()) as { report: DailyReportFull };
-      onUpdated(data.report);
-      setMessage(data.report.parentMessage ?? "");
-      setReadConfirmed(data.report.parentReadConfirmed);
-      setSleepTime(data.report.sleepTime ?? "");
-      setWakeTime(data.report.wakeTime ?? "");
-      setReadingTogether(Boolean(data.report.readingTogether));
+      const data = (await res.json()) as { patch: DailyReportParentPatch };
+      const patch = data.patch;
+      onUpdated(patch);
+      setMessage(clampTextareaNote(patch.parentMessage));
+      setReadConfirmed(patch.parentReadConfirmed);
+      setSleepTime(patch.sleepTime ?? "");
+      setWakeTime(patch.wakeTime ?? "");
+      setReadingTogether(Boolean(patch.readingTogether));
       lastSaved.current = JSON.stringify({
-        message: data.report.parentMessage ?? "",
-        readConfirmed: data.report.parentReadConfirmed,
-        sleepTime: data.report.sleepTime ?? "",
-        wakeTime: data.report.wakeTime ?? "",
-        readingTogether: Boolean(data.report.readingTogether),
+        message: patch.parentMessage ?? "",
+        readConfirmed: patch.parentReadConfirmed,
+        sleepTime: patch.sleepTime ?? "",
+        wakeTime: patch.wakeTime ?? "",
+        readingTogether: Boolean(patch.readingTogether),
       });
       setSaveState("saved");
       window.setTimeout(() => setSaveState("idle"), 1500);
@@ -163,6 +188,10 @@ export function ParentCornerSection({
     readingTogether,
     isKg,
     onUpdated,
+    report.parentReadAt,
+    report.sleepTime,
+    report.wakeTime,
+    report.readingTogether,
   ]);
 
   return (

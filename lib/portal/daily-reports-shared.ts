@@ -24,6 +24,23 @@ export type DailyReportCalendarDay = {
   parentReadConfirmed: boolean;
 };
 
+export type DailyReportCalendarMonthResponse = {
+  days: DailyReportCalendarDay[];
+  /** Latest report day in the month, else today (for single day fetch on mount). */
+  suggestedDate: string;
+};
+
+/** Slim parent-corner PATCH result — avoid rebuilding full DailyReportFull. */
+export type DailyReportParentPatch = {
+  parentMessage: string | null;
+  parentReadConfirmed: boolean;
+  parentReadAt: string | null;
+  sleepTime: string | null;
+  wakeTime: string | null;
+  readingTogether: boolean;
+  status: 'submitted' | 'read';
+};
+
 export type DailyReportCharacter = {
   name: string;
   nameId: string | null;
