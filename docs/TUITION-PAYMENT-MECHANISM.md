@@ -137,7 +137,7 @@ Schema migration: [`sql/add_tuition_bill_groups.sql`](../sql/add_tuition_bill_gr
 
 | School `theme_id` | Mode | Card | Installments |
 | --- | --- | --- | --- |
-| `1` (Kreativa) | `kreativa` | All current-AY payable `tuition_bills` by title; cart `spp-{studentId}-{billId}` | Donut from `tuition_bill_groups`; pick unpaid termins (full-amount toggle, same cart key) |
+| `1` (Kreativa) | `kreativa` | *(hidden — no Digital Tuition Card)* | One card per `tuition_bill_groups` (donut + unpaid termins); cart `spp-{studentId}-{billId}` full-amount toggle |
 | other (Talenta) | `talenta` | Jul–Jun monthly grid | Open-amount on `tuition_bills` via `inst-{billId}` |
 
 ### Current balance formula (implemented)

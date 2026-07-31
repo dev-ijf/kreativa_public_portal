@@ -66,6 +66,20 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
 
   const removeFromCart = (id: string) => setCart((prev) => prev.filter((i) => i.id !== id));
 
+  const groupHistoryHref = (groupId: string) => {
+    if (groupId.startsWith('bill-')) {
+      return `/finance/installments/${groupId.slice('bill-'.length)}/history`;
+    }
+    return `/finance/installments/group/${groupId}/history`;
+  };
+
+  /** Under a group card, shorten "DSP 26-27 - Termin 1/3" → "Termin 1/3". */
+  const terminLabel = (groupName: string, title: string) => {
+    const prefix = `${groupName} - `;
+    if (title.startsWith(prefix)) return title.slice(prefix.length);
+    return title;
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       <Header
@@ -86,7 +100,13 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
       <ChildSelector />
 
       <div className="px-4 md:px-6 space-y-6 mt-2">
-        <div className="md:grid md:grid-cols-2 md:gap-6 md:items-stretch space-y-6 md:space-y-0">
+        <div
+          className={
+            isKreativa
+              ? 'space-y-4'
+              : 'md:grid md:grid-cols-2 md:gap-6 md:items-stretch space-y-6 md:space-y-0'
+          }
+        >
           <div className="space-y-4 flex flex-col">
             <div className="bg-primary rounded-3xl p-5 shadow-lg shadow-primary/25 flex flex-col relative overflow-hidden text-white">
               <div className="flex justify-between items-center mb-4 relative z-10">
@@ -236,284 +256,175 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
             ) : null}
           </div>
 
-          {/* Right column: Digital Tuition Card */}
-          <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col">
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="font-bold text-slate-700 text-lg">
-                {lang === 'en' ? 'Digital Tuition Card' : 'Kartu SPP Digital'}
-              </h2>
-              <span className="text-xs font-bold bg-primary-light text-primary px-2.5 py-1 rounded-md">
-                {finance.academicYearLabel ? `AY ${finance.academicYearLabel}` : '—'}
-              </span>
-            </div>
+          {/* Talenta only: Digital Tuition Card (Kreativa pakai Installments by bill group). */}
+          {!isKreativa ? (
+            <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 flex flex-col">
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="font-bold text-slate-700 text-lg">
+                  {lang === 'en' ? 'Digital Tuition Card' : 'Kartu SPP Digital'}
+                </h2>
+                <span className="text-xs font-bold bg-primary-light text-primary px-2.5 py-1 rounded-md">
+                  {finance.academicYearLabel ? `AY ${finance.academicYearLabel}` : '—'}
+                </span>
+              </div>
 
-            {isKreativa ? (
-              <>
-                <div className="grid grid-cols-2 gap-2.5 md:hidden">
-                  {payableBills.length === 0 ? (
-                    <p className="col-span-2 text-sm text-slate-600">
-                      {lang === 'en' ? 'No payable bills.' : 'Tidak ada tagihan.'}
-                    </p>
-                  ) : (
-                    payableBills.map((bill) => {
-                      const id = `spp-${activeChildId}-${bill.billId}`;
-                      const isInCart = cart.some((i) => i.id === id);
-                      const btnClass = [
-                        'flex flex-col items-center justify-center py-3 px-2 rounded-2xl border transition-all relative overflow-hidden min-h-[88px]',
-                        isInCart
-                          ? 'bg-primary border-primary text-white shadow-md shadow-primary/25 scale-[1.02]'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400',
-                      ].join(' ');
-                      return (
-                        <button
-                          key={bill.billId}
-                          type="button"
-                          onClick={() => toggleTuitionToCart(bill.billId, bill.title, bill.amount)}
-                          className={btnClass}
-                        >
-                          <span className="text-[10px] sm:text-xs font-bold mb-1 text-center leading-tight px-0.5 line-clamp-2">
-                            {bill.title}
-                          </span>
-                          <span className="mb-1">
-                            {isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}
-                          </span>
-                          <span
-                            className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(
-                              ' ',
-                            )}
-                          >
-                            {formatRupiah(bill.amount)}
-                          </span>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="hidden md:block overflow-y-auto flex-1" style={{ maxHeight: '420px' }}>
-                  {payableBills.length === 0 ? (
-                    <p className="text-sm text-slate-600">
-                      {lang === 'en' ? 'No payable bills.' : 'Tidak ada tagihan.'}
-                    </p>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-white">
-                        <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
-                          <th className="pb-2 font-semibold">{lang === 'en' ? 'Bill' : 'Tagihan'}</th>
-                          <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Amount' : 'Jumlah'}</th>
-                          <th className="pb-2 font-semibold text-center">{lang === 'en' ? 'Status' : 'Status'}</th>
-                          <th className="pb-2 font-semibold text-center w-20" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payableBills.map((bill) => {
-                          const id = `spp-${activeChildId}-${bill.billId}`;
-                          const isInCart = cart.some((i) => i.id === id);
-                          return (
-                            <tr
-                              key={bill.billId}
-                              className={[
-                                'border-b border-slate-100 last:border-0 transition-colors',
-                                isInCart ? 'bg-primary-light/50' : '',
-                              ].join(' ')}
-                            >
-                              <td className="py-2.5 font-semibold text-slate-700">{bill.title}</td>
-                              <td
-                                className={[
-                                  'py-2.5 text-right font-bold',
-                                  isInCart ? 'text-primary' : 'text-slate-700',
-                                ].join(' ')}
-                              >
-                                {formatRupiah(bill.amount)}
-                              </td>
-                              <td className="py-2.5 text-center">
-                                {isInCart ? (
-                                  <span className="text-xs font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full">
-                                    {lang === 'en' ? 'In Cart' : 'Keranjang'}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                                    {lang === 'en' ? 'Unpaid' : 'Belum'}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="py-2.5 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleTuitionToCart(bill.billId, bill.title, bill.amount)}
-                                  className={[
-                                    'w-8 h-8 rounded-full inline-flex items-center justify-center transition-all',
-                                    isInCart
-                                      ? 'bg-primary text-white shadow-md'
-                                      : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-primary',
-                                  ].join(' ')}
-                                  aria-label={isInCart ? 'Remove from cart' : 'Add to cart'}
-                                >
-                                  {isInCart ? '✅' : <ShoppingCart size={14} />}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-
-                <p className="text-xs text-slate-500 mt-5 flex items-center bg-slate-50 p-2 rounded-lg">
-                  <span className="mr-2 text-primary shrink-0">ℹ️</span>{' '}
-                  {lang === 'en'
-                    ? 'Tap unpaid bills to add to cart.'
-                    : 'Tap tagihan yang belum bayar untuk menambah ke keranjang.'}
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="grid grid-cols-4 gap-2.5 md:hidden">
-                  {tuitionMonths.map((m) => {
-                    const hasBill = m.billId != null;
-                    const id = hasBill
-                      ? `spp-${activeChildId}-${m.billId}`
-                      : `spp-${activeChildId}-${m.monthKey}-empty`;
-                    const isInCart = hasBill && cart.some((i) => i.id === id);
-                    const isPaid = m.status === 'paid';
-                    const noBill = !hasBill;
-                    const labelBase = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
-                    const label = m.calendarYear != null ? `${labelBase} ${m.calendarYear}` : labelBase;
-                    const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
-                    const btnClass = [
-                      'flex flex-col items-center justify-center py-2 px-1 rounded-2xl border transition-all relative overflow-hidden',
-                      noBill || isPaid
-                        ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed opacity-80'
-                        : isInCart
-                          ? 'bg-primary border-primary text-white shadow-md shadow-primary/25 scale-[1.03]'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400',
-                    ].join(' ');
-                    return (
-                      <button
-                        key={m.monthKey}
-                        type="button"
-                        disabled={noBill || isPaid}
-                        onClick={() => {
-                          if (m.billId) toggleTuitionToCart(m.billId, title, m.amount);
-                        }}
-                        className={btnClass}
+              <div className="grid grid-cols-4 gap-2.5 md:hidden">
+                {tuitionMonths.map((m) => {
+                  const hasBill = m.billId != null;
+                  const id = hasBill
+                    ? `spp-${activeChildId}-${m.billId}`
+                    : `spp-${activeChildId}-${m.monthKey}-empty`;
+                  const isInCart = hasBill && cart.some((i) => i.id === id);
+                  const isPaid = m.status === 'paid';
+                  const noBill = !hasBill;
+                  const labelBase = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
+                  const label = m.calendarYear != null ? `${labelBase} ${m.calendarYear}` : labelBase;
+                  const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
+                  const btnClass = [
+                    'flex flex-col items-center justify-center py-2 px-1 rounded-2xl border transition-all relative overflow-hidden',
+                    noBill || isPaid
+                      ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed opacity-80'
+                      : isInCart
+                        ? 'bg-primary border-primary text-white shadow-md shadow-primary/25 scale-[1.03]'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-400',
+                  ].join(' ');
+                  return (
+                    <button
+                      key={m.monthKey}
+                      type="button"
+                      disabled={noBill || isPaid}
+                      onClick={() => {
+                        if (m.billId) toggleTuitionToCart(m.billId, title, m.amount);
+                      }}
+                      className={btnClass}
+                    >
+                      <span className="text-[10px] sm:text-xs font-bold mb-1 text-center leading-tight px-0.5">
+                        {label}
+                      </span>
+                      <span className="mb-1">
+                        {isPaid ? '✅' : noBill ? '—' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}
+                      </span>
+                      <span
+                        className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(
+                          ' ',
+                        )}
                       >
-                        <span className="text-[10px] sm:text-xs font-bold mb-1 text-center leading-tight px-0.5">
-                          {label}
-                        </span>
-                        <span className="mb-1">
-                          {isPaid ? '✅' : noBill ? '—' : isInCart ? <ShoppingCart size={16} className="text-white" /> : '○'}
-                        </span>
-                        <span
-                          className={['text-[9px] font-semibold', isInCart ? 'text-white/80' : 'text-slate-400'].join(
-                            ' ',
-                          )}
-                        >
-                          {noBill ? '—' : formatRupiah(m.amount)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                        {noBill ? '—' : formatRupiah(m.amount)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-                <div className="hidden md:block overflow-y-auto flex-1" style={{ maxHeight: '420px' }}>
-                  <table className="w-full text-sm">
-                    <thead className="sticky top-0 bg-white">
-                      <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
-                        <th className="pb-2 font-semibold">{lang === 'en' ? 'Month' : 'Bulan'}</th>
-                        <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Amount' : 'Jumlah'}</th>
-                        <th className="pb-2 font-semibold text-center">{lang === 'en' ? 'Status' : 'Status'}</th>
-                        <th className="pb-2 font-semibold text-center w-20" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tuitionMonths.map((m) => {
-                        const hasBill = m.billId != null;
-                        const id = hasBill
-                          ? `spp-${activeChildId}-${m.billId}`
-                          : `spp-${activeChildId}-${m.monthKey}-empty`;
-                        const isInCart = hasBill && cart.some((i) => i.id === id);
-                        const isPaid = m.status === 'paid';
-                        const noBill = !hasBill;
-                        const labelBase = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
-                        const label = m.calendarYear != null ? `${labelBase} ${m.calendarYear}` : labelBase;
-                        const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
-                        return (
-                          <tr
-                            key={m.monthKey}
+              <div className="hidden md:block overflow-y-auto flex-1" style={{ maxHeight: '420px' }}>
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
+                      <th className="pb-2 font-semibold">{lang === 'en' ? 'Month' : 'Bulan'}</th>
+                      <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Amount' : 'Jumlah'}</th>
+                      <th className="pb-2 font-semibold text-center">{lang === 'en' ? 'Status' : 'Status'}</th>
+                      <th className="pb-2 font-semibold text-center w-20" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tuitionMonths.map((m) => {
+                      const hasBill = m.billId != null;
+                      const id = hasBill
+                        ? `spp-${activeChildId}-${m.billId}`
+                        : `spp-${activeChildId}-${m.monthKey}-empty`;
+                      const isInCart = hasBill && cart.some((i) => i.id === id);
+                      const isPaid = m.status === 'paid';
+                      const noBill = !hasBill;
+                      const labelBase = lang === 'en' ? m.monthLabelEn : m.monthLabelId;
+                      const label = m.calendarYear != null ? `${labelBase} ${m.calendarYear}` : labelBase;
+                      const title = `${lang === 'en' ? 'Tuition' : 'SPP'} ${label}`;
+                      return (
+                        <tr
+                          key={m.monthKey}
+                          className={[
+                            'border-b border-slate-100 last:border-0 transition-colors',
+                            isInCart ? 'bg-primary-light/50' : '',
+                          ].join(' ')}
+                        >
+                          <td className="py-2.5 font-semibold text-slate-700">{label}</td>
+                          <td
                             className={[
-                              'border-b border-slate-100 last:border-0 transition-colors',
-                              isInCart ? 'bg-primary-light/50' : '',
+                              'py-2.5 text-right font-bold',
+                              noBill ? 'text-slate-400' : isInCart ? 'text-primary' : 'text-slate-700',
                             ].join(' ')}
                           >
-                            <td className="py-2.5 font-semibold text-slate-700">{label}</td>
-                            <td
-                              className={[
-                                'py-2.5 text-right font-bold',
-                                noBill ? 'text-slate-400' : isInCart ? 'text-primary' : 'text-slate-700',
-                              ].join(' ')}
-                            >
-                              {noBill ? '—' : formatRupiah(m.amount)}
-                            </td>
-                            <td className="py-2.5 text-center">
-                              {isPaid ? (
-                                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                  {lang === 'en' ? 'Paid' : 'Lunas'}
-                                </span>
-                              ) : noBill ? (
-                                <span className="text-xs text-slate-400">—</span>
-                              ) : isInCart ? (
-                                <span className="text-xs font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full">
-                                  {lang === 'en' ? 'In Cart' : 'Keranjang'}
-                                </span>
-                              ) : (
-                                <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                                  {lang === 'en' ? 'Unpaid' : 'Belum'}
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-2.5 text-center">
-                              {!noBill && !isPaid ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (m.billId) toggleTuitionToCart(m.billId, title, m.amount);
-                                  }}
-                                  className={[
-                                    'w-8 h-8 rounded-full inline-flex items-center justify-center transition-all',
-                                    isInCart
-                                      ? 'bg-primary text-white shadow-md'
-                                      : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-primary',
-                                  ].join(' ')}
-                                  aria-label={isInCart ? 'Remove from cart' : 'Add to cart'}
-                                >
-                                  {isInCart ? '✅' : <ShoppingCart size={14} />}
-                                </button>
-                              ) : null}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                            {noBill ? '—' : formatRupiah(m.amount)}
+                          </td>
+                          <td className="py-2.5 text-center">
+                            {isPaid ? (
+                              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                {lang === 'en' ? 'Paid' : 'Lunas'}
+                              </span>
+                            ) : noBill ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : isInCart ? (
+                              <span className="text-xs font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full">
+                                {lang === 'en' ? 'In Cart' : 'Keranjang'}
+                              </span>
+                            ) : (
+                              <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                                {lang === 'en' ? 'Unpaid' : 'Belum'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-center">
+                            {!noBill && !isPaid ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (m.billId) toggleTuitionToCart(m.billId, title, m.amount);
+                                }}
+                                className={[
+                                  'w-8 h-8 rounded-full inline-flex items-center justify-center transition-all',
+                                  isInCart
+                                    ? 'bg-primary text-white shadow-md'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-primary',
+                                ].join(' ')}
+                                aria-label={isInCart ? 'Remove from cart' : 'Add to cart'}
+                              >
+                                {isInCart ? '✅' : <ShoppingCart size={14} />}
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-                <p className="text-xs text-slate-500 mt-5 flex items-center bg-slate-50 p-2 rounded-lg">
-                  <span className="mr-2 text-primary shrink-0">ℹ️</span>{' '}
-                  {lang === 'en'
-                    ? 'Tap unpaid months to add to cart.'
-                    : 'Tap bulan yang belum bayar untuk menambah ke keranjang.'}
-                </p>
-              </>
-            )}
-          </div>
+              <p className="text-xs text-slate-500 mt-5 flex items-center bg-slate-50 p-2 rounded-lg">
+                <span className="mr-2 text-primary shrink-0">ℹ️</span>{' '}
+                {lang === 'en'
+                  ? 'Tap unpaid months to add to cart.'
+                  : 'Tap bulan yang belum bayar untuk menambah ke keranjang.'}
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div>
-          <h2 className="font-bold text-slate-700 mb-3 px-1 text-lg" suppressHydrationWarning>
-            {lang === 'en' ? 'Installments & other fees' : 'Cicilan & biaya lain'}
-          </h2>
+          <div className="flex items-center justify-between gap-2 mb-3 px-1">
+            <h2 className="font-bold text-slate-700 text-lg" suppressHydrationWarning>
+              {isKreativa
+                ? lang === 'en'
+                  ? 'Bills & installments'
+                  : 'Tagihan & cicilan'
+                : lang === 'en'
+                  ? 'Installments & other fees'
+                  : 'Cicilan & biaya lain'}
+            </h2>
+            {isKreativa && finance.academicYearLabel ? (
+              <span className="text-xs font-bold bg-primary-light text-primary px-2.5 py-1 rounded-md shrink-0">
+                AY {finance.academicYearLabel}
+              </span>
+            ) : null}
+          </div>
 
           {isKreativa ? (
             <>
@@ -530,7 +441,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                       <div className="flex justify-between items-start mb-5">
                         <span className="font-bold text-slate-700 text-lg">{name}</span>
                         <Link
-                          href={`/finance/installments/group/${group.id}/history`}
+                          href={groupHistoryHref(group.id)}
                           className="text-[10px] font-bold text-primary hover:bg-indigo-100 flex items-center bg-primary-light px-2.5 py-1.5 rounded-full transition-colors"
                         >
                           {lang === 'en' ? 'Installment History' : 'Riwayat Cicilan'}{' '}
@@ -598,7 +509,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-700 line-clamp-2">{termin.title}</p>
+                                      <p className="text-xs font-bold text-slate-700 line-clamp-2">
+                                        {terminLabel(name, termin.title)}
+                                      </p>
                                       <p
                                         className={[
                                           'text-sm font-bold mt-0.5',
@@ -656,7 +569,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                             <div className="flex items-center gap-3 min-w-0">
                               <span className="font-semibold text-slate-700">{name}</span>
                               <Link
-                                href={`/finance/installments/group/${group.id}/history`}
+                                href={groupHistoryHref(group.id)}
                                 className="text-[10px] font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full hover:bg-indigo-100 shrink-0"
                               >
                                 {lang === 'en' ? 'History' : 'Riwayat'} ›
@@ -705,7 +618,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                         isInCart ? 'bg-primary-light/50' : '',
                                       ].join(' ')}
                                     >
-                                      <td className="py-2 font-medium text-slate-700">{termin.title}</td>
+                                      <td className="py-2 font-medium text-slate-700">
+                                        {terminLabel(name, termin.title)}
+                                      </td>
                                       <td
                                         className={[
                                           'py-2 text-right font-bold',

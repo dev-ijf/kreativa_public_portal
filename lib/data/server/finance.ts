@@ -191,13 +191,6 @@ function rowIsInstallmentBillRow(r: BillViewRow): boolean {
   return r.payment_type === 'installment';
 }
 
-/** Kreativa donut: installment product atau multi-termin group. */
-function rowIsInstallmentGroupRow(g: BillGroupViewRow): boolean {
-  if (coalescePgBool(g.is_installment)) return true;
-  if (g.payment_type === 'installment') return true;
-  return num(g.termin_count) > 1;
-}
-
 function mapBillViewRows(rows: Record<string, unknown>[]): BillViewRow[] {
   return rows.map((raw) => {
     const base = raw as BillViewRow;
@@ -501,60 +494,36 @@ function buildKreativaPayload(
     billId: null,
   }));
 
-  const payableCandidates = rows.filter((r) => {
-    if (r.student_id !== child.id) return false;
-    if (activeAyId == null || r.academic_year_id !== activeAyId) return false;
-    return num(r.balance_amount) > 0 && !coalescePgBool(r.is_fully_paid);
-  });
-
-  function payableSortKey(r: BillViewRow): number {
-    const due = r.due_date ? new Date(r.due_date).getTime() : Number.POSITIVE_INFINITY;
-    const seq = r.termin_sequence != null ? num(r.termin_sequence) : 999;
-    return Number.isFinite(due) ? due : Number.POSITIVE_INFINITY + seq;
-  }
-
-  payableCandidates.sort((a, b) => {
-    const da = payableSortKey(a);
-    const db = payableSortKey(b);
-    if (da !== db) return da - db;
-    const sa = num(a.termin_sequence);
-    const sb = num(b.termin_sequence);
-    if (sa !== sb) return sa - sb;
-    return a.bill_id - b.bill_id;
-  });
-
-  const payableBills: FinancePayableBillSlot[] = payableCandidates.map((r) => ({
-    billId: String(r.bill_id),
-    title: r.title,
-    amount: num(r.balance_amount),
-  }));
-
   const previous = buildPreviousBills(child, rows);
-
   const installmentGroups: FinanceInstallmentGroupRow[] = [];
+  const coveredBillIds = new Set<number>();
+
   if (activeAyId != null) {
-    const childGroups = groups.filter(
-      (g) => g.student_id === child.id && g.academic_year_id === activeAyId && rowIsInstallmentGroupRow(g),
-    );
+    // Semua bill_group current AY (satu kartu per fee: DSP / DKT / SPP / Pendaftaran).
+    const childGroups = groups
+      .filter((g) => g.student_id === child.id && g.academic_year_id === activeAyId)
+      .sort((a, b) => {
+        const da = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
+        const db = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+        return a.bill_group_id - b.bill_group_id;
+      });
+
     for (const g of childGroups) {
-      const groupBillIds = rows
-        .filter((r) => r.student_id === child.id && num(r.bill_group_id) === g.bill_group_id)
-        .map((r) => r.bill_id);
+      const groupBills = rows.filter(
+        (r) => r.student_id === child.id && num(r.bill_group_id) === g.bill_group_id,
+      );
+      for (const r of groupBills) coveredBillIds.add(r.bill_id);
+
       const lines: PaymentLineRow[] = [];
-      for (const bid of groupBillIds) {
-        const list = paymentLinesByBillId.get(bid);
+      for (const r of groupBills) {
+        const list = paymentLinesByBillId.get(r.bill_id);
         if (list) lines.push(...list);
       }
       lines.sort((a, b) => String(a.detail_created_at).localeCompare(String(b.detail_created_at)));
 
-      const unpaidTermins = rows
-        .filter(
-          (r) =>
-            r.student_id === child.id &&
-            num(r.bill_group_id) === g.bill_group_id &&
-            num(r.balance_amount) > 0 &&
-            !coalescePgBool(r.is_fully_paid),
-        )
+      const unpaidTermins = groupBills
+        .filter((r) => num(r.balance_amount) > 0 && !coalescePgBool(r.is_fully_paid))
         .sort((a, b) => num(a.termin_sequence) - num(b.termin_sequence) || a.bill_id - b.bill_id)
         .map((r) => ({
           billId: String(r.bill_id),
@@ -576,6 +545,49 @@ function buildKreativaPayload(
         termins: unpaidTermins,
         paymentHistory: mapPaymentLines(lines),
       });
+    }
+
+    // Tagihan current AY tanpa bill_group (orphan) — satu "group" per bill.
+    const orphans = rows
+      .filter(
+        (r) =>
+          r.student_id === child.id &&
+          r.academic_year_id === activeAyId &&
+          !coveredBillIds.has(r.bill_id) &&
+          (r.bill_group_id == null || num(r.bill_group_id) <= 0),
+      )
+      .sort((a, b) => a.bill_id - b.bill_id);
+
+    for (const r of orphans) {
+      const bal = num(r.balance_amount);
+      const totalAmt = num(r.total_amount);
+      const paidAmt = num(r.paid_amount);
+      const fully = coalescePgBool(r.is_fully_paid) || bal <= 0;
+      const lines = paymentLinesByBillId.get(r.bill_id) ?? [];
+      installmentGroups.push({
+        id: `bill-${r.bill_id}`,
+        nameEn: r.title || r.product_name,
+        nameId: r.title || r.product_name,
+        total: totalAmt,
+        paid: paidAmt,
+        isFullyPaid: fully,
+        termins:
+          !fully && bal > 0
+            ? [{ billId: String(r.bill_id), title: r.title, amount: bal }]
+            : [],
+        paymentHistory: mapPaymentLines(lines),
+      });
+    }
+  }
+
+  // Outstanding helper: unique unpaid termin balances (tanpa digital card).
+  const payableBills: FinancePayableBillSlot[] = [];
+  const seen = new Set<string>();
+  for (const g of installmentGroups) {
+    for (const t of g.termins) {
+      if (seen.has(t.billId)) continue;
+      seen.add(t.billId);
+      payableBills.push({ billId: t.billId, title: t.title, amount: t.amount });
     }
   }
 
