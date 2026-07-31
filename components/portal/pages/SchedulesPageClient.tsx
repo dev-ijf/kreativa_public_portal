@@ -232,9 +232,10 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
               onClick={() => void shiftWeek('prev')}
               disabled={!hasPrevWeek || loadingWeek}
               aria-label={t(lang, 'schedulePrevWeek')}
-              className="p-1.5 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-1 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
             >
-              <ChevronLeft size={18} strokeWidth={2.25} />
+              <ChevronLeft size={16} strokeWidth={2.25} />
+              <span className="text-[11px] font-semibold">{t(lang, 'schedulePrevWeekShort')}</span>
             </button>
             <p className="text-xs font-semibold text-slate-500 text-center flex-1 min-w-0 truncate">
               {weekLabel}
@@ -244,9 +245,10 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
               onClick={() => void shiftWeek('next')}
               disabled={!hasNextWeek || loadingWeek}
               aria-label={t(lang, 'scheduleNextWeek')}
-              className="p-1.5 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
+              className="inline-flex items-center gap-0.5 shrink-0 px-1.5 py-1 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
             >
-              <ChevronRight size={18} strokeWidth={2.25} />
+              <span className="text-[11px] font-semibold">{t(lang, 'scheduleNextWeekShort')}</span>
+              <ChevronRight size={16} strokeWidth={2.25} />
             </button>
           </div>
         ) : null}
