@@ -1,4 +1,13 @@
 import { sql } from '@/lib/db/client';
+import { isStudentVisibleToViewer } from '@/lib/data/server/attendance';
+import {
+  getWeekAdjacency,
+  getWeekConfigById,
+  normalizeWeekDate,
+  resolveAdjacentWeekConfig,
+  resolveCurrentWeekConfig,
+  type WeekDirection,
+} from '@/lib/data/server/week-configs';
 import { computeDefaultDayIndex } from '@/lib/portal/weekly-plan-utils';
 import type {
   PortalWeekConfig,
@@ -20,35 +29,8 @@ type Enrollment = {
   academicYearId: number;
 };
 
-/**
- * Normalize a Postgres DATE to YYYY-MM-DD calendar text.
- * Prefer SQL `date_col::text` so drivers never shift by timezone.
- * Fallback: pure date strings as-is; ISO datetimes use Asia/Jakarta calendar day.
- */
 function normalizeDate(value: unknown): string {
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-    // Avoid slice(0,10) on ISO timestamps — e.g. 2026-07-19T17:00:00Z is 20 Jul WIB
-    const parsed = Date.parse(trimmed);
-    if (!Number.isNaN(parsed)) {
-      return calendarDateInJakarta(new Date(parsed));
-    }
-    return trimmed.slice(0, 10);
-  }
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return calendarDateInJakarta(value);
-  }
-  return String(value ?? '').slice(0, 10);
-}
-
-/** Civil date in Asia/Jakarta (UTC+7, no DST). */
-function calendarDateInJakarta(dt: Date): string {
-  const shifted = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
-  const y = shifted.getUTCFullYear();
-  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(shifted.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return normalizeWeekDate(value);
 }
 
 function normalizeTime(value: unknown): string {
@@ -128,42 +110,6 @@ async function getViewerEnrollments(
   }
 
   return [];
-}
-
-async function resolveWeekConfig(
-  schoolId: number,
-  academicYearId: number,
-): Promise<PortalWeekConfig | null> {
-  const rows = await sql`
-    SELECT
-      id,
-      week_number AS "weekNumber",
-      week_label AS "weekLabel",
-      date_from::text AS "dateFrom",
-      date_to::text AS "dateTo"
-    FROM wl_week_configs
-    WHERE school_id = ${schoolId}
-      AND academic_year_id = ${academicYearId}
-      AND is_active = true
-    ORDER BY
-      CASE
-        WHEN date_from <= CURRENT_DATE AND date_to >= CURRENT_DATE THEN 0
-        WHEN date_from > CURRENT_DATE THEN 1
-        ELSE 2
-      END,
-      CASE WHEN date_from > CURRENT_DATE THEN date_from END ASC NULLS LAST,
-      CASE WHEN date_to < CURRENT_DATE THEN date_to END DESC NULLS LAST
-    LIMIT 1
-  `;
-  const r = rows[0] as Record<string, unknown> | undefined;
-  if (!r) return null;
-  return {
-    id: Number(r.id),
-    weekNumber: Number(r.weekNumber),
-    weekLabel: (r.weekLabel as string | null) ?? null,
-    dateFrom: normalizeDate(r.dateFrom),
-    dateTo: normalizeDate(r.dateTo),
-  };
 }
 
 /**
@@ -258,6 +204,43 @@ async function loadPlanForWeek(
   return { plan, rows: Array.from(byRow.values()) };
 }
 
+async function buildBundleForEnrollment(
+  en: Enrollment,
+  week: PortalWeekConfig,
+): Promise<PortalWeeklyPlanBundle> {
+  const [{ plan, rows }, adjacency] = await Promise.all([
+    loadPlanForWeek(en.classId, week.id),
+    getWeekAdjacency(en.schoolId, en.academicYearId, week.id),
+  ]);
+  return {
+    studentId: en.studentId,
+    schoolId: en.schoolId,
+    classId: en.classId,
+    academicYearId: en.academicYearId,
+    week,
+    defaultDayIndex: computeDefaultDayIndex(week.dateFrom, week.dateTo),
+    hasPrevWeek: adjacency.hasPrevWeek,
+    hasNextWeek: adjacency.hasNextWeek,
+    plan,
+    rows,
+  };
+}
+
+function emptyBundle(en: Enrollment): PortalWeeklyPlanBundle {
+  return {
+    studentId: en.studentId,
+    schoolId: en.schoolId,
+    classId: en.classId,
+    academicYearId: en.academicYearId,
+    week: null,
+    defaultDayIndex: 0,
+    hasPrevWeek: false,
+    hasNextWeek: false,
+    plan: null,
+    rows: [],
+  };
+}
+
 /**
  * Weekly plans for the viewer's active enrollments,
  * with week resolved from today's date via wl_week_configs.
@@ -277,36 +260,74 @@ export async function getWeeklyPlansForPortal(
     const weekKey = `${en.schoolId}:${en.academicYearId}`;
     let week = weekCache.get(weekKey);
     if (week === undefined) {
-      week = await resolveWeekConfig(en.schoolId, en.academicYearId);
+      week = await resolveCurrentWeekConfig(en.schoolId, en.academicYearId);
       weekCache.set(weekKey, week);
     }
 
     if (!week) {
-      out.push({
-        studentId: en.studentId,
-        schoolId: en.schoolId,
-        classId: en.classId,
-        academicYearId: en.academicYearId,
-        week: null,
-        defaultDayIndex: 0,
-        plan: null,
-        rows: [],
-      });
+      out.push(emptyBundle(en));
       continue;
     }
 
-    const { plan, rows } = await loadPlanForWeek(en.classId, week.id);
-    out.push({
-      studentId: en.studentId,
-      schoolId: en.schoolId,
-      classId: en.classId,
-      academicYearId: en.academicYearId,
-      week,
-      defaultDayIndex: computeDefaultDayIndex(week.dateFrom, week.dateTo),
-      plan,
-      rows,
-    });
+    out.push(await buildBundleForEnrollment(en, week));
   }
 
   return out;
+}
+
+export type GetWeeklyPlanWeekResult =
+  | { ok: true; bundle: PortalWeeklyPlanBundle }
+  | { ok: false; reason: 'forbidden' | 'missing_class' | 'no_week' | 'bad_request' };
+
+/**
+ * Load a WL weekly plan for one student at a specific week,
+ * or the previous/next adjacent week when `direction` is set.
+ */
+export async function getWeeklyPlanForPortalStudentWeek(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+  weekConfigId: number,
+  direction?: WeekDirection | null,
+): Promise<GetWeeklyPlanWeekResult> {
+  if (!Number.isFinite(studentId) || !Number.isFinite(weekConfigId)) {
+    return { ok: false, reason: 'bad_request' };
+  }
+
+  const visible = await isStudentVisibleToViewer(viewerUserId, viewerRole, studentId);
+  if (!visible) return { ok: false, reason: 'forbidden' };
+
+  const enrollments = await getViewerEnrollments(viewerUserId, viewerRole);
+  const en = enrollments.find((e) => e.studentId === studentId);
+  if (!en) return { ok: false, reason: 'missing_class' };
+
+  let week: PortalWeekConfig | null;
+  if (direction === 'prev' || direction === 'next') {
+    week = await resolveAdjacentWeekConfig(
+      en.schoolId,
+      en.academicYearId,
+      weekConfigId,
+      direction,
+    );
+  } else {
+    week = await getWeekConfigById(weekConfigId);
+    if (
+      week &&
+      (
+        await sql`
+          SELECT 1
+          FROM wl_week_configs
+          WHERE id = ${week.id}
+            AND school_id = ${en.schoolId}
+            AND academic_year_id = ${en.academicYearId}
+          LIMIT 1
+        `
+      ).length === 0
+    ) {
+      week = null;
+    }
+  }
+
+  if (!week) return { ok: false, reason: 'no_week' };
+  return { ok: true, bundle: await buildBundleForEnrollment(en, week) };
 }

@@ -44,5 +44,7 @@ export type PortalLmsWeeklyPlanBundle = {
   academicYearId: number;
   week: PortalWeekConfig | null;
   defaultDayIndex: number;
+  hasPrevWeek: boolean;
+  hasNextWeek: boolean;
   sessions: PortalLmsSession[];
 };

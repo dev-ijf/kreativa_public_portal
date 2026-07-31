@@ -33,6 +33,8 @@ export type PortalWeeklyPlanBundle = {
   academicYearId: number;
   week: PortalWeekConfig | null;
   defaultDayIndex: number;
+  hasPrevWeek: boolean;
+  hasNextWeek: boolean;
   plan: {
     id: number;
     schoolLevel: string;

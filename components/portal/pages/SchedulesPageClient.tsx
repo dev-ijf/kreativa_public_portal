@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Header } from '@/components/portal/Header';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
@@ -28,9 +29,26 @@ type Props = {
   initialLmsPlans: PortalLmsWeeklyPlanBundle[];
 };
 
+function upsertByStudent<T extends { studentId: number }>(list: T[], next: T): T[] {
+  const idx = list.findIndex((p) => p.studentId === next.studentId);
+  if (idx < 0) return [...list, next];
+  const copy = list.slice();
+  copy[idx] = next;
+  return copy;
+}
+
 export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
   const { lang } = usePortalState();
   const activeChild = useActiveChild();
+
+  const [wlPlans, setWlPlans] = useState(initialPlans);
+  const [lmsPlans, setLmsPlans] = useState(initialLmsPlans);
+  const [loadingWeek, setLoadingWeek] = useState(false);
+
+  useEffect(() => {
+    setWlPlans(initialPlans);
+    setLmsPlans(initialLmsPlans);
+  }, [initialPlans, initialLmsPlans]);
 
   const isKg = isKindergartenStudent(activeChild ?? {});
   const isPrimary = isPrimaryStudent(activeChild ?? {});
@@ -39,28 +57,34 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
   const wlBundle = useMemo(() => {
     if (!activeChild?.classId || activeChild.academicYearId == null) return null;
     return (
-      initialPlans.find(
+      wlPlans.find(
         (p) =>
           p.studentId === activeChild.id &&
           p.classId === activeChild.classId &&
           p.academicYearId === activeChild.academicYearId,
       ) ?? null
     );
-  }, [initialPlans, activeChild]);
+  }, [wlPlans, activeChild]);
 
   const lmsBundle = useMemo(() => {
     if (!activeChild?.classId || activeChild.academicYearId == null) return null;
     return (
-      initialLmsPlans.find(
+      lmsPlans.find(
         (p) =>
           p.studentId === activeChild.id &&
           p.classId === activeChild.classId &&
           p.academicYearId === activeChild.academicYearId,
       ) ?? null
     );
-  }, [initialLmsPlans, activeChild]);
+  }, [lmsPlans, activeChild]);
 
   const week = isSecondary ? lmsBundle?.week ?? null : wlBundle?.week ?? null;
+  const hasPrevWeek = isSecondary
+    ? (lmsBundle?.hasPrevWeek ?? false)
+    : (wlBundle?.hasPrevWeek ?? false);
+  const hasNextWeek = isSecondary
+    ? (lmsBundle?.hasNextWeek ?? false)
+    : (wlBundle?.hasNextWeek ?? false);
   const defaultDayIndex = isSecondary
     ? (lmsBundle?.defaultDayIndex ?? 0)
     : (wlBundle?.defaultDayIndex ?? 0);
@@ -80,6 +104,34 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
     week?.weekLabel?.trim() ||
     (week ? `${t(lang, 'scheduleWeekPrefix')} ${week.weekNumber}` : null);
 
+  const shiftWeek = async (direction: 'prev' | 'next') => {
+    if (!activeChild || !week || loadingWeek) return;
+    if (direction === 'prev' && !hasPrevWeek) return;
+    if (direction === 'next' && !hasNextWeek) return;
+
+    setLoadingWeek(true);
+    try {
+      const params = new URLSearchParams({
+        studentId: String(activeChild.id),
+        weekConfigId: String(week.id),
+        direction,
+      });
+      const res = await fetch(`/api/portal/schedules/week?${params.toString()}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as
+        | { source: 'wl'; bundle: PortalWeeklyPlanBundle }
+        | { source: 'lms'; bundle: PortalLmsWeeklyPlanBundle };
+
+      if (data.source === 'lms') {
+        setLmsPlans((prev) => upsertByStudent(prev, data.bundle));
+      } else {
+        setWlPlans((prev) => upsertByStudent(prev, data.bundle));
+      }
+    } finally {
+      setLoadingWeek(false);
+    }
+  };
+
   const hasNoClass =
     !activeChild ||
     activeChild.classId == null ||
@@ -90,6 +142,12 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
     body = <p className="text-sm text-slate-500">{t(lang, 'scheduleNoClass')}</p>;
   } else if (!week) {
     body = <p className="text-sm text-slate-500">{t(lang, 'scheduleNoWeek')}</p>;
+  } else if (loadingWeek) {
+    body = (
+      <div className="flex justify-center py-16" aria-busy="true" aria-live="polite">
+        <Loader2 size={28} className="animate-spin text-slate-400" />
+      </div>
+    );
   } else if (isSecondary) {
     const hasSessions = (lmsBundle?.sessions.length ?? 0) > 0;
     body = !hasSessions ? (
@@ -168,7 +226,29 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
 
       <div className="px-4 space-y-4">
         {weekLabel ? (
-          <p className="text-xs font-semibold text-slate-500 -mt-1">{weekLabel}</p>
+          <div className="flex items-center justify-between gap-2 -mt-1">
+            <button
+              type="button"
+              onClick={() => void shiftWeek('prev')}
+              disabled={!hasPrevWeek || loadingWeek}
+              aria-label={t(lang, 'schedulePrevWeek')}
+              className="p-1.5 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <ChevronLeft size={18} strokeWidth={2.25} />
+            </button>
+            <p className="text-xs font-semibold text-slate-500 text-center flex-1 min-w-0 truncate">
+              {weekLabel}
+            </p>
+            <button
+              type="button"
+              onClick={() => void shiftWeek('next')}
+              disabled={!hasNextWeek || loadingWeek}
+              aria-label={t(lang, 'scheduleNextWeek')}
+              className="p-1.5 rounded-full text-slate-600 hover:bg-white/80 disabled:opacity-30 disabled:pointer-events-none"
+            >
+              <ChevronRight size={18} strokeWidth={2.25} />
+            </button>
+          </div>
         ) : null}
         {body}
       </div>
