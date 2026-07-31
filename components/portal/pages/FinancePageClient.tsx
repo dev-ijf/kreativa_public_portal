@@ -435,116 +435,132 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                   const progressPercentage =
                     group.total === 0 ? 0 : Math.min(100, (group.paid / group.total) * 100);
                   const name = lang === 'en' ? group.nameEn : group.nameId;
+                  const showDonut = group.isInstallment;
+
+                  const terminButtons =
+                    isFullyPaid ? (
+                      <div className="bg-emerald-50 text-emerald-800 text-sm p-3 rounded-xl flex flex-col gap-1 font-bold">
+                        <span className="flex items-center">
+                          <span className="mr-2">✅</span> {lang === 'en' ? 'Fully paid' : 'Sudah lunas'}
+                        </span>
+                      </div>
+                    ) : group.termins.length === 0 ? (
+                      <p className="text-xs text-slate-500">
+                        {lang === 'en' ? 'No open bills.' : 'Tidak ada tagihan terbuka.'}
+                      </p>
+                    ) : (
+                      group.termins.map((termin) => {
+                        const cartId = `spp-${activeChildId}-${termin.billId}`;
+                        const isInCart = cart.some((i) => i.id === cartId);
+                        return (
+                          <button
+                            key={termin.billId}
+                            type="button"
+                            onClick={() => toggleTuitionToCart(termin.billId, termin.title, termin.amount)}
+                            className={[
+                              'w-full text-left p-3 rounded-2xl border transition-all',
+                              isInCart
+                                ? 'bg-primary-light border-indigo-200'
+                                : 'bg-slate-50 border-slate-100 hover:border-indigo-200',
+                            ].join(' ')}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-xs font-bold text-slate-700 line-clamp-2">
+                                  {terminLabel(name, termin.title)}
+                                </p>
+                                <p
+                                  className={[
+                                    'text-sm font-bold mt-0.5',
+                                    isInCart ? 'text-primary' : 'text-slate-700',
+                                  ].join(' ')}
+                                >
+                                  {formatRupiah(termin.amount)}
+                                </p>
+                              </div>
+                              <span
+                                className={[
+                                  'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
+                                  isInCart
+                                    ? 'bg-primary text-white'
+                                    : 'bg-white border border-slate-200 text-slate-500',
+                                ].join(' ')}
+                              >
+                                {isInCart ? '✅' : <ShoppingCart size={14} />}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })
+                    );
 
                   return (
                     <div key={group.id} className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
-                      <div className="flex justify-between items-start mb-5">
-                        <span className="font-bold text-slate-700 text-lg">{name}</span>
+                      <div className="flex justify-between items-start mb-4 gap-2">
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-700 text-lg">{name}</span>
+                          {!showDonut && !isFullyPaid ? (
+                            <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                              {formatRupiah(remaining > 0 ? remaining : group.total)}
+                            </p>
+                          ) : null}
+                        </div>
                         <Link
                           href={groupHistoryHref(group.id)}
-                          className="text-[10px] font-bold text-primary hover:bg-indigo-100 flex items-center bg-primary-light px-2.5 py-1.5 rounded-full transition-colors"
+                          className="text-[10px] font-bold text-primary hover:bg-indigo-100 flex items-center bg-primary-light px-2.5 py-1.5 rounded-full transition-colors shrink-0"
                         >
-                          {lang === 'en' ? 'Installment History' : 'Riwayat Cicilan'}{' '}
+                          {showDonut
+                            ? lang === 'en'
+                              ? 'Installment History'
+                              : 'Riwayat Cicilan'
+                            : lang === 'en'
+                              ? 'History'
+                              : 'Riwayat'}{' '}
                           <span className="ml-1">›</span>
                         </Link>
                       </div>
 
-                      <div className="flex items-start gap-4">
-                        <div className="flex flex-col items-center shrink-0 w-1/3 border-r border-slate-100 pr-2">
-                          <ProgressRing percentage={progressPercentage} />
-                          <div className="mt-2 text-center w-full">
-                            {isFullyPaid ? (
-                              <>
-                                <p className="text-[10px] text-slate-500 leading-tight">
-                                  {lang === 'en' ? 'Billed' : 'Tagihan'}
-                                </p>
-                                <p className="text-xs font-bold text-slate-700 leading-tight">
-                                  {formatRupiah(group.total)}
-                                </p>
-                                <p className="text-[10px] font-bold text-emerald-600 mt-1">
-                                  {lang === 'en' ? 'Paid in full' : 'Lunas'}
-                                </p>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-[10px] text-slate-500 leading-tight">
-                                  {lang === 'en' ? 'Left' : 'Sisa'}
-                                </p>
-                                <p className="text-xs font-bold text-slate-700 leading-tight">
-                                  {formatRupiah(remaining)}
-                                </p>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="w-2/3 flex flex-col gap-2">
-                          {isFullyPaid ? (
-                            <div className="bg-emerald-50 text-emerald-800 text-sm p-3 rounded-xl flex flex-col gap-1 font-bold">
-                              <span className="flex items-center">
-                                <span className="mr-2">✅</span> {lang === 'en' ? 'Fully paid' : 'Sudah lunas'}
-                              </span>
+                      {showDonut ? (
+                        <div className="flex items-start gap-4">
+                          <div className="flex flex-col items-center shrink-0 w-1/3 border-r border-slate-100 pr-2">
+                            <ProgressRing percentage={progressPercentage} />
+                            <div className="mt-2 text-center w-full">
+                              {isFullyPaid ? (
+                                <>
+                                  <p className="text-[10px] text-slate-500 leading-tight">
+                                    {lang === 'en' ? 'Billed' : 'Tagihan'}
+                                  </p>
+                                  <p className="text-xs font-bold text-slate-700 leading-tight">
+                                    {formatRupiah(group.total)}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-emerald-600 mt-1">
+                                    {lang === 'en' ? 'Paid in full' : 'Lunas'}
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-[10px] text-slate-500 leading-tight">
+                                    {lang === 'en' ? 'Left' : 'Sisa'}
+                                  </p>
+                                  <p className="text-xs font-bold text-slate-700 leading-tight">
+                                    {formatRupiah(remaining)}
+                                  </p>
+                                </>
+                              )}
                             </div>
-                          ) : group.termins.length === 0 ? (
-                            <p className="text-xs text-slate-500">
-                              {lang === 'en' ? 'No open installments.' : 'Tidak ada termin terbuka.'}
-                            </p>
-                          ) : (
-                            group.termins.map((termin) => {
-                              const cartId = `spp-${activeChildId}-${termin.billId}`;
-                              const isInCart = cart.some((i) => i.id === cartId);
-                              return (
-                                <button
-                                  key={termin.billId}
-                                  type="button"
-                                  onClick={() =>
-                                    toggleTuitionToCart(termin.billId, termin.title, termin.amount)
-                                  }
-                                  className={[
-                                    'w-full text-left p-3 rounded-2xl border transition-all',
-                                    isInCart
-                                      ? 'bg-primary-light border-indigo-200'
-                                      : 'bg-slate-50 border-slate-100 hover:border-indigo-200',
-                                  ].join(' ')}
-                                >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-bold text-slate-700 line-clamp-2">
-                                        {terminLabel(name, termin.title)}
-                                      </p>
-                                      <p
-                                        className={[
-                                          'text-sm font-bold mt-0.5',
-                                          isInCart ? 'text-primary' : 'text-slate-700',
-                                        ].join(' ')}
-                                      >
-                                        {formatRupiah(termin.amount)}
-                                      </p>
-                                    </div>
-                                    <span
-                                      className={[
-                                        'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-                                        isInCart
-                                          ? 'bg-primary text-white'
-                                          : 'bg-white border border-slate-200 text-slate-500',
-                                      ].join(' ')}
-                                    >
-                                      {isInCart ? '✅' : <ShoppingCart size={14} />}
-                                    </span>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          )}
+                          </div>
+                          <div className="w-2/3 flex flex-col gap-2">{terminButtons}</div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">{terminButtons}</div>
+                      )}
                     </div>
                   );
                 })}
 
                 {installmentGroups.length === 0 ? (
                   <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-100 text-sm text-slate-600">
-                    {lang === 'en' ? 'No installments found.' : 'Tidak ada cicilan.'}
+                    {lang === 'en' ? 'No bills found.' : 'Tidak ada tagihan.'}
                   </div>
                 ) : null}
               </div>
@@ -552,7 +568,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
               <div className="hidden md:block bg-white rounded-3xl p-5 shadow-sm border border-slate-100">
                 {installmentGroups.length === 0 ? (
                   <p className="text-sm text-slate-600">
-                    {lang === 'en' ? 'No installments found.' : 'Tidak ada cicilan.'}
+                    {lang === 'en' ? 'No bills found.' : 'Tidak ada tagihan.'}
                   </p>
                 ) : (
                   <div className="space-y-6">
@@ -562,6 +578,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                       const progressPercentage =
                         group.total === 0 ? 0 : Math.min(100, (group.paid / group.total) * 100);
                       const name = lang === 'en' ? group.nameEn : group.nameId;
+                      const showDonut = group.isInstallment;
 
                       return (
                         <div key={group.id} className="border-b border-slate-100 last:border-0 pb-5 last:pb-0">
@@ -576,13 +593,19 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                               </Link>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <div className="w-24 bg-slate-100 rounded-full h-2">
-                                <div
-                                  className="bg-primary h-2 rounded-full transition-all"
-                                  style={{ width: `${progressPercentage}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] text-slate-500 w-8">{progressPercentage.toFixed(0)}%</span>
+                              {showDonut ? (
+                                <>
+                                  <div className="w-24 bg-slate-100 rounded-full h-2">
+                                    <div
+                                      className="bg-primary h-2 rounded-full transition-all"
+                                      style={{ width: `${progressPercentage}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 w-8">
+                                    {progressPercentage.toFixed(0)}%
+                                  </span>
+                                </>
+                              ) : null}
                               {isFullyPaid ? (
                                 <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                                   {lang === 'en' ? 'Paid' : 'Lunas'}
@@ -599,7 +622,15 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="text-left text-xs text-slate-500 border-b border-slate-100">
-                                  <th className="pb-2 font-semibold">{lang === 'en' ? 'Termin' : 'Termin'}</th>
+                                  <th className="pb-2 font-semibold">
+                                    {showDonut
+                                      ? lang === 'en'
+                                        ? 'Termin'
+                                        : 'Termin'
+                                      : lang === 'en'
+                                        ? 'Bill'
+                                        : 'Tagihan'}
+                                  </th>
                                   <th className="pb-2 font-semibold text-right">
                                     {lang === 'en' ? 'Amount' : 'Jumlah'}
                                   </th>

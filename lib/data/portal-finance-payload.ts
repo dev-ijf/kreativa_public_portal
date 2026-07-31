@@ -50,7 +50,7 @@ export type FinanceInstallmentTermin = {
   amount: number;
 };
 
-/** Kreativa: donut dari tuition_bill_groups + daftar termin. */
+/** Kreativa: group dari tuition_bill_groups (+ orphan bills). Donut hanya jika isInstallment. */
 export type FinanceInstallmentGroupRow = {
   id: string;
   nameEn: string;
@@ -58,6 +58,8 @@ export type FinanceInstallmentGroupRow = {
   total: number;
   paid: number;
   isFullyPaid: boolean;
+  /** Dari tuition_products.is_installment — false → UI tanpa donut (mis. Pendaftaran). */
+  isInstallment: boolean;
   termins: FinanceInstallmentTermin[];
   paymentHistory: FinanceInstallmentPaymentLine[];
 };

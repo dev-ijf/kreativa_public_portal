@@ -542,6 +542,7 @@ function buildKreativaPayload(
         total: netTotal > 0 ? netTotal : num(g.total_amount),
         paid: paidAmt,
         isFullyPaid: fully,
+        isInstallment: coalescePgBool(g.is_installment) || g.payment_type === 'installment',
         termins: unpaidTermins,
         paymentHistory: mapPaymentLines(lines),
       });
@@ -571,6 +572,7 @@ function buildKreativaPayload(
         total: totalAmt,
         paid: paidAmt,
         isFullyPaid: fully,
+        isInstallment: coalescePgBool(r.is_installment) || r.payment_type === 'installment',
         termins:
           !fully && bal > 0
             ? [{ billId: String(r.bill_id), title: r.title, amount: bal }]
