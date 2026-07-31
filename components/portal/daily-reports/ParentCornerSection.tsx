@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   DailyReportFull,
+  DailyReportMessage,
   DailyReportParentPatch,
 } from "@/lib/portal/daily-reports-shared";
 import { t, type Lang } from "@/lib/i18n/translations";
@@ -35,6 +36,18 @@ function formatReadAt(iso: string, lang: Lang): string {
   });
 }
 
+function formatMsgAt(iso: string | null, lang: Lang): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(lang === "id" ? "id-ID" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function ParentCornerSection({
   report,
   lang,
@@ -44,7 +57,10 @@ export function ParentCornerSection({
   disabled,
 }: Props) {
   const isKg = report.schoolLevel === "kindergarten";
-  const [message, setMessage] = useState(() => clampTextareaNote(report.parentMessage));
+  const [messages, setMessages] = useState<DailyReportMessage[]>(
+    () => report.messages ?? []
+  );
+  const [newMessage, setNewMessage] = useState("");
   const [readConfirmed, setReadConfirmed] = useState(report.parentReadConfirmed);
   const [sleepTime, setSleepTime] = useState(report.sleepTime ?? "");
   const [wakeTime, setWakeTime] = useState(report.wakeTime ?? "");
@@ -53,7 +69,7 @@ export function ParentCornerSection({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const lastSaved = useRef(
     JSON.stringify({
-      message: clampTextareaNote(report.parentMessage),
+      newMessage: "",
       readConfirmed: report.parentReadConfirmed,
       sleepTime: report.sleepTime ?? "",
       wakeTime: report.wakeTime ?? "",
@@ -62,13 +78,14 @@ export function ParentCornerSection({
   );
 
   useEffect(() => {
-    setMessage(clampTextareaNote(report.parentMessage));
+    setMessages(report.messages ?? []);
+    setNewMessage("");
     setReadConfirmed(report.parentReadConfirmed);
     setSleepTime(report.sleepTime ?? "");
     setWakeTime(report.wakeTime ?? "");
     setReadingTogether(Boolean(report.readingTogether));
     lastSaved.current = JSON.stringify({
-      message: clampTextareaNote(report.parentMessage),
+      newMessage: "",
       readConfirmed: report.parentReadConfirmed,
       sleepTime: report.sleepTime ?? "",
       wakeTime: report.wakeTime ?? "",
@@ -76,7 +93,7 @@ export function ParentCornerSection({
     });
   }, [
     report.id,
-    report.parentMessage,
+    report.messages,
     report.parentReadConfirmed,
     report.sleepTime,
     report.wakeTime,
@@ -95,14 +112,14 @@ export function ParentCornerSection({
   const isDirty = useMemo(() => {
     return (
       JSON.stringify({
-        message,
+        newMessage: newMessage.trim(),
         readConfirmed,
         sleepTime,
         wakeTime,
         readingTogether,
       }) !== lastSaved.current
     );
-  }, [message, readConfirmed, sleepTime, wakeTime, readingTogether]);
+  }, [newMessage, readConfirmed, sleepTime, wakeTime, readingTogether]);
 
   const teacherDisplay = report.teacherNames.length
     ? report.teacherNames.join(", ")
@@ -113,8 +130,9 @@ export function ParentCornerSection({
 
   const performSave = useCallback(async () => {
     setSaveState("saving");
+    const appendText = clampTextareaNote(newMessage.trim());
     const optimistic: DailyReportParentPatch = {
-      parentMessage: message.trim() || null,
+      parentMessage: appendText || report.parentMessage,
       parentReadConfirmed: readConfirmed,
       parentReadAt: readConfirmed
         ? report.parentReadAt ?? new Date().toISOString()
@@ -123,16 +141,28 @@ export function ParentCornerSection({
       wakeTime: isKg ? wakeTime || null : report.wakeTime,
       readingTogether: isKg ? readingTogether : report.readingTogether,
       status: readConfirmed ? "read" : "submitted",
+      messages: appendText
+        ? [
+            ...messages,
+            {
+              id: Date.now(),
+              authorRole: "parent",
+              body: appendText,
+              createdAt: new Date().toISOString(),
+            },
+          ]
+        : messages,
     };
-    // Optimistic merge so UI feels instant.
     onUpdated(optimistic);
+    if (appendText) setMessages(optimistic.messages ?? messages);
     lastSaved.current = JSON.stringify({
-      message: optimistic.parentMessage ?? "",
+      newMessage: "",
       readConfirmed: optimistic.parentReadConfirmed,
       sleepTime: optimistic.sleepTime ?? "",
       wakeTime: optimistic.wakeTime ?? "",
       readingTogether: Boolean(optimistic.readingTogether),
     });
+    setNewMessage("");
 
     try {
       const res = await fetch("/api/portal/daily-reports/parent", {
@@ -141,7 +171,7 @@ export function ParentCornerSection({
         body: JSON.stringify({
           studentId,
           date: selectedDate,
-          parentMessage: message,
+          ...(appendText ? { parentMessage: appendText } : {}),
           parentReadConfirmed: readConfirmed,
           ...(isKg
             ? {
@@ -159,13 +189,13 @@ export function ParentCornerSection({
       const data = (await res.json()) as { patch: DailyReportParentPatch };
       const patch = data.patch;
       onUpdated(patch);
-      setMessage(clampTextareaNote(patch.parentMessage));
+      if (patch.messages) setMessages(patch.messages);
       setReadConfirmed(patch.parentReadConfirmed);
       setSleepTime(patch.sleepTime ?? "");
       setWakeTime(patch.wakeTime ?? "");
       setReadingTogether(Boolean(patch.readingTogether));
       lastSaved.current = JSON.stringify({
-        message: patch.parentMessage ?? "",
+        newMessage: "",
         readConfirmed: patch.parentReadConfirmed,
         sleepTime: patch.sleepTime ?? "",
         wakeTime: patch.wakeTime ?? "",
@@ -181,17 +211,19 @@ export function ParentCornerSection({
   }, [
     studentId,
     selectedDate,
-    message,
+    newMessage,
     readConfirmed,
     sleepTime,
     wakeTime,
     readingTogether,
     isKg,
     onUpdated,
+    report.parentMessage,
     report.parentReadAt,
     report.sleepTime,
     report.wakeTime,
     report.readingTogether,
+    messages,
   ]);
 
   return (
@@ -249,15 +281,62 @@ export function ParentCornerSection({
         title={t(lang, "drSectionParentCorner")}
         icon="👪"
       >
+        <div className="space-y-2">
+          <FieldLabel>{t(lang, "drParentMessageLabel")}</FieldLabel>
+          <div className="max-h-64 overflow-y-auto space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            {messages.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-3">
+                {lang === "id" ? "Belum ada pesan." : "No messages yet."}
+              </p>
+            ) : (
+              messages.map((m) => {
+                const isStaff = m.authorRole === "staff";
+                return (
+                  <div
+                    key={`${m.id}-${m.createdAt || "x"}`}
+                    className={`flex ${isStaff ? "justify-start" : "justify-end"}`}
+                  >
+                    <div
+                      className={`max-w-[90%] rounded-2xl px-3 py-2 text-[14px] whitespace-pre-wrap break-words ${
+                        isStaff
+                          ? "bg-white border border-slate-200 text-slate-800"
+                          : "bg-primary text-white"
+                      }`}
+                    >
+                      <p
+                        className={`text-[10px] font-bold mb-0.5 ${
+                          isStaff ? "text-slate-400" : "text-white/80"
+                        }`}
+                      >
+                        {isStaff
+                          ? lang === "id"
+                            ? "Guru"
+                            : "Teacher"
+                          : lang === "id"
+                            ? "Anda"
+                            : "You"}
+                        {m.createdAt ? ` · ${formatMsgAt(m.createdAt, lang)}` : ""}
+                      </p>
+                      {m.body}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
         <div>
-          <FieldLabel htmlFor="dr-parent-msg">{t(lang, "drParentMessageLabel")}</FieldLabel>
+          <FieldLabel htmlFor="dr-parent-msg">
+            {lang === "id" ? "Tulis pesan baru" : "Write a new message"}
+          </FieldLabel>
           <Textarea
             id="dr-parent-msg"
-            value={message}
-            onChange={(e) => setMessage(clampTextareaNote(e.target.value))}
+            value={newMessage}
+            onChange={(e) => setNewMessage(clampTextareaNote(e.target.value))}
             disabled={disabled}
             placeholder={t(lang, "drParentMessagePlaceholder")}
-            rows={4}
+            rows={3}
             maxLength={TEXTAREA_NOTE_MAX}
             className="rounded-2xl border border-slate-200 px-3 py-2.5 text-[15px] font-normal text-slate-900 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50"
           />

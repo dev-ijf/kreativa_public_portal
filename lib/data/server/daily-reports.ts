@@ -19,6 +19,7 @@ import type {
   DailyReportHomeTip,
   DailyReportMemorize,
   DailyReportObserveDomain,
+  DailyReportMessage,
   DailyReportParentPatch,
   DailyReportSchoolLevel,
   DailyReportStudentMedia,
@@ -679,6 +680,44 @@ export async function getDailyReportByDate(
     ratingLabel: r.ratingLabel ?? null,
   }));
 
+  let messages: DailyReportMessage[] = [];
+  try {
+    const msgRows = await sql`
+      SELECT
+        id,
+        author_role AS "authorRole",
+        body,
+        created_at AS "createdAt"
+      FROM dr_daily_report_messages
+      WHERE report_id = ${reportId}
+      ORDER BY created_at ASC, id ASC
+    `;
+    messages = (
+      msgRows as { id: number; authorRole: string; body: string; createdAt: unknown }[]
+    ).map((m) => ({
+      id: Number(m.id),
+      authorRole: m.authorRole === 'staff' ? 'staff' : 'parent',
+      body: m.body,
+      createdAt: m.createdAt != null ? String(m.createdAt) : null,
+    }));
+  } catch {
+    messages = [];
+  }
+  if (
+    messages.length === 0 &&
+    typeof h.parentMessage === 'string' &&
+    h.parentMessage.trim()
+  ) {
+    messages = [
+      {
+        id: 0,
+        authorRole: 'parent',
+        body: h.parentMessage.trim(),
+        createdAt: null,
+      },
+    ];
+  }
+
   const report: DailyReportFull = {
     id: reportId,
     studentName: String(h.studentName ?? ''),
@@ -707,6 +746,7 @@ export async function getDailyReportByDate(
     teacherHighlight: (h.teacherHighlight as string | null) ?? null,
     teacherFollowup: (h.teacherFollowup as string | null) ?? null,
     parentMessage: (h.parentMessage as string | null) ?? null,
+    messages,
     parentReadConfirmed: Boolean(h.parentReadConfirmed),
     parentReadAt: h.parentReadAt != null ? String(h.parentReadAt) : null,
     status: h.status as 'submitted' | 'read',
@@ -787,7 +827,7 @@ export async function updateDailyReportParentCorner(
   const isKg = isKindergartenStudent(access.info);
 
   const existing = await sql`
-    SELECT id
+    SELECT id, school_id, parent_message
     FROM dr_daily_reports
     WHERE student_id = ${studentId}
       AND report_date = ${date}::date
@@ -795,13 +835,17 @@ export async function updateDailyReportParentCorner(
     LIMIT 1
   `;
 
-  const row = existing[0] as { id: number } | undefined;
+  const row = existing[0] as
+    | { id: number; school_id: number | null; parent_message: string | null }
+    | undefined;
   if (!row) return { ok: false, reason: 'not_found' };
 
-  const message =
-    input.parentMessage !== undefined
-      ? input.parentMessage?.trim() || null
-      : undefined;
+  // Non-empty parentMessage → append to thread. Empty/null does not wipe history.
+  const appendBody =
+    input.parentMessage !== undefined && input.parentMessage != null
+      ? input.parentMessage.trim()
+      : '';
+  const message = appendBody ? appendBody : undefined;
 
   const readConfirmed = input.parentReadConfirmed;
   const sleepTime =
@@ -843,6 +887,26 @@ export async function updateDailyReportParentCorner(
       WHERE id = ${row.id}
         AND student_id = ${studentId}
     `;
+  }
+
+  if (message !== undefined) {
+    try {
+      const [{ c }] = (await sql`
+        SELECT COUNT(*)::int AS c FROM dr_daily_report_messages WHERE report_id = ${row.id}
+      `) as [{ c: number }];
+      if (Number(c) === 0 && row.parent_message?.trim()) {
+        await sql`
+          INSERT INTO dr_daily_report_messages (school_id, report_id, author_role, author_user_id, body)
+          VALUES (${row.school_id}, ${row.id}, 'parent', NULL, ${row.parent_message.trim()})
+        `;
+      }
+      await sql`
+        INSERT INTO dr_daily_report_messages (school_id, report_id, author_role, author_user_id, body)
+        VALUES (${row.school_id}, ${row.id}, 'parent', ${viewerUserId}, ${message})
+      `;
+    } catch {
+      // Table may not exist until ERP migration 0050 is applied — fall back to legacy column only
+    }
   }
 
   if (message !== undefined && readConfirmed === true) {
@@ -924,6 +988,39 @@ export async function updateDailyReportParentCorner(
     status: string;
   };
 
+  let messages: DailyReportMessage[] = [];
+  try {
+    const msgRows = await sql`
+      SELECT
+        id,
+        author_role AS "authorRole",
+        body,
+        created_at AS "createdAt"
+      FROM dr_daily_report_messages
+      WHERE report_id = ${row.id}
+      ORDER BY created_at ASC, id ASC
+    `;
+    messages = (
+      msgRows as { id: number; authorRole: string; body: string; createdAt: unknown }[]
+    ).map((m) => ({
+      id: Number(m.id),
+      authorRole: m.authorRole === 'staff' ? 'staff' : 'parent',
+      body: m.body,
+      createdAt: m.createdAt != null ? String(m.createdAt) : null,
+    }));
+  } catch {
+    if (p.parentMessage?.trim()) {
+      messages = [
+        {
+          id: 0,
+          authorRole: 'parent',
+          body: p.parentMessage.trim(),
+          createdAt: null,
+        },
+      ];
+    }
+  }
+
   void invalidateDailyReportCalendarCache(studentId);
 
   return {
@@ -936,6 +1033,7 @@ export async function updateDailyReportParentCorner(
       wakeTime: p.wakeTime ?? null,
       readingTogether: Boolean(p.readingTogether),
       status: p.status === 'read' ? 'read' : 'submitted',
+      messages,
     },
   };
 }

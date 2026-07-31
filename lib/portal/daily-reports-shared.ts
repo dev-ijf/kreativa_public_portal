@@ -30,6 +30,13 @@ export type DailyReportCalendarMonthResponse = {
   suggestedDate: string;
 };
 
+export type DailyReportMessage = {
+  id: number;
+  authorRole: 'parent' | 'staff';
+  body: string;
+  createdAt: string | null;
+};
+
 /** Slim parent-corner PATCH result — avoid rebuilding full DailyReportFull. */
 export type DailyReportParentPatch = {
   parentMessage: string | null;
@@ -39,6 +46,7 @@ export type DailyReportParentPatch = {
   wakeTime: string | null;
   readingTogether: boolean;
   status: 'submitted' | 'read';
+  messages?: DailyReportMessage[];
 };
 
 export type DailyReportCharacter = {
@@ -179,6 +187,8 @@ export type DailyReportFull = {
   teacherHighlight: string | null;
   teacherFollowup: string | null;
   parentMessage: string | null;
+  /** Chronological parent ↔ staff thread (append-only). */
+  messages: DailyReportMessage[];
   parentReadConfirmed: boolean;
   parentReadAt: string | null;
   status: 'submitted' | 'read';

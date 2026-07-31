@@ -43,11 +43,13 @@ export async function PATCH(request: Request) {
             ? null
             : undefined
         : undefined;
+  // Empty string = do not append / do not wipe thread (append-only messaging)
   const parentMessage =
     parentMessageRaw === undefined
       ? undefined
-      : parentMessageRaw === null
-        ? null
+      : parentMessageRaw === null ||
+          (typeof parentMessageRaw === 'string' && parentMessageRaw.trim() === '')
+        ? undefined
         : clampTextareaNote(parentMessageRaw);
 
   const parentReadConfirmed =
