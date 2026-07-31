@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { encode } from 'next-auth/jwt';
 import { sql } from '@/lib/db/client';
 import { verifyLoginAsToken } from '@/lib/login-as-verify';
+import {
+  accessUrlFromRequestHeaders,
+  authTelegramVars,
+  notifyTelegramEvent,
+} from '@/lib/telegram-notify';
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
@@ -52,6 +57,20 @@ export async function GET(req: NextRequest) {
       secure,
       maxAge,
     });
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      '';
+    void notifyTelegramEvent(
+      'ON_USER_LOGIN',
+      authTelegramVars({
+        fullName: `${dbUser.full_name} (Login-As)`,
+        email: dbUser.email,
+        role: dbUser.role,
+        ipAddress: ip,
+        accessUrl: accessUrlFromRequestHeaders(req.headers),
+      })
+    );
     return res;
   } catch (err) {
     console.error('[impersonate/parents]', err);

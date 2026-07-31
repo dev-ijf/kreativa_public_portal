@@ -1,6 +1,23 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { sql } from '@/lib/db/client';
+import {
+  authTelegramVars,
+  getRequestAccessUrl,
+  notifyTelegramEvent,
+} from '@/lib/telegram-notify';
+
+async function requestIp(): Promise<string> {
+  try {
+    const { headers } = await import('next/headers');
+    const h = await headers();
+    const xff = h.get('x-forwarded-for');
+    if (xff) return xff.split(',')[0]?.trim() || '';
+    return h.get('x-real-ip') || '';
+  } catch {
+    return '';
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -60,6 +77,42 @@ export const authOptions: NextAuthOptions = {
         session.user.fullName = token.fullName as string;
       }
       return session;
+    },
+  },
+  events: {
+    async signIn({ user }) {
+      const [ip, accessUrl] = await Promise.all([requestIp(), getRequestAccessUrl()]);
+      const rows = user.email
+        ? await sql`
+            SELECT full_name, role FROM core_users
+            WHERE email = ${user.email} AND role IN ('parent', 'student')
+            LIMIT 1
+          `
+        : [];
+      const dbUser = rows[0] as { full_name?: string; role?: string } | undefined;
+      void notifyTelegramEvent(
+        'ON_USER_LOGIN',
+        authTelegramVars({
+          fullName: dbUser?.full_name ?? user.name,
+          email: user.email,
+          role: dbUser?.role,
+          ipAddress: ip,
+          accessUrl,
+        })
+      );
+    },
+    async signOut({ token }) {
+      const [ip, accessUrl] = await Promise.all([requestIp(), getRequestAccessUrl()]);
+      void notifyTelegramEvent(
+        'ON_USER_LOGOUT',
+        authTelegramVars({
+          fullName: (token?.fullName as string) || (token?.name as string) || '',
+          email: (token?.email as string) || '',
+          role: (token?.role as string) || '',
+          ipAddress: ip,
+          accessUrl,
+        })
+      );
     },
   },
 };
