@@ -1,7 +1,12 @@
 export type TelegramAuthEvent = 'ON_USER_LOGIN' | 'ON_USER_LOGOUT';
 
-function formatTime(date = new Date()): string {
-  return date.toLocaleString('en-GB', {
+const JAKARTA_TZ = 'Asia/Jakarta';
+
+/** Asia/Jakarta (GMT+7) — use for @time / @created_at_bot */
+function formatTimeJakarta(date: Date | string | number = new Date()): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return d.toLocaleString('en-GB', {
+    timeZone: JAKARTA_TZ,
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -9,6 +14,13 @@ function formatTime(date = new Date()): string {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+function telegramTimeVars(date: Date | string | number = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const created_at = d.toISOString();
+  const created_at_bot = formatTimeJakarta(d);
+  return { created_at, created_at_bot, time: created_at_bot };
 }
 
 export async function getRequestAccessUrl(): Promise<string> {
@@ -71,12 +83,13 @@ export function authTelegramVars(input: {
   role?: string | null;
   ipAddress?: string | null;
   accessUrl?: string | null;
+  at?: Date | string | number;
 }): Record<string, string> {
   return {
     full_name: input.fullName ?? '',
     email: input.email ?? '',
     role: input.role ?? '',
-    time: formatTime(),
+    ...telegramTimeVars(input.at ?? new Date()),
     ip_address: input.ipAddress ?? '',
     source_app: 'parents_portal',
     access_url: input.accessUrl ?? '',
