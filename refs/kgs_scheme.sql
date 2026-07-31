@@ -285,8 +285,35 @@ CREATE TABLE "public"."core_users" (
 );
 
 DROP TABLE IF EXISTS "public"."tuition_bills";
+DROP TABLE IF EXISTS "public"."tuition_bill_groups";
 -- Sequence and defined type
 CREATE SEQUENCE IF NOT EXISTS tuition_bills_id_seq;
+CREATE SEQUENCE IF NOT EXISTS tuition_bill_groups_id_seq;
+
+-- Table Definition
+CREATE TABLE "public"."tuition_bill_groups" (
+    "id" int8 NOT NULL DEFAULT nextval('tuition_bill_groups_id_seq'::regclass),
+    "student_id" int4 NOT NULL,
+    "product_id" int4 NOT NULL,
+    "academic_year_id" int4 NOT NULL,
+    "school_id" int8 NOT NULL,
+    "cohort_id" int8 NOT NULL,
+    "title" varchar(100) NOT NULL,
+    "total_amount" numeric(15,2) NOT NULL,
+    "discount_amount" numeric(15,2) DEFAULT 0,
+    "additional_discount" numeric(15,2) DEFAULT 0,
+    "paid_amount" numeric(15,2) DEFAULT 0,
+    "min_payment" numeric(15,2) NOT NULL,
+    "status" varchar(50) NOT NULL,
+    "due_date" date,
+    "termin_count" int4 DEFAULT 1,
+    "termin_scheme" varchar(50),
+    "notes_ket" varchar(200),
+    "notes" text,
+    "created_at" timestamp DEFAULT now(),
+    "updated_at" timestamp DEFAULT now(),
+    PRIMARY KEY ("id")
+);
 
 -- Table Definition
 CREATE TABLE "public"."tuition_bills" (
@@ -308,7 +335,13 @@ CREATE TABLE "public"."tuition_bills" (
     "school_id" int8,
     "cohort_id" int8,
     "discount_amount" numeric(15,2) DEFAULT 0,
+    "additional_discount" numeric(15,2) DEFAULT 0,
     "notes" text,
+    "notes_ket" varchar(200),
+    "bill_group_id" int8,
+    "termin_sequence" int4 DEFAULT 1,
+    "termin_scheme" varchar(50),
+    "termin_count" int4 DEFAULT 1,
     PRIMARY KEY ("id")
 );
 

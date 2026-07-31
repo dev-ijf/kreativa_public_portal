@@ -33,13 +33,16 @@ export async function POST(request: Request) {
       paymentMethodId,
     });
 
-    void scheduleCheckoutWhatsAppJob({
-      transactionId: checkout.transactionId,
-      transactionCreatedAt: checkout.transactionCreatedAt,
-      userId,
-    }).catch((err) => {
+    try {
+      await scheduleCheckoutWhatsAppJob({
+        transactionId: checkout.transactionId,
+        transactionCreatedAt: checkout.transactionCreatedAt,
+        userId,
+      });
+    } catch (err) {
+      // Jangan gagalkan checkout jika WA gagal.
       console.error('checkout_whatsapp_schedule', err);
-    });
+    }
 
     return NextResponse.json({
       referenceNo: checkout.referenceNo,

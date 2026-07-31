@@ -2,6 +2,8 @@
  * Tipe + helper UI finance portal — aman untuk `"use client"` (tanpa import DB).
  */
 
+export type FinanceBillingMode = 'kreativa' | 'talenta';
+
 export type FinanceMonthSlot = {
   monthKey: string;
   monthLabelEn: string;
@@ -11,6 +13,13 @@ export type FinanceMonthSlot = {
   amount: number;
   status: 'paid' | 'unpaid';
   billId: string | null;
+};
+
+/** Kreativa: kotak kartu tagihan (bukan bulan). */
+export type FinancePayableBillSlot = {
+  billId: string;
+  title: string;
+  amount: number;
 };
 
 export type FinanceInstallmentPaymentLine = {
@@ -34,6 +43,25 @@ export type FinanceInstallmentRow = {
   paymentHistory: FinanceInstallmentPaymentLine[];
 };
 
+/** Kreativa: termin unpaid di bawah bill group (toggle full amount). */
+export type FinanceInstallmentTermin = {
+  billId: string;
+  title: string;
+  amount: number;
+};
+
+/** Kreativa: donut dari tuition_bill_groups + daftar termin. */
+export type FinanceInstallmentGroupRow = {
+  id: string;
+  nameEn: string;
+  nameId: string;
+  total: number;
+  paid: number;
+  isFullyPaid: boolean;
+  termins: FinanceInstallmentTermin[];
+  paymentHistory: FinanceInstallmentPaymentLine[];
+};
+
 export type FinancePreviousBillRow = {
   id: string;
   ay: string;
@@ -43,10 +71,13 @@ export type FinancePreviousBillRow = {
 };
 
 export type FinanceChildPayload = {
+  billingMode: FinanceBillingMode;
   academicYearLabel: string | null;
   months: FinanceMonthSlot[];
+  payableBills: FinancePayableBillSlot[];
   previous: FinancePreviousBillRow[];
   installments: FinanceInstallmentRow[];
+  installmentGroups: FinanceInstallmentGroupRow[];
 };
 
 export const FINANCE_MONTH_GRID: { monthKey: string; monthLabelEn: string; monthLabelId: string }[] = [
@@ -66,6 +97,7 @@ export const FINANCE_MONTH_GRID: { monthKey: string; monthLabelEn: string; month
 
 export function emptyFinanceChildPayload(): FinanceChildPayload {
   return {
+    billingMode: 'talenta',
     academicYearLabel: null,
     months: FINANCE_MONTH_GRID.map((meta) => ({
       ...meta,
@@ -74,7 +106,9 @@ export function emptyFinanceChildPayload(): FinanceChildPayload {
       status: 'unpaid' as const,
       billId: null,
     })),
+    payableBills: [],
     previous: [],
     installments: [],
+    installmentGroups: [],
   };
 }

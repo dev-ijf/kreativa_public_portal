@@ -126,25 +126,35 @@ sequenceDiagram
 | View | Purpose |
 | --- | --- |
 | `v_portal_finance_bills` | Flat bill list with product, academic year, and balance |
+| `v_portal_finance_bill_groups` | Kreativa master groups for installment donuts |
 | `v_portal_tuition_payment_lines` | Paid lines for installment history |
 
 Source: [`sql/portal_finance_views.sql`](../sql/portal_finance_views.sql)
 
+Schema migration: [`sql/add_tuition_bill_groups.sql`](../sql/add_tuition_bill_groups.sql)
+
+### Billing modes
+
+| School `theme_id` | Mode | Card | Installments |
+| --- | --- | --- | --- |
+| `1` (Kreativa) | `kreativa` | All current-AY payable `tuition_bills` by title; cart `spp-{studentId}-{billId}` | Donut from `tuition_bill_groups`; pick unpaid termins (full-amount toggle, same cart key) |
+| other (Talenta) | `talenta` | Jul–Jun monthly grid | Open-amount on `tuition_bills` via `inst-{billId}` |
+
 ### Current balance formula (implemented)
 
 ```text
-balance_amount = GREATEST(total_amount - paid_amount, 0)
+balance_amount = GREATEST(total_amount - paid_amount - COALESCE(discount_amount,0) - COALESCE(additional_discount,0), 0)
 ```
 
 ### Fully paid formula (implemented)
 
 ```text
 is_fully_paid =
-  paid_amount >= total_amount
+  balance_amount <= 0
   OR lower(status) = 'paid'
 ```
 
-### Discount-aware formula (recommended in SQL comments, not active in the view)
+### Legacy note (superseded by discount-aware balance above)
 
 ```text
 balance_amount = GREATEST(
@@ -622,7 +632,7 @@ Tables involved:
 - `core_student_parent_profiles` / `core_users` (phone fallback)
 - `tuition_transactions` (WhatsApp flags)
 
-Delivery is asynchronous (QStash + StarSender in current code). Notification deduplication searches `notif_logs` payload patterns; it is not a hard unique DB constraint.
+Checkout WA and payment-success WA are both sent **directly** (await StarSender) — QStash is temporarily disabled for these paths because async webhooks were not delivering. Notification deduplication searches `notif_logs` payload patterns; it is not a hard unique DB constraint.
 
 ---
 

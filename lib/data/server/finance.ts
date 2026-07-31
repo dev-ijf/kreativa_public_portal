@@ -1,25 +1,37 @@
 import { cache } from 'react';
 
 /**
- * Portal finance (GET): data berasal dari view `v_portal_finance_bills` dan
- * `v_portal_tuition_payment_lines` (lihat sql/portal_finance_views.sql).
+ * Portal finance (GET): data dari `v_portal_finance_bills`,
+ * `v_portal_finance_bill_groups`, `v_portal_tuition_payment_lines`
+ * (lihat sql/portal_finance_views.sql).
  *
- * Kolom opsional di Neon produksi (sinkron dengan refs/kgs_scheme.sql):
- * tuition_bills.school_id, cohort_id, discount_amount, notes;
- * tuition_products.is_installment — diekspos view sebagai is_installment;
- * jika discount_amount ada, sesuaikan definisi view di DB (GREATEST(total - paid - discount, 0)).
+ * billingMode:
+ * - talenta (theme_id ≠ 1): kartu 12 bulan + cicilan open-amount dari tuition_bills
+ * - kreativa (theme_id = 1): kartu tagihan by title + donut dari tuition_bill_groups
  */
 import {
   FINANCE_MONTH_GRID,
+  emptyFinanceChildPayload,
+  type FinanceBillingMode,
   type FinanceChildPayload,
+  type FinanceInstallmentGroupRow,
   type FinanceInstallmentRow,
   type FinanceMonthSlot,
+  type FinancePayableBillSlot,
   type FinancePreviousBillRow,
 } from '@/lib/data/portal-finance-payload';
 import type { PortalChildRow } from '@/lib/data/server/children';
 import { sql } from '@/lib/db/client';
 
-export type { FinanceChildPayload, FinanceInstallmentRow, FinanceMonthSlot, FinancePreviousBillRow } from '@/lib/data/portal-finance-payload';
+export type {
+  FinanceBillingMode,
+  FinanceChildPayload,
+  FinanceInstallmentGroupRow,
+  FinanceInstallmentRow,
+  FinanceMonthSlot,
+  FinancePayableBillSlot,
+  FinancePreviousBillRow,
+} from '@/lib/data/portal-finance-payload';
 
 /** Hanya student_id yang boleh di-query tagihan (parent / student), tidak percaya array dari client semata. */
 async function loadStudentIdsAccessibleToViewer(userId: number, role: string): Promise<number[]> {
@@ -65,6 +77,27 @@ type BillViewRow = {
   related_month: string | null;
   bill_created_at: string | null;
   due_date: string | null;
+  bill_group_id: number | null;
+  termin_sequence: number | null;
+};
+
+type BillGroupViewRow = {
+  bill_group_id: number;
+  student_id: number;
+  academic_year_id: number;
+  academic_year_name: string;
+  product_id: number;
+  product_name: string;
+  payment_type: string;
+  is_installment: boolean;
+  title: string;
+  total_amount: string | number;
+  paid_amount: string | number;
+  net_total_amount: string | number;
+  balance_amount: string | number;
+  is_fully_paid: boolean;
+  termin_count: number | null;
+  due_date: string | null;
 };
 
 type PaymentLineRow = {
@@ -109,10 +142,14 @@ function billMatchesSlot(
   return false;
 }
 
-function num(v: string | number | null | undefined): number {
+function num(v: unknown): number {
   if (v == null) return 0;
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   if (typeof v === 'bigint') return Number(v);
+  if (typeof v === 'string') {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -139,8 +176,12 @@ function coalescePgBool(v: unknown): boolean {
   return v === true || v === 't' || v === 'true' || v === 1 || v === '1';
 }
 
+function billingModeFromThemeId(themeId: number | null | undefined): FinanceBillingMode {
+  return themeId === 1 ? 'kreativa' : 'talenta';
+}
+
 /**
- * Tagihan non-bulanan yang boleh tampil di blok cicilan/DSP/DKT:
+ * Tagihan non-bulanan yang boleh tampil di blok cicilan/DSP/DKT (Talenta):
  * utama `tuition_products.is_installment`; fallback `payment_type = 'installment'` untuk seed/data lama.
  * `monthly` tetap hanya di kartu SPP 12 bulan.
  */
@@ -150,35 +191,15 @@ function rowIsInstallmentBillRow(r: BillViewRow): boolean {
   return r.payment_type === 'installment';
 }
 
-async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[]> {
-  const unique = [...new Set(studentIds)].filter((n) => Number.isFinite(n) && n > 0);
-  if (unique.length === 0) return [];
-  const rows = await sql`
-    SELECT
-      bill_id,
-      student_id,
-      academic_year_id,
-      academic_year_name,
-      product_id,
-      product_name,
-      payment_type,
-      title,
-      (total_amount)::float8 AS total_amount,
-      (paid_amount)::float8 AS paid_amount,
-      (min_payment)::float8 AS min_payment,
-      (balance_amount)::float8 AS balance_amount,
-      is_fully_paid,
-      bill_month,
-      bill_year,
-      related_month,
-      bill_created_at,
-      due_date,
-      is_installment
-    FROM v_portal_finance_bills
-    WHERE student_id = ANY(${unique}::int[])
-    ORDER BY student_id ASC, bill_id ASC
-  `;
-  return (rows as unknown as Record<string, unknown>[]).map((raw) => {
+/** Kreativa donut: installment product atau multi-termin group. */
+function rowIsInstallmentGroupRow(g: BillGroupViewRow): boolean {
+  if (coalescePgBool(g.is_installment)) return true;
+  if (g.payment_type === 'installment') return true;
+  return num(g.termin_count) > 1;
+}
+
+function mapBillViewRows(rows: Record<string, unknown>[]): BillViewRow[] {
+  return rows.map((raw) => {
     const base = raw as BillViewRow;
     return {
       ...base,
@@ -186,8 +207,126 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
       paid_amount: numMoney(raw, 'paid_amount', 'paidAmount') as BillViewRow['paid_amount'],
       min_payment: numMoney(raw, 'min_payment', 'minPayment') as BillViewRow['min_payment'],
       balance_amount: numMoney(raw, 'balance_amount', 'balanceAmount') as BillViewRow['balance_amount'],
+      bill_group_id:
+        raw.bill_group_id != null || raw.billGroupId != null
+          ? num(raw.bill_group_id ?? raw.billGroupId)
+          : null,
+      termin_sequence:
+        raw.termin_sequence != null || raw.terminSequence != null
+          ? num(raw.termin_sequence ?? raw.terminSequence)
+          : null,
     };
   });
+}
+
+async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[]> {
+  const unique = [...new Set(studentIds)].filter((n) => Number.isFinite(n) && n > 0);
+  if (unique.length === 0) return [];
+  try {
+    const rows = await sql`
+      SELECT
+        bill_id,
+        student_id,
+        academic_year_id,
+        academic_year_name,
+        product_id,
+        product_name,
+        payment_type,
+        title,
+        (total_amount)::float8 AS total_amount,
+        (paid_amount)::float8 AS paid_amount,
+        (min_payment)::float8 AS min_payment,
+        (balance_amount)::float8 AS balance_amount,
+        is_fully_paid,
+        bill_month,
+        bill_year,
+        related_month,
+        bill_created_at,
+        due_date,
+        is_installment,
+        bill_group_id,
+        termin_sequence
+      FROM v_portal_finance_bills
+      WHERE student_id = ANY(${unique}::int[])
+      ORDER BY student_id ASC, bill_id ASC
+    `;
+    return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+  } catch {
+    // View lama tanpa kolom bill_group — fallback Talenta-compatible.
+    const rows = await sql`
+      SELECT
+        bill_id,
+        student_id,
+        academic_year_id,
+        academic_year_name,
+        product_id,
+        product_name,
+        payment_type,
+        title,
+        (total_amount)::float8 AS total_amount,
+        (paid_amount)::float8 AS paid_amount,
+        (min_payment)::float8 AS min_payment,
+        (balance_amount)::float8 AS balance_amount,
+        is_fully_paid,
+        bill_month,
+        bill_year,
+        related_month,
+        bill_created_at,
+        due_date,
+        is_installment
+      FROM v_portal_finance_bills
+      WHERE student_id = ANY(${unique}::int[])
+      ORDER BY student_id ASC, bill_id ASC
+    `;
+    return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+  }
+}
+
+async function fetchBillGroupsForStudents(studentIds: number[]): Promise<BillGroupViewRow[]> {
+  const unique = [...new Set(studentIds)].filter((n) => Number.isFinite(n) && n > 0);
+  if (unique.length === 0) return [];
+  try {
+    const rows = await sql`
+      SELECT
+        bill_group_id,
+        student_id,
+        academic_year_id,
+        academic_year_name,
+        product_id,
+        product_name,
+        payment_type,
+        is_installment,
+        title,
+        (total_amount)::float8 AS total_amount,
+        (paid_amount)::float8 AS paid_amount,
+        (net_total_amount)::float8 AS net_total_amount,
+        (balance_amount)::float8 AS balance_amount,
+        is_fully_paid,
+        termin_count,
+        due_date
+      FROM v_portal_finance_bill_groups
+      WHERE student_id = ANY(${unique}::int[])
+      ORDER BY student_id ASC, bill_group_id ASC
+    `;
+    return (rows as unknown as Record<string, unknown>[]).map((raw) => {
+      const base = raw as BillGroupViewRow;
+      return {
+        ...base,
+        bill_group_id: num(raw.bill_group_id ?? raw.billGroupId),
+        total_amount: numMoney(raw, 'total_amount', 'totalAmount'),
+        paid_amount: numMoney(raw, 'paid_amount', 'paidAmount'),
+        net_total_amount: numMoney(raw, 'net_total_amount', 'netTotalAmount'),
+        balance_amount: numMoney(raw, 'balance_amount', 'balanceAmount'),
+        termin_count:
+          raw.termin_count != null || raw.terminCount != null
+            ? num(raw.termin_count ?? raw.terminCount)
+            : null,
+      };
+    });
+  } catch {
+    // View belum di-deploy di lingkungan lama — Kreativa groups kosong.
+    return [];
+  }
 }
 
 async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLineRow[]> {
@@ -209,7 +348,64 @@ async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLi
   return rows as unknown as PaymentLineRow[];
 }
 
-function buildChildPayload(
+function mapPaymentLines(lines: PaymentLineRow[]) {
+  return lines.map((ln) => {
+    const createdAt =
+      typeof ln.transaction_created_at === 'string'
+        ? ln.transaction_created_at
+        : ln.transaction_created_at != null
+          ? String(ln.transaction_created_at)
+          : '';
+    return {
+      date: (ln.payment_date ?? ln.detail_created_at).slice(0, 10),
+      amount: num(ln.amount_paid),
+      transactionId: String(ln.transaction_id),
+      transactionCreatedAt: createdAt,
+      referenceNo: ln.reference_no ?? null,
+      transactionStatus: ln.transaction_status ?? null,
+    };
+  });
+}
+
+function buildPreviousBills(child: PortalChildRow, rows: BillViewRow[]): FinancePreviousBillRow[] {
+  const activeAyId = child.academicYearId;
+  const previousCandidates: { row: BillViewRow; amount: number }[] = [];
+  if (activeAyId != null) {
+    for (const r of rows) {
+      if (r.student_id !== child.id) continue;
+      if (r.academic_year_id === activeAyId) continue;
+      const bal = num(r.balance_amount);
+      if (bal <= 0) continue;
+      previousCandidates.push({ row: r, amount: bal });
+    }
+  }
+  function pastDueSortKey(r: BillViewRow): number {
+    const raw = r.bill_created_at ?? r.due_date;
+    if (raw == null) return 0;
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  previousCandidates.sort((a, b) => pastDueSortKey(b.row) - pastDueSortKey(a.row));
+  return previousCandidates.map(({ row: r, amount: bal }) => ({
+    id: String(r.bill_id),
+    ay: r.academic_year_name,
+    titleEn: r.title,
+    titleId: r.title,
+    amount: bal,
+  }));
+}
+
+function resolveAyName(child: PortalChildRow, rows: BillViewRow[], groups: BillGroupViewRow[]): string | null {
+  const activeAyId = child.academicYearId;
+  if (activeAyId == null) return null;
+  return (
+    rows.find((r) => r.student_id === child.id && r.academic_year_id === activeAyId)?.academic_year_name ??
+    groups.find((g) => g.student_id === child.id && g.academic_year_id === activeAyId)?.academic_year_name ??
+    null
+  );
+}
+
+function buildTalentaPayload(
   child: PortalChildRow,
   rows: BillViewRow[],
   paymentLinesByBillId: Map<number, PaymentLineRow[]>,
@@ -222,10 +418,7 @@ function buildChildPayload(
       activeAyId != null &&
       r.academic_year_id === activeAyId,
   );
-  const ayName =
-    monthlyCurrent[0]?.academic_year_name ??
-    rows.find((r) => r.student_id === child.id && r.academic_year_id === activeAyId)?.academic_year_name ??
-    null;
+  const ayName = resolveAyName(child, rows, []);
   const ayRange = ayName ? parseAcademicYearRange(ayName) : null;
 
   const months: FinanceMonthSlot[] = FINANCE_MONTH_GRID.map((meta, slot) => ({
@@ -248,36 +441,13 @@ function buildChildPayload(
         ...FINANCE_MONTH_GRID[slot],
         calendarYear: y,
         amount: chosen.is_fully_paid ? total : balance > 0 ? balance : total,
-        status: chosen.is_fully_paid ? 'paid' : 'unpaid',
+        status: coalescePgBool(chosen.is_fully_paid) ? 'paid' : 'unpaid',
         billId: String(chosen.bill_id),
       };
     }
   }
 
-  const previousCandidates: { row: BillViewRow; amount: number }[] = [];
-  if (activeAyId != null) {
-    for (const r of rows) {
-      if (r.student_id !== child.id) continue;
-      if (r.academic_year_id === activeAyId) continue;
-      const bal = num(r.balance_amount);
-      if (bal <= 0) continue;
-      previousCandidates.push({ row: r, amount: bal });
-    }
-  }
-  function pastDueSortKey(r: BillViewRow): number {
-    const raw = r.bill_created_at ?? r.due_date;
-    if (raw == null) return 0;
-    const t = new Date(raw).getTime();
-    return Number.isFinite(t) ? t : 0;
-  }
-  previousCandidates.sort((a, b) => pastDueSortKey(b.row) - pastDueSortKey(a.row));
-  const previous: FinancePreviousBillRow[] = previousCandidates.map(({ row: r, amount: bal }) => ({
-    id: String(r.bill_id),
-    ay: r.academic_year_name,
-    titleEn: r.title,
-    titleId: r.title,
-    amount: bal,
-  }));
+  const previous = buildPreviousBills(child, rows);
 
   const installments: FinanceInstallmentRow[] = [];
   if (activeAyId != null) {
@@ -286,22 +456,6 @@ function buildChildPayload(
     );
     for (const r of instRows) {
       const lines = paymentLinesByBillId.get(r.bill_id) ?? [];
-      const paymentHistory = lines.map((ln) => {
-        const createdAt =
-          typeof ln.transaction_created_at === 'string'
-            ? ln.transaction_created_at
-            : ln.transaction_created_at != null
-              ? String(ln.transaction_created_at)
-              : '';
-        return {
-          date: (ln.payment_date ?? ln.detail_created_at).slice(0, 10),
-          amount: num(ln.amount_paid),
-          transactionId: String(ln.transaction_id),
-          transactionCreatedAt: createdAt,
-          referenceNo: ln.reference_no ?? null,
-          transactionStatus: ln.transaction_status ?? null,
-        };
-      });
       const minP = num(r.min_payment);
       const totalAmt = num(r.total_amount);
       const paidAmt = num(r.paid_amount);
@@ -315,16 +469,124 @@ function buildChildPayload(
         paid: paidAmt,
         minPayment: minP > 0 ? minP : 0,
         isFullyPaid: fully,
-        paymentHistory,
+        paymentHistory: mapPaymentLines(lines),
       });
     }
   }
 
   return {
+    billingMode: 'talenta',
     academicYearLabel: ayName,
     months,
+    payableBills: [],
     previous,
     installments,
+    installmentGroups: [],
+  };
+}
+
+function buildKreativaPayload(
+  child: PortalChildRow,
+  rows: BillViewRow[],
+  groups: BillGroupViewRow[],
+  paymentLinesByBillId: Map<number, PaymentLineRow[]>,
+): FinanceChildPayload {
+  const activeAyId = child.academicYearId;
+  const ayName = resolveAyName(child, rows, groups);
+  const emptyMonths: FinanceMonthSlot[] = FINANCE_MONTH_GRID.map((meta) => ({
+    ...meta,
+    calendarYear: null,
+    amount: 0,
+    status: 'unpaid' as const,
+    billId: null,
+  }));
+
+  const payableCandidates = rows.filter((r) => {
+    if (r.student_id !== child.id) return false;
+    if (activeAyId == null || r.academic_year_id !== activeAyId) return false;
+    return num(r.balance_amount) > 0 && !coalescePgBool(r.is_fully_paid);
+  });
+
+  function payableSortKey(r: BillViewRow): number {
+    const due = r.due_date ? new Date(r.due_date).getTime() : Number.POSITIVE_INFINITY;
+    const seq = r.termin_sequence != null ? num(r.termin_sequence) : 999;
+    return Number.isFinite(due) ? due : Number.POSITIVE_INFINITY + seq;
+  }
+
+  payableCandidates.sort((a, b) => {
+    const da = payableSortKey(a);
+    const db = payableSortKey(b);
+    if (da !== db) return da - db;
+    const sa = num(a.termin_sequence);
+    const sb = num(b.termin_sequence);
+    if (sa !== sb) return sa - sb;
+    return a.bill_id - b.bill_id;
+  });
+
+  const payableBills: FinancePayableBillSlot[] = payableCandidates.map((r) => ({
+    billId: String(r.bill_id),
+    title: r.title,
+    amount: num(r.balance_amount),
+  }));
+
+  const previous = buildPreviousBills(child, rows);
+
+  const installmentGroups: FinanceInstallmentGroupRow[] = [];
+  if (activeAyId != null) {
+    const childGroups = groups.filter(
+      (g) => g.student_id === child.id && g.academic_year_id === activeAyId && rowIsInstallmentGroupRow(g),
+    );
+    for (const g of childGroups) {
+      const groupBillIds = rows
+        .filter((r) => r.student_id === child.id && num(r.bill_group_id) === g.bill_group_id)
+        .map((r) => r.bill_id);
+      const lines: PaymentLineRow[] = [];
+      for (const bid of groupBillIds) {
+        const list = paymentLinesByBillId.get(bid);
+        if (list) lines.push(...list);
+      }
+      lines.sort((a, b) => String(a.detail_created_at).localeCompare(String(b.detail_created_at)));
+
+      const unpaidTermins = rows
+        .filter(
+          (r) =>
+            r.student_id === child.id &&
+            num(r.bill_group_id) === g.bill_group_id &&
+            num(r.balance_amount) > 0 &&
+            !coalescePgBool(r.is_fully_paid),
+        )
+        .sort((a, b) => num(a.termin_sequence) - num(b.termin_sequence) || a.bill_id - b.bill_id)
+        .map((r) => ({
+          billId: String(r.bill_id),
+          title: r.title,
+          amount: num(r.balance_amount),
+        }));
+
+      const netTotal = num(g.net_total_amount);
+      const paidAmt = num(g.paid_amount);
+      const fully = coalescePgBool(g.is_fully_paid) || (netTotal > 0 && paidAmt >= netTotal);
+
+      installmentGroups.push({
+        id: String(g.bill_group_id),
+        nameEn: g.title || g.product_name,
+        nameId: g.title || g.product_name,
+        total: netTotal > 0 ? netTotal : num(g.total_amount),
+        paid: paidAmt,
+        isFullyPaid: fully,
+        termins: unpaidTermins,
+        paymentHistory: mapPaymentLines(lines),
+      });
+    }
+  }
+
+  return {
+    billingMode: 'kreativa',
+    academicYearLabel: ayName,
+    months: emptyMonths,
+    payableBills,
+    previous,
+    installments: [],
+    installmentGroups,
   };
 }
 
@@ -342,11 +604,17 @@ export async function getFinanceDashboardForPortal(
   if (safeChildren.length === 0) return out;
 
   const studentIds = safeChildren.map((c) => c.id);
-  const allRows = await fetchBillsForStudents(studentIds);
+  const hasKreativa = safeChildren.some((c) => billingModeFromThemeId(c.themeId) === 'kreativa');
 
-  const installmentBillIds = allRows.filter((r) => rowIsInstallmentBillRow(r)).map((r) => r.bill_id);
-  const uniqueBillIds = [...new Set(installmentBillIds)];
-  const lineRows = await fetchPaymentLinesForBillIds(uniqueBillIds);
+  const allRows = await fetchBillsForStudents(studentIds);
+  const allGroups = hasKreativa ? await fetchBillGroupsForStudents(studentIds) : [];
+
+  const paymentBillIds = new Set<number>();
+  for (const r of allRows) {
+    if (rowIsInstallmentBillRow(r)) paymentBillIds.add(r.bill_id);
+    if (r.bill_group_id != null) paymentBillIds.add(r.bill_id);
+  }
+  const lineRows = await fetchPaymentLinesForBillIds([...paymentBillIds]);
   const paymentLinesByBillId = new Map<number, PaymentLineRow[]>();
   for (const ln of lineRows) {
     const list = paymentLinesByBillId.get(ln.bill_id) ?? [];
@@ -355,7 +623,17 @@ export async function getFinanceDashboardForPortal(
   }
 
   for (const child of safeChildren) {
-    out[child.id] = buildChildPayload(child, allRows, paymentLinesByBillId);
+    const mode = billingModeFromThemeId(child.themeId);
+    out[child.id] =
+      mode === 'kreativa'
+        ? buildKreativaPayload(child, allRows, allGroups, paymentLinesByBillId)
+        : buildTalentaPayload(child, allRows, paymentLinesByBillId);
   }
+
+  // Pastikan setiap anak punya shape penuh (hindari undefined di client).
+  for (const child of safeChildren) {
+    if (!out[child.id]) out[child.id] = emptyFinanceChildPayload();
+  }
+
   return out;
 }

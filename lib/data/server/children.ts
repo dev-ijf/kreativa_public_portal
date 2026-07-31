@@ -39,6 +39,8 @@ export type PortalChildRow = {
   levelGradeName: string | null;
   levelOrder: number | null;
   schoolName: string;
+  /** core_schools.theme_id — 1 = Kreativa, 2 = Talenta. */
+  themeId: number | null;
   /** core_students.gender — typically L (male) / P (female). */
   gender: string | null;
 };
@@ -57,6 +59,7 @@ async function loadPortalChildren(userId: number, role: string): Promise<PortalC
         lg.name       AS "levelGradeName",
         lg.level_order AS "levelOrder",
         sc.name       AS "schoolName",
+        sc.theme_id   AS "themeId",
         s.gender      AS "gender"
       FROM core_parent_student_relations r
       JOIN core_students s  ON s.id = r.student_id
@@ -90,6 +93,7 @@ async function loadPortalChildren(userId: number, role: string): Promise<PortalC
       lg.name       AS "levelGradeName",
       lg.level_order AS "levelOrder",
       sc.name       AS "schoolName",
+      sc.theme_id   AS "themeId",
       s.gender      AS "gender"
     FROM core_students s
     JOIN core_schools  sc ON sc.id = s.school_id

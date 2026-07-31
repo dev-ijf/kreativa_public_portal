@@ -375,13 +375,16 @@ export async function POST(req: NextRequest) {
     return buildResponse(paymentError('12', CCY), 200, debug);
   }
 
-  void schedulePaymentSuccessWhatsAppJob({
-    transactionId: String(tid),
-    userId: Number(head.user_id),
-    channelId: String(CHANNELID ?? '').trim() || undefined,
-  }).catch((err) => {
+  try {
+    await schedulePaymentSuccessWhatsAppJob({
+      transactionId: String(tid),
+      userId: Number(head.user_id),
+      channelId: String(CHANNELID ?? '').trim() || undefined,
+    });
+  } catch (err) {
+    // Jangan gagalkan settlement bank jika WA gagal.
     console.error('bmi_va_payment_schedule_wa', err);
-  });
+  }
 
   const billOut = String(Math.max(0, Math.round(totalDb * 100)));
   const cust = formatCustomerName(String(head.student_name ?? CUSTNAME ?? ''));

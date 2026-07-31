@@ -471,3 +471,67 @@ export async function getPaymentLinesForBillPortal(
 
   return { lines, productName };
 }
+
+/** Kreativa: riwayat pembayaran agregat semua termin di bawah tuition_bill_groups. */
+export async function getPaymentLinesForBillGroupPortal(
+  viewerUserId: number,
+  viewerRole: string,
+  billGroupId: number,
+): Promise<{ lines: FinanceInstallmentPaymentLine[]; productName: string | null } | null> {
+  const allowed = new Set(await getStudentIdsAccessibleToViewer(viewerUserId, viewerRole));
+  const groupRows = (await sql`
+    SELECT
+      g.student_id AS "studentId",
+      g.title AS "title",
+      p.name AS "productName"
+    FROM tuition_bill_groups g
+    INNER JOIN tuition_products p ON p.id = g.product_id
+    WHERE g.id = ${billGroupId}
+    LIMIT 1
+  `) as unknown as { studentId: number; title: string | null; productName: string | null }[];
+  if (groupRows.length === 0) return null;
+  const studentId = Number(groupRows[0].studentId);
+  if (!allowed.has(studentId)) return null;
+
+  const productName = groupRows[0].title?.trim() || groupRows[0].productName || null;
+
+  const billIdRows = (await sql`
+    SELECT id AS "billId"
+    FROM tuition_bills
+    WHERE bill_group_id = ${billGroupId}
+  `) as unknown as { billId: number }[];
+  const billIds = billIdRows.map((r) => Number(r.billId)).filter((n) => Number.isFinite(n) && n > 0);
+  if (billIds.length === 0) {
+    return { lines: [], productName };
+  }
+
+  const rows = (await sql`
+    SELECT
+      amount_paid,
+      detail_created_at,
+      payment_date,
+      transaction_id,
+      transaction_created_at,
+      reference_no,
+      transaction_status
+    FROM v_portal_tuition_payment_lines
+    WHERE bill_id = ANY(${billIds}::int[])
+      AND transaction_status = 'success'
+    ORDER BY detail_created_at ASC
+  `) as unknown as Record<string, unknown>[];
+
+  const lines: FinanceInstallmentPaymentLine[] = rows.map((ln) => {
+    const createdAt = ts(ln.transaction_created_at);
+    const dateRaw = ln.payment_date ?? ln.detail_created_at;
+    return {
+      date: ts(dateRaw).slice(0, 10),
+      amount: num(ln.amount_paid),
+      transactionId: String(ln.transaction_id ?? ''),
+      transactionCreatedAt: createdAt,
+      referenceNo: ln.reference_no as string | null,
+      transactionStatus: ln.transaction_status as string | null,
+    };
+  });
+
+  return { lines, productName };
+}
