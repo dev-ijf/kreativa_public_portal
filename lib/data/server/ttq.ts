@@ -7,6 +7,12 @@ import {
   tahfidzPct,
   tilawahPct,
 } from '@/lib/ttq/formulas';
+import {
+  listSemestersForYear,
+  loadTtqClassTarget,
+  loadTtqClassTargetForDate,
+  semesterNumberFromDate,
+} from '@/lib/ttq/semesters';
 
 function normalizeDate(value: unknown): string {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -19,6 +25,19 @@ async function getActiveAcademicYearId(): Promise<number | null> {
     SELECT id FROM core_academic_years WHERE is_active = true ORDER BY id DESC LIMIT 1
   `;
   return rows[0] ? Number(rows[0].id) : null;
+}
+
+function mapTarget(t: Awaited<ReturnType<typeof loadTtqClassTarget>>) {
+  if (!t) return null;
+  return {
+    jilid_id: t.jilid_id,
+    halaman: t.halaman,
+    jilid_name: t.jilid_name,
+    surah_id: t.surah_id,
+    surah_nomor: t.surah_nomor,
+    surah_name: t.surah_name,
+    semester_id: t.semester_id,
+  };
 }
 
 export async function getTtqSummary(
@@ -51,53 +70,50 @@ export async function getTtqSummary(
   const st = studentRows[0];
   const classId = st.class_id == null ? null : Number(st.class_id);
 
-  const targetRows = classId
-    ? await sql`
+  const today = new Date().toISOString().slice(0, 10);
+  const [semesters, semesterTarget, yearTarget, latestRows, achievedCountRows] =
+    await Promise.all([
+      listSemestersForYear(ayId),
+      classId
+        ? loadTtqClassTargetForDate({
+            classId,
+            academicYearId: ayId,
+            dateIso: today,
+          })
+        : Promise.resolve(null),
+      classId
+        ? loadTtqClassTarget({
+            classId,
+            academicYearId: ayId,
+            semesterId: null,
+          })
+        : Promise.resolve(null),
+      sql`
         SELECT
-          tct.target_jilid_id, tct.target_halaman, tct.target_surah_id,
-          tj.name AS target_jilid_name,
-          ts.nomor AS target_surah_nomor, ts.name_latin AS target_surah_name
-        FROM ttq_class_targets tct
-        JOIN ttq_jilid tj ON tj.id = tct.target_jilid_id
-        JOIN ttq_surah ts ON ts.id = tct.target_surah_id
-        WHERE tct.class_id = ${classId}
-          AND tct.academic_year_id = ${ayId}
-          AND tct.term_id IS NULL
+          dl.log_date, dl.is_absent, dl.jilid_id, dl.halaman, dl.current_surah_id,
+          dl.is_tilawah_achieved, dl.is_tahfidz_achieved, dl.catatan, dl.updated_at,
+          j.name AS jilid_name,
+          su.nomor AS surah_nomor, su.name_latin AS surah_name
+        FROM ttq_daily_logs dl
+        LEFT JOIN ttq_jilid j ON j.id = dl.jilid_id
+        LEFT JOIN ttq_surah su ON su.id = dl.current_surah_id
+        WHERE dl.student_id = ${studentId}
+          AND dl.academic_year_id = ${ayId}
+        ORDER BY dl.log_date DESC
         LIMIT 1
-      `
-    : [];
+      `,
+      sql`
+        SELECT COUNT(*)::int AS cnt
+        FROM ttq_surah_achieved
+        WHERE student_id = ${studentId}
+      `,
+    ]);
 
-  const latestRows = await sql`
-    SELECT
-      dl.log_date, dl.is_absent, dl.jilid_id, dl.halaman, dl.current_surah_id,
-      dl.is_tilawah_achieved, dl.is_tahfidz_achieved, dl.catatan, dl.updated_at,
-      j.name AS jilid_name,
-      su.nomor AS surah_nomor, su.name_latin AS surah_name
-    FROM ttq_daily_logs dl
-    LEFT JOIN ttq_jilid j ON j.id = dl.jilid_id
-    LEFT JOIN ttq_surah su ON su.id = dl.current_surah_id
-    WHERE dl.student_id = ${studentId}
-      AND dl.academic_year_id = ${ayId}
-    ORDER BY dl.log_date DESC
-    LIMIT 1
-  `;
-
-  const achievedCountRows = await sql`
-    SELECT COUNT(*)::int AS cnt
-    FROM ttq_surah_achieved
-    WHERE student_id = ${studentId}
-  `;
-
-  const target = targetRows[0]
-    ? {
-        jilid_id: Number(targetRows[0].target_jilid_id),
-        halaman: Number(targetRows[0].target_halaman),
-        jilid_name: String(targetRows[0].target_jilid_name),
-        surah_id: Number(targetRows[0].target_surah_id),
-        surah_nomor: Number(targetRows[0].target_surah_nomor),
-        surah_name: String(targetRows[0].target_surah_name),
-      }
-    : null;
+  const target = mapTarget(semesterTarget);
+  const target_year = mapTarget(yearTarget);
+  const currentSemesterNumber = semesterNumberFromDate(today);
+  const currentSemester =
+    semesters.find((s) => s.semester_number === currentSemesterNumber) || null;
 
   const latest = latestRows[0]
     ? {
@@ -112,17 +128,35 @@ export async function getTtqSummary(
       }
     : null;
 
+  // Progress % vs current semester target (fallback year)
+  const pctTarget = target || target_year;
   let tilawah_pct = 0;
   let tahfidz_pct = 0;
   let tilawah_ok = false;
   let tahfidz_ok = false;
-  if (latest && !latest.is_absent && target && latest.jilid_id != null && latest.halaman != null) {
-    tilawah_pct = tilawahPct(latest.jilid_id, latest.halaman, target.jilid_id, target.halaman);
-    tilawah_ok = isTilawahAchieved(latest.jilid_id, latest.halaman, target.jilid_id, target.halaman);
+  if (
+    latest &&
+    !latest.is_absent &&
+    pctTarget &&
+    latest.jilid_id != null &&
+    latest.halaman != null
+  ) {
+    tilawah_pct = tilawahPct(
+      latest.jilid_id,
+      latest.halaman,
+      pctTarget.jilid_id,
+      pctTarget.halaman
+    );
+    tilawah_ok = isTilawahAchieved(
+      latest.jilid_id,
+      latest.halaman,
+      pctTarget.jilid_id,
+      pctTarget.halaman
+    );
   }
-  if (latest && !latest.is_absent && target && latest.surah_nomor != null) {
-    tahfidz_pct = tahfidzPct(latest.surah_nomor, target.surah_nomor);
-    tahfidz_ok = isTahfidzAchieved(latest.surah_nomor, target.surah_nomor);
+  if (latest && !latest.is_absent && pctTarget && latest.surah_nomor != null) {
+    tahfidz_pct = tahfidzPct(latest.surah_nomor, pctTarget.surah_nomor);
+    tahfidz_ok = isTahfidzAchieved(latest.surah_nomor, pctTarget.surah_nomor);
   }
 
   return {
@@ -136,6 +170,14 @@ export async function getTtqSummary(
       grade_name: st.grade_name == null ? null : String(st.grade_name),
     },
     target,
+    target_year,
+    current_semester: currentSemester
+      ? {
+          id: currentSemester.id,
+          semester_number: currentSemester.semester_number,
+          name: currentSemester.name,
+        }
+      : null,
     latest,
     tilawah_pct,
     tahfidz_pct,
@@ -173,10 +215,16 @@ export async function getTtqHistory(
     FROM ttq_daily_logs dl
     LEFT JOIN ttq_jilid j ON j.id = dl.jilid_id
     LEFT JOIN ttq_surah su ON su.id = dl.current_surah_id
+    LEFT JOIN core_semesters cs
+      ON cs.academic_year_id = dl.academic_year_id
+     AND cs.semester_number = CASE
+           WHEN EXTRACT(MONTH FROM dl.log_date) >= 7 THEN 1
+           ELSE 2
+         END
     LEFT JOIN ttq_class_targets tct
       ON tct.class_id = dl.class_id
      AND tct.academic_year_id = dl.academic_year_id
-     AND tct.term_id IS NULL
+     AND tct.semester_id = cs.id
     LEFT JOIN ttq_surah tsu ON tsu.id = tct.target_surah_id
     WHERE dl.student_id = ${studentId}
       AND dl.academic_year_id = ${ayId}

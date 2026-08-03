@@ -42,6 +42,19 @@ type Summary = {
     jilid_name: string;
     surah_nomor: number;
     surah_name: string;
+    semester_id?: number | null;
+  } | null;
+  target_year?: {
+    jilid_id: number;
+    halaman: number;
+    jilid_name: string;
+    surah_nomor: number;
+    surah_name: string;
+  } | null;
+  current_semester?: {
+    id: number;
+    semester_number: 1 | 2;
+    name: string;
   } | null;
   latest: {
     log_date: string;
@@ -384,6 +397,35 @@ export function TtqPageClient() {
           <div className="mt-4 px-4 space-y-3">
             {tab === 'progress' && summary && (
               <>
+                <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-3 text-xs text-violet-900">
+                  <div className="font-semibold">
+                    {summary.current_semester?.name ||
+                      (lang === 'en' ? 'Current semester' : 'Semester berjalan')}
+                  </div>
+                  <div className="mt-1">
+                    {lang === 'en' ? 'Semester target' : 'Target semester'}:{' '}
+                    <b>
+                      {summary.target?.jilid_name || '—'} Hal.{summary.target?.halaman ?? '—'}
+                    </b>
+                    {' · '}
+                    <b>
+                      {summary.target?.surah_name || '—'} ({summary.target?.surah_nomor ?? '—'})
+                    </b>
+                  </div>
+                  <div className="mt-0.5 text-violet-800/80">
+                    {lang === 'en' ? 'Year target' : 'Target setahun'}:{' '}
+                    <b>
+                      {summary.target_year?.jilid_name || summary.target?.jilid_name || '—'} Hal.
+                      {summary.target_year?.halaman ?? summary.target?.halaman ?? '—'}
+                    </b>
+                    {' · '}
+                    <b>
+                      {summary.target_year?.surah_name || summary.target?.surah_name || '—'} (
+                      {summary.target_year?.surah_nomor ?? summary.target?.surah_nomor ?? '—'})
+                    </b>
+                  </div>
+                </div>
+
                 <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                   <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800">
                     <BookOpen size={16} className="text-violet-700" /> Tilawah
@@ -397,7 +439,8 @@ export function TtqPageClient() {
                     </b>
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Target: {summary.target?.jilid_name} Hal.{summary.target?.halaman}
+                    {lang === 'en' ? 'Semester target' : 'Target semester'}:{' '}
+                    {summary.target?.jilid_name} Hal.{summary.target?.halaman}
                   </p>
                   <div className="mt-3">
                     <PctBar value={summary.tilawah_pct} label="% vs target" />
@@ -432,7 +475,8 @@ export function TtqPageClient() {
                     </b>
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Target: {summary.target?.surah_name} ({summary.target?.surah_nomor})
+                    {lang === 'en' ? 'Semester target' : 'Target semester'}:{' '}
+                    {summary.target?.surah_name} ({summary.target?.surah_nomor})
                   </p>
                   <div className="mt-3">
                     <PctBar value={summary.tahfidz_pct} label="% vs target" />
@@ -603,18 +647,34 @@ export function TtqPageClient() {
                     <div className="grid grid-cols-2 gap-2">
                       <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
                         <p className="text-[10px] font-bold uppercase text-slate-400">
-                          Target Tilawah
+                          {rekapMode === 'year'
+                            ? lang === 'en'
+                              ? 'Year Tilawah'
+                              : 'Tilawah Setahun'
+                            : lang === 'en'
+                              ? 'Semester Tilawah'
+                              : 'Tilawah Semester'}
                         </p>
                         <p className="mt-1 text-sm font-bold text-slate-800">
-                          {rekap.target?.jilid_name} Hal.{rekap.target?.halaman}
+                          {rekapMode === 'year'
+                            ? `${rekap.target_year?.jilid_name || rekap.target?.jilid_name || '—'} Hal.${rekap.target_year?.halaman ?? rekap.target?.halaman ?? '—'}`
+                            : `${rekap.target?.jilid_name || '—'} Hal.${rekap.target?.halaman ?? '—'}`}
                         </p>
                       </div>
                       <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
                         <p className="text-[10px] font-bold uppercase text-slate-400">
-                          Target Tahfidz
+                          {rekapMode === 'year'
+                            ? lang === 'en'
+                              ? 'Year Tahfidz'
+                              : 'Tahfidz Setahun'
+                            : lang === 'en'
+                              ? 'Semester Tahfidz'
+                              : 'Tahfidz Semester'}
                         </p>
                         <p className="mt-1 text-sm font-bold text-slate-800">
-                          {rekap.target?.surah_name} ({rekap.target?.surah_nomor})
+                          {rekapMode === 'year'
+                            ? `${rekap.target_year?.surah_name || rekap.target?.surah_name || '—'} (${rekap.target_year?.surah_nomor ?? rekap.target?.surah_nomor ?? '—'})`
+                            : `${rekap.target?.surah_name || '—'} (${rekap.target?.surah_nomor ?? '—'})`}
                         </p>
                       </div>
                       <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
