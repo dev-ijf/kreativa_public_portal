@@ -13,8 +13,7 @@ import {
   getWhatsAppMeUrl,
 } from '@/lib/data/server/portal-theme';
 import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
-import { getAppModules } from '@/lib/data/server/modules';
-import { buildModuleActiveMap } from '@/lib/portal/menu-config';
+import { getSchoolModuleActiveMaps } from '@/lib/data/server/modules';
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const session = await getCachedServerSession();
@@ -23,21 +22,23 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const theme = await getPortalThemeForRequest();
   const whatsappUrl = getWhatsAppMeUrl(theme.whatsapp_number);
 
-  const [portalChildren, modules] = await Promise.all([
-    session?.user?.userId
-      ? getPortalChildren(session.user.userId, session.user.role)
-      : Promise.resolve([]),
-    getAppModules(),
-  ]);
+  const portalChildren = session?.user?.userId
+    ? await getPortalChildren(session.user.userId, session.user.role)
+    : [];
 
-  const moduleActiveMap = buildModuleActiveMap(modules);
+  const schoolIds = portalChildren.map((c) => c.schoolId);
+  const moduleMapsBySchool = await getSchoolModuleActiveMaps(schoolIds);
 
   return (
     <AuthProvider session={session}>
-      <PortalProvider initialPortalChildren={portalChildren} initialLang={initialLang}>
+      <PortalProvider
+        initialPortalChildren={portalChildren}
+        initialLang={initialLang}
+        initialModuleMapsBySchool={moduleMapsBySchool}
+      >
         <SidebarProvider>
           <div className="min-h-screen bg-slate-50 text-slate-800 md:flex">
-            <Sidebar logoUrl={getDarkBgLogoUrl(theme)} logoAlt={theme.portal_title} moduleActiveMap={moduleActiveMap} />
+            <Sidebar logoUrl={getDarkBgLogoUrl(theme)} logoAlt={theme.portal_title} />
 
             <div className="min-h-screen w-full flex justify-center md:flex-1 md:overflow-y-auto">
               <div className="w-full max-w-[420px] sm:border sm:border-slate-200/70 sm:shadow-sm md:max-w-none md:border-0 md:shadow-none overflow-hidden bg-slate-50">
@@ -51,4 +52,3 @@ export default async function PortalLayout({ children }: { children: ReactNode }
     </AuthProvider>
   );
 }
-

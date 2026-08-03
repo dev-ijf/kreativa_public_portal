@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Award, BookOpen, Brain, Calendar, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
+import { Award, BookOpen, BookOpenCheck, Brain, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
 import { TopHero } from '@/components/portal/TopHero';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
@@ -13,7 +13,7 @@ import { t, type Lang } from '@/lib/i18n/translations';
 import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
 import { agendaForChild } from '@/lib/portal/agenda-filter';
-import { MENU_CONFIG, isModuleActive, type ModuleActiveMap } from '@/lib/portal/menu-config';
+import { MENU_CONFIG, isModuleActiveForSchool } from '@/lib/portal/menu-config';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -25,13 +25,12 @@ type Props = {
   logoAlt: string;
   initialAgendas: PortalAgendaRow[];
   initialAnnouncements: PortalAnnouncementRow[];
-  moduleActiveMap: ModuleActiveMap;
 };
 
-export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements, moduleActiveMap }: Props) {
+export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements }: Props) {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
-  const { lang, setLang } = usePortalState();
+  const { lang, setLang, moduleMapsBySchool } = usePortalState();
   const activeChild = useActiveChild();
   const [now, setNow] = useState(() => new Date());
   const [mounted, setMounted] = useState(false);
@@ -89,10 +88,10 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
     schedules: <BookOpen size={28} className="text-blue-600" />,
     attendance: <CheckSquare size={28} className="text-orange-600" />,
     report: <Award size={28} className="text-purple-600" />,
-    agenda: <Calendar size={28} className="text-red-600" />,
     updates: <Megaphone size={28} className="text-teal-600" />,
     'adaptive-learning': <Brain size={28} className="text-pink-600" />,
     habits: <CheckSquare size={28} className="text-emerald-600" />,
+    ttq: <BookOpenCheck size={28} className="text-violet-700" />,
   };
 
   const menus = MENU_CONFIG.map((cfg) => ({
@@ -102,7 +101,7 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
       : t(lang, cfg.labelKey as Parameters<typeof t>[1]),
     color: cfg.color,
     icon: iconMap[cfg.moduleCode],
-    isActive: isModuleActive(moduleActiveMap, cfg.moduleCode),
+    isActive: isModuleActiveForSchool(moduleMapsBySchool, activeChild?.schoolId, cfg.moduleCode),
   }));
 
   const displayName = session?.user?.role === 'parent'
@@ -158,7 +157,7 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
           return (
             <Link
               key={e.id}
-              href="/agenda"
+              href="/updates?tab=agenda"
               className="flex items-center justify-between rounded-xl hover:bg-slate-50 -mx-1 px-1 py-0.5 transition-colors"
             >
               <div className="min-w-0 pr-2">
@@ -279,7 +278,7 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-sm font-bold text-slate-700">{t(lang, 'upcomingEvents')}</p>
-                <Link href="/agenda" className="text-xs font-bold text-primary">{t(lang, 'seeAll')}</Link>
+                <Link href="/updates?tab=agenda" className="text-xs font-bold text-primary">{t(lang, 'seeAll')}</Link>
               </div>
               {upcomingList}
               {activeChild && (
@@ -321,7 +320,7 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5">
               <div className="flex items-center justify-between mb-3">
                 <p className="font-bold text-slate-700">{t(lang, 'upcomingEvents')}</p>
-                <Link href="/agenda" className="text-xs font-bold text-primary">{t(lang, 'seeAll')}</Link>
+                <Link href="/updates?tab=agenda" className="text-xs font-bold text-primary">{t(lang, 'seeAll')}</Link>
               </div>
               {upcomingList}
               {activeChild && (

@@ -6,6 +6,10 @@ import type { PortalSelectedPaymentState } from '@/lib/data/portal-payment';
 import type { PortalChildRow } from '@/lib/data/server/children';
 import type { Lang } from '@/lib/portal-lang-cookie';
 import { buildPortalLangCookieValue } from '@/lib/portal-lang-cookie';
+import {
+  isModuleActiveForSchool,
+  type SchoolModuleActiveMaps,
+} from '@/lib/portal/menu-config';
 
 export type { Lang };
 
@@ -30,6 +34,7 @@ type PortalState = {
   setCart: Dispatch<SetStateAction<CartItem[]>>;
   selectedPayment: PaymentMethod | null;
   setSelectedPayment: Dispatch<SetStateAction<PaymentMethod | null>>;
+  moduleMapsBySchool: SchoolModuleActiveMaps;
 };
 
 const PortalContext = createContext<PortalState | null>(null);
@@ -39,14 +44,21 @@ type ProviderProps = {
   initialPortalChildren?: PortalChildRow[];
   /** Dari cookie server (`portal.lang`) agar teks bahasa pertama sama saat hidrasi. */
   initialLang?: Lang;
+  initialModuleMapsBySchool?: SchoolModuleActiveMaps;
 };
 
-export function PortalProvider({ children, initialPortalChildren = [], initialLang }: ProviderProps) {
+export function PortalProvider({
+  children,
+  initialPortalChildren = [],
+  initialLang,
+  initialModuleMapsBySchool = {},
+}: ProviderProps) {
   const [lang, setLang] = useState<Lang>(() => (initialLang === 'en' || initialLang === 'id' ? initialLang : 'en'));
   const [portalChildren] = useState<PortalChildRow[]>(initialPortalChildren);
   const [activeChildId, setActiveChildId] = useState<number>(initialPortalChildren[0]?.id ?? 0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
+  const [moduleMapsBySchool] = useState<SchoolModuleActiveMaps>(initialModuleMapsBySchool);
 
   const childIds = useMemo(() => new Set(portalChildren.map((c) => c.id)), [portalChildren]);
 
@@ -119,8 +131,19 @@ export function PortalProvider({ children, initialPortalChildren = [], initialLa
   }, [selectedPayment]);
 
   const value = useMemo(
-    () => ({ lang, setLang, portalChildren, activeChildId, setActiveChildId, cart, setCart, selectedPayment, setSelectedPayment }),
-    [lang, portalChildren, activeChildId, cart, selectedPayment],
+    () => ({
+      lang,
+      setLang,
+      portalChildren,
+      activeChildId,
+      setActiveChildId,
+      cart,
+      setCart,
+      selectedPayment,
+      setSelectedPayment,
+      moduleMapsBySchool,
+    }),
+    [lang, portalChildren, activeChildId, cart, selectedPayment, moduleMapsBySchool],
   );
 
   return <PortalContext.Provider value={value}>{children}</PortalContext.Provider>;
@@ -135,5 +158,12 @@ export function usePortalState() {
 export function useActiveChild(): PortalChildRow | undefined {
   const { portalChildren, activeChildId } = usePortalState();
   return portalChildren.find((c) => c.id === activeChildId);
+}
+
+/** Resolve module visibility for the active child's school. */
+export function useIsModuleActive(moduleCode: string): boolean {
+  const { moduleMapsBySchool } = usePortalState();
+  const activeChild = useActiveChild();
+  return isModuleActiveForSchool(moduleMapsBySchool, activeChild?.schoolId, moduleCode);
 }
 

@@ -8,8 +8,8 @@ import { useSession, signOut } from 'next-auth/react';
 import {
   Award,
   BookOpen,
+  BookOpenCheck,
   Brain,
-  Calendar,
   CheckSquare,
   Home,
   LogOut,
@@ -23,8 +23,8 @@ import { usePortalState, useActiveChild } from '@/components/portal/state/Portal
 import { ConfirmDialog } from '@/components/portal/ConfirmDialog';
 import { isDailyReportStudent } from '@/lib/portal/is-kindergarten';
 import { t } from '@/lib/i18n/translations';
+import { isModuleActiveForSchool } from '@/lib/portal/menu-config';
 import { useSidebar } from './SidebarProvider';
-import { isModuleActive, type ModuleActiveMap } from '@/lib/portal/menu-config';
 
 type NavItem = {
   href: string;
@@ -37,13 +37,12 @@ type NavItem = {
 type Props = {
   logoUrl: string;
   logoAlt: string;
-  moduleActiveMap: ModuleActiveMap;
 };
 
-export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
+export function Sidebar({ logoUrl, logoAlt }: Props) {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const { lang, setLang } = usePortalState();
+  const { lang, setLang, moduleMapsBySchool } = usePortalState();
   const activeChild = useActiveChild();
   const { expanded, toggle } = useSidebar();
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -54,7 +53,6 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
     { href: '/schedules', icon: <BookOpen size={20} />, labelKey: 'schedules', moduleCode: 'schedules' },
     { href: '/attendance', icon: <CheckSquare size={20} />, labelKey: 'attendance', moduleCode: 'attendance' },
     { href: '/report', icon: <Award size={20} />, labelKey: 'report', moduleCode: 'report' },
-    { href: '/agenda', icon: <Calendar size={20} />, labelKey: 'agenda', moduleCode: 'agenda' },
     { href: '/updates', icon: <Megaphone size={20} />, labelKey: 'updates', moduleCode: 'updates' },
     { href: '/adaptive-learning', icon: <Brain size={20} />, labelKey: 'adaptiveLearning', moduleCode: 'adaptive-learning' },
     {
@@ -63,6 +61,7 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
       labelKey: isDailyReportStudent(activeChild ?? {}) ? 'dailyReports' : 'habits',
       moduleCode: 'habits',
     },
+    { href: '/ttq', icon: <BookOpenCheck size={20} />, labelKey: 'ttq', moduleCode: 'ttq' },
   ];
 
   const isActive = (href: string) => {
@@ -127,7 +126,7 @@ export function Sidebar({ logoUrl, logoAlt, moduleActiveMap }: Props) {
               const active = isActive(item.href);
               const label = item.labelOverride ?? t(lang, item.labelKey as Parameters<typeof t>[1]);
               const moduleActive = item.moduleCode
-                ? isModuleActive(moduleActiveMap, item.moduleCode)
+                ? isModuleActiveForSchool(moduleMapsBySchool, activeChild?.schoolId, item.moduleCode)
                 : true;
 
               if (!moduleActive) {
