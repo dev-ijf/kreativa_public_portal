@@ -97,6 +97,51 @@ export const FINANCE_MONTH_GRID: { monthKey: string; monthLabelEn: string; month
   { monthKey: 'jun', monthLabelEn: 'Jun', monthLabelId: 'Jun' },
 ];
 
+const MONTH_KEY_TO_NUM: Record<string, number> = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
+};
+
+/** Tahun+bulan kalender saat ini di Asia/Jakarta (untuk outstanding SPP). */
+export function jakartaCalendarYearMonth(nowMs: number = Date.now()): { year: number; month: number } {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+  });
+  const parts = dtf.formatToParts(new Date(nowMs));
+  const year = Number(parts.find((p) => p.type === 'year')?.value ?? '0');
+  const month = Number(parts.find((p) => p.type === 'month')?.value ?? '0');
+  return { year, month };
+}
+
+/**
+ * SPP monthly hanya dihitung outstanding jika bulan tagihan ≤ bulan berjalan (WIB).
+ * Tagihan bulan depan yang sudah di-generate tidak masuk total tertunggak.
+ */
+export function isFinanceMonthDueOrPast(
+  slot: Pick<FinanceMonthSlot, 'monthKey' | 'calendarYear'>,
+  nowMs: number = Date.now(),
+): boolean {
+  if (slot.calendarYear == null) return false;
+  const monthNum = MONTH_KEY_TO_NUM[slot.monthKey];
+  if (!monthNum) return false;
+  const { year, month } = jakartaCalendarYearMonth(nowMs);
+  if (slot.calendarYear < year) return true;
+  if (slot.calendarYear > year) return false;
+  return monthNum <= month;
+}
+
 export function emptyFinanceChildPayload(): FinanceChildPayload {
   return {
     billingMode: 'talenta',

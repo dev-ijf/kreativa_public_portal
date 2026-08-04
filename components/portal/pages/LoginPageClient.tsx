@@ -6,7 +6,6 @@ import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
-import { WhatsAppBubble } from '@/components/portal/WhatsAppBubble';
 import { t, type Lang } from '@/lib/i18n/translations';
 
 type LoginPageClientProps = {
@@ -17,9 +16,7 @@ type LoginPageClientProps = {
   portalTitle?: string;
   welcomeText?: string | null;
   secondaryColor?: string | null;
-  whatsappNumber?: string | null;
   onePortalUrl?: string;
-  whatsappUrl?: string | null;
 };
 
 const FALLBACK_COLOR = '#4f46e5';
@@ -79,7 +76,6 @@ export function LoginPageClient({
   welcomeText,
   secondaryColor,
   onePortalUrl = 'https://one.kreativaglobal.sch.id',
-  whatsappUrl,
 }: LoginPageClientProps) {
   const mobileLogo = darkLogoUrl || logoUrl;
   const cardColor = secondaryColor || FALLBACK_COLOR;
@@ -279,8 +275,6 @@ export function LoginPageClient({
         </div>
 
       </div>
-
-      <WhatsAppBubble href={whatsappUrl} />
     </div>
   );
 }

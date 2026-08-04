@@ -10,8 +10,8 @@ import { getPortalChildren } from '@/lib/data/server/children';
 import {
   getPortalThemeForRequest,
   getDarkBgLogoUrl,
-  getWhatsAppMeUrl,
 } from '@/lib/data/server/portal-theme';
+import { getSchoolWhatsappUrlsByIds } from '@/lib/data/server/school-contact';
 import { parsePortalLangCookie, PORTAL_LANG_COOKIE } from '@/lib/portal-lang-cookie';
 import { getSchoolModuleActiveMaps } from '@/lib/data/server/modules';
 
@@ -20,14 +20,16 @@ export default async function PortalLayout({ children }: { children: ReactNode }
   const cookieStore = await cookies();
   const initialLang = parsePortalLangCookie(cookieStore.get(PORTAL_LANG_COOKIE)?.value);
   const theme = await getPortalThemeForRequest();
-  const whatsappUrl = getWhatsAppMeUrl(theme.whatsapp_number);
 
   const portalChildren = session?.user?.userId
     ? await getPortalChildren(session.user.userId, session.user.role)
     : [];
 
   const schoolIds = portalChildren.map((c) => c.schoolId);
-  const moduleMapsBySchool = await getSchoolModuleActiveMaps(schoolIds);
+  const [moduleMapsBySchool, whatsappBySchoolId] = await Promise.all([
+    getSchoolModuleActiveMaps(schoolIds),
+    getSchoolWhatsappUrlsByIds(schoolIds),
+  ]);
 
   return (
     <AuthProvider session={session}>
@@ -46,7 +48,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
               </div>
             </div>
           </div>
-          <WhatsAppBubble href={whatsappUrl} liftForCart />
+          <WhatsAppBubble hrefBySchoolId={whatsappBySchoolId} liftForCart />
         </SidebarProvider>
       </PortalProvider>
     </AuthProvider>

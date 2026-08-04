@@ -136,7 +136,7 @@ export const TRANSLATIONS = {
     habitsPeriodNote:
       'Prayers and related worship are excused today and will not lower the checklist score.',
     habitsSectionSunnahExtra: 'Extra sunnah & worship',
-    habitsSectionMengajiMaghrib: 'Recite Quran together after Maghrib',
+    habitsSectionMengajiMaghrib: 'Recite Quran together',
     habitsSectionPolite4s: 'Manners with parents',
     habitsSectionPolite4sHint: '4S: smile, greet, say salam, stay courteous.',
     habitsSectionHelpChores: 'Helping Parents at home',
@@ -582,7 +582,7 @@ export const TRANSLATIONS = {
     habitsPeriodNote:
       'Sholat dan ibadah terkait dikecualikan hari ini dan tidak menurunkan skor checklist.',
     habitsSectionSunnahExtra: 'Sunnah & ibadah tambahan',
-    habitsSectionMengajiMaghrib: 'Magrib Mengaji',
+    habitsSectionMengajiMaghrib: 'Mengaji bersama',
     habitsSectionPolite4s: 'Sopan di rumah',
     habitsSectionPolite4sHint: '4S: senyum, sapa, salam, sopan.',
     habitsSectionHelpChores: 'Aktivitas di rumah',
@@ -632,7 +632,7 @@ export const TRANSLATIONS = {
     habitRowIsha: 'Sudah sholat Isya',
     habitRowDhuha: 'Sudah sholat Dhuha (jika ada jadwal)',
     habitRowTahajud: 'Sudah sholat tahajud (malam)',
-    habitRowReadQuran: 'Sudah mengaji bersama setelah Maghrib',
+    habitRowReadQuran: 'Sudah mengaji bersama',
     habitRowSunnahFasting: 'Puasa sunnah hari ini (jika sedang puasa)',
     habitRowWakeUp: 'Anak sudah bangun sebelum waktu Subuh',
     habitRowHelpParents: 'Sudah membantu tugas rumah (masak, beres-beres, dll.)',

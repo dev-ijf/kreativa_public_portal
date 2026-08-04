@@ -6,7 +6,6 @@ import {
   getBrowserTitle,
   getGlobalSetting,
   getOnePortalUrl,
-  getWhatsAppMeUrl,
 } from '@/lib/data/server/portal-theme';
 
 export default async function Page() {
@@ -29,9 +28,7 @@ export default async function Page() {
         portalTitle={getBrowserTitle(theme)}
         welcomeText={theme.welcome_text}
         secondaryColor={theme.secondary_color}
-        whatsappNumber={theme.whatsapp_number}
         onePortalUrl={getOnePortalUrl(theme.host_domain)}
-        whatsappUrl={getWhatsAppMeUrl(theme.whatsapp_number)}
       />
     </Suspense>
   );

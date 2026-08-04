@@ -46,8 +46,10 @@ export type TuitionReceiptPayload = {
   rombelLabel: string | null;
   lines: TuitionReceiptLine[];
   total: number;
-  /** theme_id sekolah — 1 = Kreativa (EN), 2 = Talenta (ID). */
+  /** theme_id sekolah — 1 = Kreativa (EN), selain itu Talenta (ID). */
   themeId?: number | null;
+  /** Nama SDM keuangan sekolah (`core_users.role = 'school_finance'`). */
+  financeOfficerName: string | null;
 };
 
 function num(v: unknown): number {
@@ -326,6 +328,7 @@ export async function getReceiptPayloadForPortal(
       s.program AS student_program,
       c.name AS class_name,
       lg.name AS level_grade_name,
+      s.school_id AS school_id,
       sch.name AS school_name,
       sch.address AS school_address,
       sch.school_logo_url,
@@ -402,6 +405,21 @@ export async function getReceiptPayloadForPortal(
   const themeIdRaw = h.theme_id;
   const themeId = themeIdRaw != null ? Number(themeIdRaw) : null;
 
+  const schoolId = num(h.school_id);
+  let financeOfficerName: string | null = null;
+  if (schoolId > 0) {
+    const financeRows = (await sql`
+      SELECT full_name
+      FROM core_users
+      WHERE school_id = ${schoolId}
+        AND role = 'school_finance'
+      ORDER BY id ASC
+      LIMIT 1
+    `) as unknown as { full_name: string }[];
+    const name = financeRows[0]?.full_name?.trim();
+    financeOfficerName = name ? name : null;
+  }
+
   return {
     schoolName: String(h.school_name ?? 'Sekolah'),
     schoolAddress,
@@ -417,6 +435,7 @@ export async function getReceiptPayloadForPortal(
     lines,
     total: num(h.total_amount),
     themeId,
+    financeOfficerName,
   };
 }
 

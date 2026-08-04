@@ -32,9 +32,9 @@ type Labels = {
   total: string;
   amountInWordsLabel: string;
   notes: string;
-  depositor: string;
-  officer: string;
+  adminStaffTitle: string;
   systemNote: string;
+  digitalNote: string;
 };
 
 const ID_LABELS: Labels = {
@@ -53,9 +53,10 @@ const ID_LABELS: Labels = {
   total: 'TOTAL',
   amountInWordsLabel: 'TERBILANG',
   notes: 'KETERANGAN',
-  depositor: 'PENYETOR',
-  officer: 'PETUGAS',
+  adminStaffTitle: 'STAF ADMINISTRATIF SEKOLAH',
   systemNote: 'SYSTEM / BANK',
+  digitalNote:
+    'Pembayaran secara digital tidak memerlukan tanda tangan basah. Dokumen ini adalah bukti pembayaran yang sah.',
 };
 
 const EN_LABELS: Labels = {
@@ -74,9 +75,10 @@ const EN_LABELS: Labels = {
   total: 'TOTAL',
   amountInWordsLabel: 'AMOUNT IN WORDS',
   notes: 'NOTES',
-  depositor: 'DEPOSITOR',
-  officer: 'OFFICER',
+  adminStaffTitle: 'ADMINISTRATIVE SCHOOL STAFF',
   systemNote: 'SYSTEM / BANK',
+  digitalNote:
+    'Digital payments do not require a wet-ink signature. This document is a valid proof of payment.',
 };
 
 const styles = StyleSheet.create({
@@ -131,9 +133,13 @@ const styles = StyleSheet.create({
   totalLabel: { width: 120, fontFamily: 'Helvetica-Bold', fontSize: 9, textAlign: 'right', marginRight: 8 },
   totalVal: { width: 100, fontSize: 9, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
   terbilang: { marginTop: 6, fontSize: 8, textAlign: 'right', maxWidth: '100%' },
-  signRow: { flexDirection: 'row', marginTop: 36, justifyContent: 'space-between' },
-  signCol: { width: '30%', fontSize: 8 },
-  signTitle: { fontFamily: 'Helvetica-Bold', marginBottom: 36 },
+  notesBlock: { marginTop: 20, fontSize: 8 },
+  notesTitle: { fontFamily: 'Helvetica-Bold', marginBottom: 4 },
+  notesBody: { fontSize: 7.5, lineHeight: 1.4, color: '#333' },
+  signRow: { flexDirection: 'row', marginTop: 36, justifyContent: 'flex-end' },
+  signCol: { width: '38%', fontSize: 8, alignItems: 'center' },
+  signTitle: { fontFamily: 'Helvetica-Bold', marginBottom: 36, textAlign: 'center' },
+  signName: { fontSize: 8, fontFamily: 'Helvetica-Bold', textAlign: 'center' },
   systemNote: { marginTop: 16, fontSize: 7, textAlign: 'right', color: '#555' },
 });
 
@@ -142,6 +148,7 @@ export function TuitionReceiptPdfDoc({ data }: { data: TuitionReceiptPayload }) 
   const l = en ? EN_LABELS : ID_LABELS;
   const amountWords = en ? amountInWordsEnUpper(data.total) : terbilangRupiahUpper(data.total);
   const lines = data.lines.length > 0 ? data.lines : [{ label: en ? 'Payment' : 'Pembayaran', amount: data.total }];
+  const officerName = data.financeOfficerName?.trim() || null;
 
   return (
     <Document>
@@ -232,15 +239,15 @@ export function TuitionReceiptPdfDoc({ data }: { data: TuitionReceiptPayload }) 
           </Text>
         </View>
 
+        <View style={styles.notesBlock}>
+          <Text style={styles.notesTitle}>{l.notes}</Text>
+          <Text style={styles.notesBody}>{l.digitalNote}</Text>
+        </View>
+
         <View style={styles.signRow}>
           <View style={styles.signCol}>
-            <Text style={styles.signTitle}>{l.notes}</Text>
-          </View>
-          <View style={styles.signCol}>
-            <Text style={styles.signTitle}>{l.depositor}</Text>
-          </View>
-          <View style={styles.signCol}>
-            <Text style={styles.signTitle}>{l.officer}</Text>
+            <Text style={styles.signTitle}>{l.adminStaffTitle}</Text>
+            {officerName ? <Text style={styles.signName}>{officerName}</Text> : null}
           </View>
         </View>
         <Text style={styles.systemNote}>{l.systemNote}</Text>

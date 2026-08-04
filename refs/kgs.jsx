@@ -329,7 +329,7 @@ const TRANSLATIONS = {
     isha: "Isya",
     dhuha: "Dhuha",
     tahajud: "Tahajud",
-    readQuran: "Mengaji ba'da Maghrib",
+    readQuran: "Mengaji bersama",
     wakeUpEarly: "Bangun sebelum jam 5 pagi",
     helpParents: "Membantu orang tua",
     weeklySummary: "Laporan Kemajuan Mingguan",

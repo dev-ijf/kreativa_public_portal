@@ -12,6 +12,7 @@ import { cache } from 'react';
 import {
   FINANCE_MONTH_GRID,
   emptyFinanceChildPayload,
+  jakartaCalendarYearMonth,
   type FinanceBillingMode,
   type FinanceChildPayload,
   type FinanceInstallmentGroupRow,
@@ -140,6 +141,34 @@ function billMatchesSlot(
     return row.bill_year === y && row.bill_month === m;
   }
   return false;
+}
+
+/** Tahun+bulan kalender tagihan bulanan; null jika bukan monthly / tidak ada periode. */
+function billCalendarYearMonth(row: BillViewRow): { year: number; month: number } | null {
+  if (row.related_month) {
+    const d = new Date(row.related_month);
+    if (!Number.isNaN(d.getTime())) {
+      return { year: d.getFullYear(), month: d.getMonth() + 1 };
+    }
+  }
+  if (row.bill_year != null && row.bill_month != null) {
+    return { year: row.bill_year, month: row.bill_month };
+  }
+  return null;
+}
+
+/**
+ * Outstanding: monthly SPP hanya jika periode ≤ bulan berjalan (WIB).
+ * Non-monthly (DSP/DKT/dll) selalu dihitung selama masih ada saldo.
+ */
+function billCountsTowardOutstanding(row: BillViewRow, nowMs: number = Date.now()): boolean {
+  if (row.payment_type !== 'monthly') return true;
+  const period = billCalendarYearMonth(row);
+  if (!period) return false;
+  const { year, month } = jakartaCalendarYearMonth(nowMs);
+  if (period.year < year) return true;
+  if (period.year > year) return false;
+  return period.month <= month;
 }
 
 function num(v: unknown): number {
@@ -582,13 +611,19 @@ function buildKreativaPayload(
     }
   }
 
-  // Outstanding helper: unique unpaid termin balances (tanpa digital card).
+  // Outstanding helper: unique unpaid balances, exclude future monthly SPP.
+  const billsById = new Map<number, BillViewRow>();
+  for (const r of rows) {
+    if (r.student_id === child.id) billsById.set(r.bill_id, r);
+  }
   const payableBills: FinancePayableBillSlot[] = [];
   const seen = new Set<string>();
   for (const g of installmentGroups) {
     for (const t of g.termins) {
       if (seen.has(t.billId)) continue;
       seen.add(t.billId);
+      const bill = billsById.get(Number(t.billId));
+      if (bill && !billCountsTowardOutstanding(bill)) continue;
       payableBills.push({ billId: t.billId, title: t.title, amount: t.amount });
     }
   }

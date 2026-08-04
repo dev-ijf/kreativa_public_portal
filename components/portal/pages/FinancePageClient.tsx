@@ -8,7 +8,11 @@ import { FloatingCartBar } from '@/components/portal/FloatingCartBar';
 import { ProgressRing } from '@/components/portal/ProgressRing';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
-import { emptyFinanceChildPayload, type FinanceChildPayload } from '@/lib/data/portal-finance-payload';
+import {
+  emptyFinanceChildPayload,
+  isFinanceMonthDueOrPast,
+  type FinanceChildPayload,
+} from '@/lib/data/portal-finance-payload';
 import { formatInputNumber, formatRupiah } from '@/lib/utils/format';
 
 type FinancePageClientProps = {
@@ -32,12 +36,19 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
   const totalOutstanding = useMemo(() => {
     const prevUnpaid = prevBills.reduce((s, b) => s + b.amount, 0);
     if (isKreativa) {
-      // Unique payable bill balances only (card + previous). Do not add group remaining.
+      // Server already excludes future monthly SPP from payableBills.
       const currentUnpaid = payableBills.reduce((s, b) => s + b.amount, 0);
       return currentUnpaid + prevUnpaid;
     }
-    const tuitionUnpaid = tuitionMonths.filter((m) => m.status === 'unpaid' && m.billId).reduce((s, m) => s + m.amount, 0);
-    const instUnpaid = installments.reduce((s, i) => s + (i.total - i.paid), 0);
+    // SPP: hanya bulan berjalan + bulan lalu (bukan tagihan masa depan).
+    // Non-monthly (DSP/DKT/dll): sisa yang belum lunas saja.
+    const tuitionUnpaid = tuitionMonths
+      .filter((m) => m.status === 'unpaid' && m.billId && isFinanceMonthDueOrPast(m))
+      .reduce((s, m) => s + m.amount, 0);
+    const instUnpaid = installments.reduce((s, i) => {
+      if (i.isFullyPaid) return s;
+      return s + Math.max(0, i.total - i.paid);
+    }, 0);
     return tuitionUnpaid + instUnpaid + prevUnpaid;
   }, [isKreativa, payableBills, tuitionMonths, installments, prevBills]);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { useActiveChild, usePortalState } from '@/components/portal/state/PortalProvider';
 
 const WhatsAppIcon = () => (
   <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -9,20 +9,29 @@ const WhatsAppIcon = () => (
 );
 
 type Props = {
-  href: string | null | undefined;
+  /** Static link (e.g. login). Prefer hrefBySchoolId when school context exists. */
+  href?: string | null;
+  /** Per-school wa.me URLs keyed by schoolId; resolved from the active child. */
+  hrefBySchoolId?: Record<number, string | null>;
   /** Lift above the floating cart bar when the cart has items. */
   liftForCart?: boolean;
 };
 
-export function WhatsAppBubble({ href, liftForCart = false }: Props) {
+export function WhatsAppBubble({ href = null, hrefBySchoolId, liftForCart = false }: Props) {
   const { cart } = usePortalState();
-  if (!href) return null;
+  const activeChild = useActiveChild();
+
+  const resolvedHref = hrefBySchoolId
+    ? (activeChild ? hrefBySchoolId[activeChild.schoolId] ?? null : null)
+    : href;
+
+  if (!resolvedHref) return null;
 
   const lift = liftForCart && cart.length > 0;
 
   return (
     <a
-      href={href}
+      href={resolvedHref}
       target="_blank"
       rel="noopener noreferrer"
       className={[
