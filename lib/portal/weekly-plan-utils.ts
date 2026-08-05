@@ -59,6 +59,44 @@ export function formatTimeRange(start: string, end: string): string {
   return `${start} – ${end}`;
 }
 
+/** Short subject code for weekly grid cells (e.g. Math → MA). */
+export function subjectAbbrev(name: string | null | undefined): string {
+  if (!name) return '—';
+  const trimmed = name.trim();
+  if (!trimmed) return '—';
+
+  const known: Record<string, string> = {
+    math: 'MA',
+    mathematics: 'MA',
+    'english language': 'EL',
+    'cll-english': 'EL',
+    english: 'EL',
+    'english reading': 'REA',
+    reading: 'REA',
+    'bahasa indonesia': 'BI',
+    indonesian: 'BI',
+    'islamic studies': 'IS',
+    'quran studies': 'QS',
+    'physical education': 'PE',
+    pe: 'PE',
+    science: 'SCI',
+    stem: 'STEM',
+    art: 'ART',
+    motoric: 'MOT',
+  };
+  const hit = known[trimmed.toLowerCase()];
+  if (hit) return hit;
+
+  const words = trimmed.split(/[\s/-]+/).filter(Boolean);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0]!.toUpperCase())
+      .join('');
+  }
+  return trimmed.slice(0, 3).toUpperCase();
+}
+
 /**
  * Add days to a YYYY-MM-DD civil date using UTC calendar math
  * (avoids local/DST timezone shifting the day number).

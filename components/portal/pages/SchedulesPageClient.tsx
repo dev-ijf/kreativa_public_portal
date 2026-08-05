@@ -10,7 +10,6 @@ import type { PortalWeeklyPlanBundle } from '@/lib/portal/weekly-plan-types';
 import type { PortalLmsWeeklyPlanBundle } from '@/lib/portal/lms-weekly-plan-types';
 import {
   isKindergartenStudent,
-  isPrimaryStudent,
   isSecondaryOrHighSchoolStudent,
 } from '@/lib/portal/is-kindergarten';
 import { subjectColor } from '@/lib/portal/weekly-plan-colors';
@@ -22,7 +21,9 @@ import {
 import { DayTabs } from '@/components/portal/schedules/DayTabs';
 import { KindergartenWeeklyPlanView } from '@/components/portal/schedules/KindergartenWeeklyPlanView';
 import { PrimaryWeeklyPlanView } from '@/components/portal/schedules/PrimaryWeeklyPlanView';
+import { SecondaryWeeklyGridView } from '@/components/portal/schedules/SecondaryWeeklyGridView';
 import { SecondaryWeeklyPlanView } from '@/components/portal/schedules/SecondaryWeeklyPlanView';
+import { WeeklyPlanGridView } from '@/components/portal/schedules/WeeklyPlanGridView';
 
 type Props = {
   initialPlans: PortalWeeklyPlanBundle[];
@@ -51,7 +52,6 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
   }, [initialPlans, initialLmsPlans]);
 
   const isKg = isKindergartenStudent(activeChild ?? {});
-  const isPrimary = isPrimaryStudent(activeChild ?? {});
   const isSecondary = isSecondaryOrHighSchoolStudent(activeChild ?? {});
 
   const wlBundle = useMemo(() => {
@@ -154,22 +154,31 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
       <p className="text-sm text-slate-500">{t(lang, 'scheduleNoPlan')}</p>
     ) : (
       <>
-        <DayTabs
-          lang={lang}
-          dateFrom={week.dateFrom}
-          selectedDayIndex={selectedDayIndex}
-          onSelect={setSelectedDayIndex}
-          metaForDay={(dayIndex) => ({
-            kind: 'count',
-            count: (lmsBundle?.sessions ?? []).filter((s) => s.dayIndex === dayIndex)
-              .length,
-          })}
-        />
-        <SecondaryWeeklyPlanView
-          lang={lang}
-          sessions={lmsBundle?.sessions ?? []}
-          dayIndex={selectedDayIndex}
-        />
+        <div className="space-y-4 md:hidden">
+          <DayTabs
+            lang={lang}
+            dateFrom={week.dateFrom}
+            selectedDayIndex={selectedDayIndex}
+            onSelect={setSelectedDayIndex}
+            metaForDay={(dayIndex) => ({
+              kind: 'count',
+              count: (lmsBundle?.sessions ?? []).filter((s) => s.dayIndex === dayIndex)
+                .length,
+            })}
+          />
+          <SecondaryWeeklyPlanView
+            lang={lang}
+            sessions={lmsBundle?.sessions ?? []}
+            dayIndex={selectedDayIndex}
+          />
+        </div>
+        <div className="hidden md:block">
+          <SecondaryWeeklyGridView
+            lang={lang}
+            sessions={lmsBundle?.sessions ?? []}
+            dateFrom={week.dateFrom}
+          />
+        </div>
       </>
     );
   } else if (!wlBundle?.plan) {
@@ -177,44 +186,47 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
   } else {
     body = (
       <>
-        <DayTabs
-          lang={lang}
-          dateFrom={week.dateFrom}
-          selectedDayIndex={selectedDayIndex}
-          onSelect={setSelectedDayIndex}
-          metaForDay={(dayIndex) => {
-            if (isKg) {
-              const main = findKindergartenMainRow(wlBundle.rows, dayIndex);
-              const slot = main ? slotForDay(main, dayIndex) : null;
-              const name =
-                slot?.subjectName || main?.category || main?.subjectName || null;
-              return { kind: 'dot', color: subjectColor(name).fg };
-            }
-            return {
-              kind: 'count',
-              count: subjectLessonCount(wlBundle.rows, dayIndex),
-            };
-          }}
-        />
-        {isKg ? (
-          <KindergartenWeeklyPlanView
+        <div className="space-y-4 md:hidden">
+          <DayTabs
+            lang={lang}
+            dateFrom={week.dateFrom}
+            selectedDayIndex={selectedDayIndex}
+            onSelect={setSelectedDayIndex}
+            metaForDay={(dayIndex) => {
+              if (isKg) {
+                const main = findKindergartenMainRow(wlBundle.rows, dayIndex);
+                const slot = main ? slotForDay(main, dayIndex) : null;
+                const name =
+                  slot?.subjectName || main?.category || main?.subjectName || null;
+                return { kind: 'dot', color: subjectColor(name).fg };
+              }
+              return {
+                kind: 'count',
+                count: subjectLessonCount(wlBundle.rows, dayIndex),
+              };
+            }}
+          />
+          {isKg ? (
+            <KindergartenWeeklyPlanView
+              lang={lang}
+              rows={wlBundle.rows}
+              dayIndex={selectedDayIndex}
+            />
+          ) : (
+            <PrimaryWeeklyPlanView
+              lang={lang}
+              rows={wlBundle.rows}
+              dayIndex={selectedDayIndex}
+            />
+          )}
+        </div>
+        <div className="hidden md:block">
+          <WeeklyPlanGridView
             lang={lang}
             rows={wlBundle.rows}
-            dayIndex={selectedDayIndex}
+            dateFrom={week.dateFrom}
           />
-        ) : isPrimary ? (
-          <PrimaryWeeklyPlanView
-            lang={lang}
-            rows={wlBundle.rows}
-            dayIndex={selectedDayIndex}
-          />
-        ) : (
-          <PrimaryWeeklyPlanView
-            lang={lang}
-            rows={wlBundle.rows}
-            dayIndex={selectedDayIndex}
-          />
-        )}
+        </div>
       </>
     );
   }
