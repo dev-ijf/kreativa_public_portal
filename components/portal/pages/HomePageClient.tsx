@@ -196,11 +196,11 @@ export function HomePageClient({
                   <Image
                     src={logoUrl}
                     alt={logoAlt}
-                    width={tenant === 'talenta' ? 140 : 160}
-                    height={tenant === 'talenta' ? 56 : 80}
+                    width={tenant === 'talenta' ? 120 : 160}
+                    height={tenant === 'talenta' ? 48 : 80}
                     className={
                       tenant === 'talenta'
-                        ? 'h-14 w-auto max-w-[9.5rem] object-contain object-left shrink-0'
+                        ? 'h-12 w-auto max-w-[8.5rem] object-contain object-left shrink-0'
                         : 'h-20 w-auto object-contain object-left shrink-0'
                     }
                     priority
