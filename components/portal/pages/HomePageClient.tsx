@@ -14,6 +14,7 @@ import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
 import { agendaForChild } from '@/lib/portal/agenda-filter';
 import { MENU_CONFIG, isModuleActiveForSchool } from '@/lib/portal/menu-config';
+import type { PortalTenantId } from '@/lib/portal/tenant';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -23,11 +24,18 @@ function todayLocalISO(): string {
 type Props = {
   logoUrl: string;
   logoAlt: string;
+  tenant?: PortalTenantId;
   initialAgendas: PortalAgendaRow[];
   initialAnnouncements: PortalAnnouncementRow[];
 };
 
-export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnouncements }: Props) {
+export function HomePageClient({
+  logoUrl,
+  logoAlt,
+  tenant = 'kreativa',
+  initialAgendas,
+  initialAnnouncements,
+}: Props) {
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const { data: session } = useSession();
   const { lang, setLang, moduleMapsBySchool } = usePortalState();
@@ -184,16 +192,20 @@ export function HomePageClient({ logoUrl, logoAlt, initialAgendas, initialAnnoun
           <div className="pt-4">
             <div className="flex justify-between items-start pl-2 pr-4 mb-4 text-white">
               <div className="flex flex-col items-start min-w-0">
-                <div className="flex items-center mb-3">
+                <div className="flex items-center gap-2 mb-3">
                   <Image
                     src={logoUrl}
                     alt={logoAlt}
-                    width={160}
-                    height={80}
-                    className="h-20 w-auto object-contain object-left shrink-0"
+                    width={tenant === 'talenta' ? 140 : 160}
+                    height={tenant === 'talenta' ? 56 : 80}
+                    className={
+                      tenant === 'talenta'
+                        ? 'h-14 w-auto max-w-[9.5rem] object-contain object-left shrink-0'
+                        : 'h-20 w-auto object-contain object-left shrink-0'
+                    }
                     priority
                   />
-                  <p className="text-base font-bold text-white leading-tight -ml-1">
+                  <p className="text-base font-bold text-white leading-tight">
                     {t(stableLang, 'appName')}
                   </p>
                 </div>
