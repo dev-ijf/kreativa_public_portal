@@ -2,7 +2,14 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/portal/favicon', '/api/internal/qstash'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/api/auth',
+  '/api/portal/favicon',
+  '/api/internal/qstash',
+  '/manifest.webmanifest',
+  '/sw.js',
+];
 
 const LOCAL_DEV_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
@@ -25,12 +32,25 @@ export async function middleware(request: NextRequest) {
   const hostHeader = request.headers.get('host') ?? request.nextUrl.hostname;
   const portalHostname = hostHeader.split(':')[0]?.trim().toLowerCase() ?? '';
 
+  const requestHeaders = new Headers(request.headers);
+  const effectiveHost = effectivePortalHostname(portalHostname);
+  requestHeaders.set('x-portal-hostname', effectiveHost);
+  requestHeaders.set(
+    'x-tenant-id',
+    effectiveHost.includes('talentajuara') || portalHostname.includes('talentajuara')
+      ? 'talenta'
+      : 'kreativa',
+  );
+
   if (pathname === '/favicon.ico') {
     const url = request.nextUrl.clone();
     url.pathname = '/api/portal/favicon';
-    const requestHeaders = new Headers(request.headers);
-    requestHeaders.set('x-portal-hostname', effectivePortalHostname(portalHostname));
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
+
+  // PWA assets must stay public and carry tenant headers for theme lookup.
+  if (pathname === '/manifest.webmanifest' || pathname === '/sw.js') {
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
@@ -49,13 +69,6 @@ export async function middleware(request: NextRequest) {
     const homeUrl = new URL('/', request.url);
     return NextResponse.redirect(homeUrl);
   }
-
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-portal-hostname', effectivePortalHostname(portalHostname));
-  requestHeaders.set(
-    'x-tenant-id',
-    portalHostname.includes('talentajuara') ? 'talenta' : 'kreativa',
-  );
 
   return NextResponse.next({
     request: {

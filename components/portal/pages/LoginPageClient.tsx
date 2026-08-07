@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
+import { PwaInstallBanner } from '@/components/portal/PwaInstallBanner';
 import { t, type Lang } from '@/lib/i18n/translations';
+import type { PortalTenantId } from '@/lib/portal/tenant';
 
 type LoginPageClientProps = {
   logoUrl: string;
@@ -17,6 +19,7 @@ type LoginPageClientProps = {
   welcomeText?: string | null;
   secondaryColor?: string | null;
   onePortalUrl?: string;
+  tenant?: PortalTenantId;
 };
 
 const FALLBACK_COLOR = '#4f46e5';
@@ -76,6 +79,7 @@ export function LoginPageClient({
   welcomeText,
   secondaryColor,
   onePortalUrl = 'https://one.kreativaglobal.sch.id',
+  tenant = 'kreativa',
 }: LoginPageClientProps) {
   const mobileLogo = darkLogoUrl || logoUrl;
   const cardColor = secondaryColor || FALLBACK_COLOR;
@@ -275,6 +279,8 @@ export function LoginPageClient({
         </div>
 
       </div>
+
+      <PwaInstallBanner logoUrl={logoUrl} tenant={tenant} />
     </div>
   );
 }

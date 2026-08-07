@@ -22,6 +22,7 @@ export default async function Page() {
   return (
     <HomePageClient
       logoUrl={getDarkBgLogoUrl(theme)}
+      brandLogoUrl={theme.logo_url}
       logoAlt={theme.portal_title}
       tenant={tenant}
       initialAgendas={initialAgendas}

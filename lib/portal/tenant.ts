@@ -5,6 +5,11 @@ const GA_MEASUREMENT_IDS: Record<PortalTenantId, string> = {
   talenta: 'G-432WYS41W1',
 };
 
+const PWA_APP_NAMES: Record<PortalTenantId, { name: string; shortName: string }> = {
+  kreativa: { name: 'Kreativa Parents', shortName: 'Kreativa Parents' },
+  talenta: { name: 'Talenta Juara Parents', shortName: 'Talenta Parents' },
+};
+
 /** Client-side tenant from hostname (middleware sets x-tenant-id the same way). */
 export function resolvePortalTenantFromHost(hostname: string): PortalTenantId {
   return hostname.includes('talentajuara') ? 'talenta' : 'kreativa';
@@ -12,6 +17,11 @@ export function resolvePortalTenantFromHost(hostname: string): PortalTenantId {
 
 export function getGaMeasurementId(tenant: PortalTenantId): string {
   return GA_MEASUREMENT_IDS[tenant];
+}
+
+/** Home-screen / install dialog labels per tenant. */
+export function getPwaAppNames(tenant: PortalTenantId): { name: string; shortName: string } {
+  return PWA_APP_NAMES[tenant];
 }
 
 /**

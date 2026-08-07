@@ -7,6 +7,7 @@ import {
   getGlobalSetting,
   getOnePortalUrl,
 } from '@/lib/data/server/portal-theme';
+import { resolvePortalTenantFromHost } from '@/lib/portal/tenant';
 
 export default async function Page() {
   const [theme, globalBg] = await Promise.all([
@@ -17,6 +18,7 @@ export default async function Page() {
   // Only use theme.login_bg_url when it is a full HTTP URL (not a stale local path).
   const themeBg = theme.login_bg_url?.startsWith('http') ? theme.login_bg_url : null;
   const loginBgUrl = themeBg || globalBg || null;
+  const tenant = resolvePortalTenantFromHost(theme.host_domain);
 
   return (
     <Suspense>
@@ -29,6 +31,7 @@ export default async function Page() {
         welcomeText={theme.welcome_text}
         secondaryColor={theme.secondary_color}
         onePortalUrl={getOnePortalUrl(theme.host_domain)}
+        tenant={tenant}
       />
     </Suspense>
   );

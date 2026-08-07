@@ -1,18 +1,23 @@
 import { NextResponse } from 'next/server';
-import { getPortalThemeForRequest } from '@/lib/data/server/portal-theme';
+import {
+  getPortalThemeForRequest,
+  getColoredBrandIconUrl,
+} from '@/lib/data/server/portal-theme';
 
 const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#3A2EAE"/></svg>`;
 
 /**
- * Favicon per hostname: browser meminta /favicon.ico atau link ke route ini;
- * redirect ke Blob (atau SVG fallback) supaya tidak tertimpa ikon default Vercel.
+ * Favicon per hostname: prefer colored logo_url (not white secondary logo).
  */
-export async function GET() {
+export async function GET(request: Request) {
   const theme = await getPortalThemeForRequest();
-  const target = theme.favicon_url?.trim();
+  const target = getColoredBrandIconUrl(theme)?.trim();
 
   if (target) {
-    return NextResponse.redirect(target, 302);
+    const url = /^https?:\/\//i.test(target)
+      ? target
+      : new URL(target, request.url).toString();
+    return NextResponse.redirect(url, 302);
   }
 
   return new NextResponse(FALLBACK_SVG, {

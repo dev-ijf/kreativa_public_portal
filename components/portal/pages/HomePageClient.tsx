@@ -14,6 +14,7 @@ import type { PortalAgendaRow } from '@/lib/data/server/agendas';
 import type { PortalAnnouncementRow } from '@/lib/data/server/announcements';
 import { agendaForChild } from '@/lib/portal/agenda-filter';
 import { MENU_CONFIG, isModuleActiveForSchool } from '@/lib/portal/menu-config';
+import { PwaInstallBanner } from '@/components/portal/PwaInstallBanner';
 import type { PortalTenantId } from '@/lib/portal/tenant';
 
 function todayLocalISO(): string {
@@ -23,6 +24,7 @@ function todayLocalISO(): string {
 
 type Props = {
   logoUrl: string;
+  brandLogoUrl?: string;
   logoAlt: string;
   tenant?: PortalTenantId;
   initialAgendas: PortalAgendaRow[];
@@ -31,6 +33,7 @@ type Props = {
 
 export function HomePageClient({
   logoUrl,
+  brandLogoUrl,
   logoAlt,
   tenant = 'kreativa',
   initialAgendas,
@@ -346,6 +349,8 @@ export function HomePageClient({
           </div>
         </div>
       </div>
+
+      <PwaInstallBanner logoUrl={brandLogoUrl || logoUrl} tenant={tenant} />
     </div>
   );
 }

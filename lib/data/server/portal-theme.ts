@@ -70,6 +70,13 @@ export function getDarkBgLogoUrl(theme: PortalThemeResolved): string {
 }
 
 /**
+ * Colored brand mark for favicon / PWA icons (never the white dark-bg logo).
+ */
+export function getColoredBrandIconUrl(theme: PortalThemeResolved): string {
+  return theme.logo_url?.trim() || theme.favicon_url?.trim() || FALLBACK_LOGO;
+}
+
+/**
  * Returns the browser tab title.
  * Uses secondary_title if available, otherwise falls back to portal_title.
  */
