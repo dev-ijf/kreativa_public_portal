@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { LogOut } from 'lucide-react';
+import { ConfirmDialog } from '@/components/portal/ConfirmDialog';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import { t } from '@/lib/i18n/translations';
@@ -9,6 +11,7 @@ import { t } from '@/lib/i18n/translations';
 export function ProfilePageClient() {
   const { lang, portalChildren } = usePortalState();
   const { data: session } = useSession();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-6">
@@ -43,13 +46,28 @@ export function ProfilePageClient() {
         </div>
 
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          type="button"
+          onClick={() => setLogoutOpen(true)}
           className="w-full mt-6 bg-white border border-red-200 text-red-500 font-bold py-3.5 rounded-full hover:bg-red-50 transition-colors flex items-center justify-center shadow-sm"
         >
           <LogOut size={18} className="mr-2" />
           {t(lang, 'logout')}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={logoutOpen}
+        title={t(lang, 'logoutConfirmTitle')}
+        message={t(lang, 'logoutConfirmMessage')}
+        cancelLabel={t(lang, 'logoutConfirmCancel')}
+        confirmLabel={t(lang, 'logoutConfirmOk')}
+        confirmDanger
+        onCancel={() => setLogoutOpen(false)}
+        onConfirm={() => {
+          setLogoutOpen(false);
+          signOut({ callbackUrl: '/login' });
+        }}
+      />
     </div>
   );
 }
