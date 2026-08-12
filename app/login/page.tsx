@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { LoginPageClient } from '@/components/portal/pages/LoginPageClient';
+import { WhatsAppBubble } from '@/components/portal/WhatsAppBubble';
 import {
   getPortalThemeForRequest,
   getDarkBgLogoUrl,
@@ -7,6 +8,7 @@ import {
   getGlobalSetting,
   getOnePortalUrl,
 } from '@/lib/data/server/portal-theme';
+import { getThemeWhatsappUrl } from '@/lib/data/server/school-contact';
 import { resolvePortalTenantFromHost } from '@/lib/portal/tenant';
 
 export default async function Page() {
@@ -19,6 +21,7 @@ export default async function Page() {
   const themeBg = theme.login_bg_url?.startsWith('http') ? theme.login_bg_url : null;
   const loginBgUrl = themeBg || globalBg || null;
   const tenant = resolvePortalTenantFromHost(theme.host_domain);
+  const whatsappHref = await getThemeWhatsappUrl(theme.id);
 
   return (
     <Suspense>
@@ -33,6 +36,7 @@ export default async function Page() {
         onePortalUrl={getOnePortalUrl(theme.host_domain)}
         tenant={tenant}
       />
+      <WhatsAppBubble href={whatsappHref} />
     </Suspense>
   );
 }

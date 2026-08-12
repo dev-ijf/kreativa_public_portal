@@ -17,13 +17,20 @@ type Props = {
   liftForCart?: boolean;
 };
 
+/**
+ * Floating WhatsApp CTA.
+ * Hidden when href / active child's school has no `core_schools.whatsapp_number`.
+ */
 export function WhatsAppBubble({ href = null, hrefBySchoolId, liftForCart = false }: Props) {
   const { cart } = usePortalState();
   const activeChild = useActiveChild();
 
-  const resolvedHref = hrefBySchoolId
-    ? (activeChild ? hrefBySchoolId[activeChild.schoolId] ?? null : null)
-    : href;
+  const resolvedHref =
+    hrefBySchoolId != null
+      ? activeChild
+        ? hrefBySchoolId[activeChild.schoolId] ?? null
+        : null
+      : href ?? null;
 
   if (!resolvedHref) return null;
 

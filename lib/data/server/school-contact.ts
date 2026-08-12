@@ -21,3 +21,24 @@ export async function getSchoolWhatsappUrlsByIds(
   }
   return map;
 }
+
+/**
+ * Pre-login: wa.me for the portal tenant (theme).
+ * Uses the first school under `theme_id` that has a non-empty `whatsapp_number` (by sort).
+ * Returns null when none are configured — bubble must stay hidden.
+ */
+export async function getThemeWhatsappUrl(themeId: number): Promise<string | null> {
+  if (!Number.isFinite(themeId) || themeId <= 0) return null;
+
+  const rows = (await sql`
+    SELECT whatsapp_number
+    FROM core_schools
+    WHERE theme_id = ${themeId}
+      AND whatsapp_number IS NOT NULL
+      AND BTRIM(whatsapp_number) <> ''
+    ORDER BY sort ASC NULLS LAST, id ASC
+    LIMIT 1
+  `) as { whatsapp_number: string | null }[];
+
+  return getWhatsAppMeUrl(rows[0]?.whatsapp_number);
+}
