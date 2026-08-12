@@ -47,7 +47,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
       .reduce((s, m) => s + m.amount, 0);
     const instUnpaid = installments.reduce((s, i) => {
       if (i.isFullyPaid) return s;
-      return s + Math.max(0, i.total - i.paid);
+      return s + Math.max(0, i.total - i.paid - (i.discount ?? 0));
     }, 0);
     return tuitionUnpaid + instUnpaid + prevUnpaid;
   }, [isKreativa, payableBills, tuitionMonths, installments, prevBills]);
@@ -129,7 +129,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
               <div className="flex justify-between items-end relative z-10">
                 <div>
                   <p className="text-xs text-white/70 font-semibold mb-1">
-                    {lang === 'en' ? 'Total Outstanding' : 'Total Tertunggak'} ({childName.split(' ')[0]})
+                    {lang === 'en' ? 'Unpaid Bills' : 'Tagihan Belum Terbayar'} ({childName.split(' ')[0]})
                   </p>
                   <p className="text-3xl font-bold text-white">{formatRupiah(totalOutstanding)}</p>
                 </div>
@@ -322,6 +322,16 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                       >
                         {noBill ? '—' : formatRupiah(m.amount)}
                       </span>
+                      {!noBill && (m.discount ?? 0) > 0 ? (
+                        <span
+                          className={[
+                            'text-[8px] font-semibold mt-0.5',
+                            isInCart ? 'text-white/70' : 'text-emerald-600',
+                          ].join(' ')}
+                        >
+                          −{formatRupiah(m.discount)}
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -333,6 +343,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                     <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
                       <th className="pb-2 font-semibold">{lang === 'en' ? 'Month' : 'Bulan'}</th>
                       <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Amount' : 'Jumlah'}</th>
+                      <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Discount' : 'Diskon'}</th>
                       <th className="pb-2 font-semibold text-center">{lang === 'en' ? 'Status' : 'Status'}</th>
                       <th className="pb-2 font-semibold text-center w-20" />
                     </tr>
@@ -365,6 +376,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                             ].join(' ')}
                           >
                             {noBill ? '—' : formatRupiah(m.amount)}
+                          </td>
+                          <td className="py-2.5 text-right text-slate-600">
+                            {noBill ? '—' : (m.discount ?? 0) > 0 ? formatRupiah(m.discount) : '—'}
                           </td>
                           <td className="py-2.5 text-center">
                             {isPaid ? (
@@ -447,6 +461,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                     group.total === 0 ? 0 : Math.min(100, (group.paid / group.total) * 100);
                   const name = lang === 'en' ? group.nameEn : group.nameId;
                   const showDonut = group.isInstallment;
+                  const groupDiscount = group.discount ?? 0;
 
                   const terminButtons =
                     isFullyPaid ? (
@@ -488,6 +503,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                 >
                                   {formatRupiah(termin.amount)}
                                 </p>
+                                {(termin.discount ?? 0) > 0 ? (
+                                  <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">
+                                    {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(termin.discount)}
+                                  </p>
+                                ) : null}
                               </div>
                               <span
                                 className={[
@@ -544,6 +564,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                   <p className="text-xs font-bold text-slate-700 leading-tight">
                                     {formatRupiah(group.total)}
                                   </p>
+                                  {groupDiscount > 0 ? (
+                                    <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(groupDiscount)}
+                                    </p>
+                                  ) : null}
                                   <p className="text-[10px] font-bold text-emerald-600 mt-1">
                                     {lang === 'en' ? 'Paid in full' : 'Lunas'}
                                   </p>
@@ -556,6 +581,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                   <p className="text-xs font-bold text-slate-700 leading-tight">
                                     {formatRupiah(remaining)}
                                   </p>
+                                  {groupDiscount > 0 ? (
+                                    <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(groupDiscount)}
+                                    </p>
+                                  ) : null}
                                 </>
                               )}
                             </div>
@@ -563,7 +593,14 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                           <div className="w-2/3 flex flex-col gap-2">{terminButtons}</div>
                         </div>
                       ) : (
-                        <div className="flex flex-col gap-2">{terminButtons}</div>
+                        <div className="flex flex-col gap-2">
+                          {groupDiscount > 0 ? (
+                            <p className="text-[10px] font-semibold text-emerald-600 px-0.5">
+                              {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(groupDiscount)}
+                            </p>
+                          ) : null}
+                          {terminButtons}
+                        </div>
                       )}
                     </div>
                   );
@@ -590,12 +627,18 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                         group.total === 0 ? 0 : Math.min(100, (group.paid / group.total) * 100);
                       const name = lang === 'en' ? group.nameEn : group.nameId;
                       const showDonut = group.isInstallment;
+                      const groupDiscount = group.discount ?? 0;
 
                       return (
                         <div key={group.id} className="border-b border-slate-100 last:border-0 pb-5 last:pb-0">
                           <div className="flex items-center justify-between gap-3 mb-3">
                             <div className="flex items-center gap-3 min-w-0">
                               <span className="font-semibold text-slate-700">{name}</span>
+                              {groupDiscount > 0 ? (
+                                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
+                                  {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(groupDiscount)}
+                                </span>
+                              ) : null}
                               <Link
                                 href={groupHistoryHref(group.id)}
                                 className="text-[10px] font-bold text-primary bg-primary-light px-2 py-0.5 rounded-full hover:bg-indigo-100 shrink-0"
@@ -645,6 +688,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                   <th className="pb-2 font-semibold text-right">
                                     {lang === 'en' ? 'Amount' : 'Jumlah'}
                                   </th>
+                                  <th className="pb-2 font-semibold text-right">
+                                    {lang === 'en' ? 'Discount' : 'Diskon'}
+                                  </th>
                                   <th className="pb-2 font-semibold text-center w-20" />
                                 </tr>
                               </thead>
@@ -670,6 +716,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                         ].join(' ')}
                                       >
                                         {formatRupiah(termin.amount)}
+                                      </td>
+                                      <td className="py-2 text-right text-slate-600">
+                                        {(termin.discount ?? 0) > 0
+                                          ? formatRupiah(termin.discount)
+                                          : '—'}
                                       </td>
                                       <td className="py-2 text-center">
                                         <button
@@ -706,10 +757,12 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
               <div className="space-y-4 md:hidden">
                 {installments.map((inst) => {
                   const cartId = `inst-${inst.id}`;
-                  const remaining = Math.max(0, inst.total - inst.paid);
+                  const discount = inst.discount ?? 0;
+                  const netTotal = Math.max(0, inst.total - discount);
+                  const remaining = Math.max(0, netTotal - inst.paid);
                   const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                   const progressPercentage =
-                    inst.total === 0 ? 0 : Math.min(100, (inst.paid / inst.total) * 100);
+                    netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
                   const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
                   const typedAmount = installmentInputs[inst.id];
                   const defaultInput =
@@ -742,6 +795,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                 <p className="text-xs font-bold text-slate-700 leading-tight">
                                   {formatRupiah(inst.total)}
                                 </p>
+                                {discount > 0 ? (
+                                  <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                    {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
+                                  </p>
+                                ) : null}
                                 <p className="text-[10px] font-bold text-emerald-600 mt-1">
                                   {lang === 'en' ? 'Paid in full' : 'Lunas'}
                                 </p>
@@ -754,6 +812,11 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                 <p className="text-xs font-bold text-slate-700 leading-tight">
                                   {formatRupiah(remaining)}
                                 </p>
+                                {discount > 0 ? (
+                                  <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                    {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
+                                  </p>
+                                ) : null}
                               </>
                             )}
                           </div>
@@ -852,6 +915,7 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                         <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
                           <th className="pb-2 font-semibold">{lang === 'en' ? 'Fee Name' : 'Nama Tagihan'}</th>
                           <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Total' : 'Total'}</th>
+                          <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Discount' : 'Diskon'}</th>
                           <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Paid' : 'Dibayar'}</th>
                           <th className="pb-2 font-semibold text-right">{lang === 'en' ? 'Remaining' : 'Sisa'}</th>
                           <th className="pb-2 font-semibold text-center">{lang === 'en' ? 'Progress' : 'Progress'}</th>
@@ -862,10 +926,12 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                       <tbody>
                         {installments.map((inst) => {
                           const cartId = `inst-${inst.id}`;
-                          const remaining = Math.max(0, inst.total - inst.paid);
+                          const discount = inst.discount ?? 0;
+                          const netTotal = Math.max(0, inst.total - discount);
+                          const remaining = Math.max(0, netTotal - inst.paid);
                           const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                           const progressPercentage =
-                            inst.total === 0 ? 0 : Math.min(100, (inst.paid / inst.total) * 100);
+                            netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
                           const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
                           const typedAmount = installmentInputs[inst.id];
                           const defaultInput =
@@ -893,6 +959,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                 </div>
                               </td>
                               <td className="py-3 text-right font-bold text-slate-700">{formatRupiah(inst.total)}</td>
+                              <td className="py-3 text-right text-slate-600">
+                                {discount > 0 ? formatRupiah(discount) : '—'}
+                              </td>
                               <td className="py-3 text-right text-slate-600">{formatRupiah(inst.paid)}</td>
                               <td className="py-3 text-right font-bold text-slate-700">{formatRupiah(remaining)}</td>
                               <td className="py-3 text-center">

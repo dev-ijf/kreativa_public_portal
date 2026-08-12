@@ -11,6 +11,8 @@ export type FinanceMonthSlot = {
   /** Tahun kalender untuk slot Jul–Jun (mis. AY 2025/2026 → Jul–Des 2025, Jan–Jun 2026). */
   calendarYear: number | null;
   amount: number;
+  /** discount_amount + additional_discount dari tuition_bills. */
+  discount: number;
   status: 'paid' | 'unpaid';
   billId: string | null;
 };
@@ -36,6 +38,8 @@ export type FinanceInstallmentRow = {
   nameEn: string;
   nameId: string;
   total: number;
+  /** discount_amount + additional_discount dari tuition_bills. */
+  discount: number;
   paid: number;
   minPayment: number;
   /** Dari tagihan DB: lunas → gauge 100%, tanpa input / add to cart. */
@@ -48,6 +52,7 @@ export type FinanceInstallmentTermin = {
   billId: string;
   title: string;
   amount: number;
+  discount: number;
 };
 
 /** Kreativa: group dari tuition_bill_groups (+ orphan bills). Donut hanya jika isInstallment. */
@@ -56,6 +61,8 @@ export type FinanceInstallmentGroupRow = {
   nameEn: string;
   nameId: string;
   total: number;
+  /** discount_amount + additional_discount dari group / bill. */
+  discount: number;
   paid: number;
   isFullyPaid: boolean;
   /** Dari tuition_products.is_installment — false → UI tanpa donut (mis. Pendaftaran). */
@@ -127,7 +134,7 @@ export function jakartaCalendarYearMonth(nowMs: number = Date.now()): { year: nu
 
 /**
  * SPP monthly hanya dihitung outstanding jika bulan tagihan ≤ bulan berjalan (WIB).
- * Tagihan bulan depan yang sudah di-generate tidak masuk total tertunggak.
+ * Tagihan bulan depan yang sudah di-generate tidak masuk tagihan belum terbayar.
  */
 export function isFinanceMonthDueOrPast(
   slot: Pick<FinanceMonthSlot, 'monthKey' | 'calendarYear'>,
@@ -150,6 +157,7 @@ export function emptyFinanceChildPayload(): FinanceChildPayload {
       ...meta,
       calendarYear: null,
       amount: 0,
+      discount: 0,
       status: 'unpaid' as const,
       billId: null,
     })),

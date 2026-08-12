@@ -80,7 +80,7 @@ const TRANSLATIONS = {
     habits: "Habits",
 
     detail: "Detail",
-    totalOutstanding: "Total Outstanding",
+    totalOutstanding: "Unpaid Bills",
     paymentHistory: "Payment History",
     viewHistory: "View past successful transactions",
     digitalTuition: "Digital Tuition Card",
@@ -245,7 +245,7 @@ const TRANSLATIONS = {
     habits: "Pembiasaan",
 
     detail: "Detail",
-    totalOutstanding: "Total Tagihan",
+    totalOutstanding: "Tagihan Belum Terbayar",
     paymentHistory: "Riwayat Pembayaran",
     viewHistory: "Lihat transaksi sukses sebelumnya",
     digitalTuition: "Kartu SPP Digital",

@@ -72,6 +72,8 @@ type BillViewRow = {
   paid_amount: string | number;
   min_payment: string | number;
   balance_amount: string | number;
+  discount_amount: string | number;
+  additional_discount: string | number;
   is_fully_paid: boolean;
   bill_month: number | null;
   bill_year: number | null;
@@ -96,10 +98,19 @@ type BillGroupViewRow = {
   paid_amount: string | number;
   net_total_amount: string | number;
   balance_amount: string | number;
+  discount_amount: string | number;
+  additional_discount: string | number;
   is_fully_paid: boolean;
   termin_count: number | null;
   due_date: string | null;
 };
+
+function billDiscountTotal(row: {
+  discount_amount?: string | number;
+  additional_discount?: string | number;
+}): number {
+  return Math.max(0, num(row.discount_amount) + num(row.additional_discount));
+}
 
 type PaymentLineRow = {
   bill_id: number;
@@ -229,6 +240,12 @@ function mapBillViewRows(rows: Record<string, unknown>[]): BillViewRow[] {
       paid_amount: numMoney(raw, 'paid_amount', 'paidAmount') as BillViewRow['paid_amount'],
       min_payment: numMoney(raw, 'min_payment', 'minPayment') as BillViewRow['min_payment'],
       balance_amount: numMoney(raw, 'balance_amount', 'balanceAmount') as BillViewRow['balance_amount'],
+      discount_amount: numMoney(raw, 'discount_amount', 'discountAmount') as BillViewRow['discount_amount'],
+      additional_discount: numMoney(
+        raw,
+        'additional_discount',
+        'additionalDiscount',
+      ) as BillViewRow['additional_discount'],
       bill_group_id:
         raw.bill_group_id != null || raw.billGroupId != null
           ? num(raw.bill_group_id ?? raw.billGroupId)
@@ -259,6 +276,8 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
         (paid_amount)::float8 AS paid_amount,
         (min_payment)::float8 AS min_payment,
         (balance_amount)::float8 AS balance_amount,
+        (COALESCE(discount_amount, 0))::float8 AS discount_amount,
+        (COALESCE(additional_discount, 0))::float8 AS additional_discount,
         is_fully_paid,
         bill_month,
         bill_year,
@@ -274,7 +293,7 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
     `;
     return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
   } catch {
-    // View lama tanpa kolom bill_group — fallback Talenta-compatible.
+    // View lama tanpa kolom bill_group / discount — fallback Talenta-compatible.
     const rows = await sql`
       SELECT
         bill_id,
@@ -323,6 +342,8 @@ async function fetchBillGroupsForStudents(studentIds: number[]): Promise<BillGro
         (paid_amount)::float8 AS paid_amount,
         (net_total_amount)::float8 AS net_total_amount,
         (balance_amount)::float8 AS balance_amount,
+        (COALESCE(discount_amount, 0))::float8 AS discount_amount,
+        (COALESCE(additional_discount, 0))::float8 AS additional_discount,
         is_fully_paid,
         termin_count,
         due_date
@@ -339,6 +360,8 @@ async function fetchBillGroupsForStudents(studentIds: number[]): Promise<BillGro
         paid_amount: numMoney(raw, 'paid_amount', 'paidAmount'),
         net_total_amount: numMoney(raw, 'net_total_amount', 'netTotalAmount'),
         balance_amount: numMoney(raw, 'balance_amount', 'balanceAmount'),
+        discount_amount: numMoney(raw, 'discount_amount', 'discountAmount'),
+        additional_discount: numMoney(raw, 'additional_discount', 'additionalDiscount'),
         termin_count:
           raw.termin_count != null || raw.terminCount != null
             ? num(raw.termin_count ?? raw.terminCount)
@@ -447,6 +470,7 @@ function buildTalentaPayload(
     ...meta,
     calendarYear: ayRange ? calendarForSlot(slot, ayRange).y : null,
     amount: 0,
+    discount: 0,
     status: 'unpaid' as const,
     billId: null,
   }));
@@ -458,11 +482,13 @@ function buildTalentaPayload(
       const chosen = candidates.sort((a, b) => num(b.balance_amount) - num(a.balance_amount))[0];
       const balance = num(chosen.balance_amount);
       const total = num(chosen.total_amount);
+      const discount = billDiscountTotal(chosen);
       const y = calendarForSlot(slot, ayRange).y;
       months[slot] = {
         ...FINANCE_MONTH_GRID[slot],
         calendarYear: y,
         amount: chosen.is_fully_paid ? total : balance > 0 ? balance : total,
+        discount,
         status: coalescePgBool(chosen.is_fully_paid) ? 'paid' : 'unpaid',
         billId: String(chosen.bill_id),
       };
@@ -481,13 +507,16 @@ function buildTalentaPayload(
       const minP = num(r.min_payment);
       const totalAmt = num(r.total_amount);
       const paidAmt = num(r.paid_amount);
+      const discount = billDiscountTotal(r);
+      const balance = num(r.balance_amount);
       const fully =
-        coalescePgBool(r.is_fully_paid) || (totalAmt > 0 && paidAmt >= totalAmt);
+        coalescePgBool(r.is_fully_paid) || balance <= 0 || (totalAmt > 0 && paidAmt + discount >= totalAmt);
       installments.push({
         id: String(r.bill_id),
         nameEn: r.product_name,
         nameId: r.product_name,
         total: totalAmt,
+        discount,
         paid: paidAmt,
         minPayment: minP > 0 ? minP : 0,
         isFullyPaid: fully,
@@ -519,6 +548,7 @@ function buildKreativaPayload(
     ...meta,
     calendarYear: null,
     amount: 0,
+    discount: 0,
     status: 'unpaid' as const,
     billId: null,
   }));
@@ -558,10 +588,12 @@ function buildKreativaPayload(
           billId: String(r.bill_id),
           title: r.title,
           amount: num(r.balance_amount),
+          discount: billDiscountTotal(r),
         }));
 
       const netTotal = num(g.net_total_amount);
       const paidAmt = num(g.paid_amount);
+      const groupDiscount = billDiscountTotal(g);
       const fully = coalescePgBool(g.is_fully_paid) || (netTotal > 0 && paidAmt >= netTotal);
 
       installmentGroups.push({
@@ -569,6 +601,7 @@ function buildKreativaPayload(
         nameEn: g.title || g.product_name,
         nameId: g.title || g.product_name,
         total: netTotal > 0 ? netTotal : num(g.total_amount),
+        discount: groupDiscount,
         paid: paidAmt,
         isFullyPaid: fully,
         isInstallment: coalescePgBool(g.is_installment) || g.payment_type === 'installment',
@@ -592,6 +625,7 @@ function buildKreativaPayload(
       const bal = num(r.balance_amount);
       const totalAmt = num(r.total_amount);
       const paidAmt = num(r.paid_amount);
+      const discount = billDiscountTotal(r);
       const fully = coalescePgBool(r.is_fully_paid) || bal <= 0;
       const lines = paymentLinesByBillId.get(r.bill_id) ?? [];
       installmentGroups.push({
@@ -599,12 +633,13 @@ function buildKreativaPayload(
         nameEn: r.title || r.product_name,
         nameId: r.title || r.product_name,
         total: totalAmt,
+        discount,
         paid: paidAmt,
         isFullyPaid: fully,
         isInstallment: coalescePgBool(r.is_installment) || r.payment_type === 'installment',
         termins:
           !fully && bal > 0
-            ? [{ billId: String(r.bill_id), title: r.title, amount: bal }]
+            ? [{ billId: String(r.bill_id), title: r.title, amount: bal, discount }]
             : [],
         paymentHistory: mapPaymentLines(lines),
       });
