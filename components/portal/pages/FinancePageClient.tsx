@@ -763,10 +763,13 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                   const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                   const progressPercentage =
                     netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
-                  const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                  const rawMin = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                  const instFloor = Math.min(rawMin, remaining);
                   const typedAmount = installmentInputs[inst.id];
                   const defaultInput =
-                    typedAmount != null && typedAmount >= instFloor ? typedAmount : instFloor;
+                    typedAmount != null && typedAmount >= instFloor && typedAmount <= remaining
+                      ? typedAmount
+                      : remaining;
                   const name = lang === 'en' ? inst.nameEn : inst.nameId;
                   const cartItem = !isFullyPaid ? cart.find((i) => i.id === cartId) : undefined;
 
@@ -796,9 +799,15 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                   {formatRupiah(inst.total)}
                                 </p>
                                 {discount > 0 ? (
-                                  <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
-                                    {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
-                                  </p>
+                                  <>
+                                    <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
+                                    </p>
+                                    <p className="text-[10px] font-semibold text-slate-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'After discount' : 'Setelah diskon'}{' '}
+                                      {formatRupiah(netTotal)}
+                                    </p>
+                                  </>
                                 ) : null}
                                 <p className="text-[10px] font-bold text-emerald-600 mt-1">
                                   {lang === 'en' ? 'Paid in full' : 'Lunas'}
@@ -807,16 +816,28 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                             ) : (
                               <>
                                 <p className="text-[10px] text-slate-500 leading-tight">
+                                  {lang === 'en' ? 'Billed' : 'Tagihan'}
+                                </p>
+                                <p className="text-xs font-bold text-slate-700 leading-tight">
+                                  {formatRupiah(inst.total)}
+                                </p>
+                                {discount > 0 ? (
+                                  <>
+                                    <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
+                                    </p>
+                                    <p className="text-[10px] font-semibold text-slate-600 mt-0.5 leading-tight">
+                                      {lang === 'en' ? 'After discount' : 'Setelah diskon'}{' '}
+                                      {formatRupiah(netTotal)}
+                                    </p>
+                                  </>
+                                ) : null}
+                                <p className="text-[10px] text-slate-500 leading-tight mt-1">
                                   {lang === 'en' ? 'Left' : 'Sisa'}
                                 </p>
                                 <p className="text-xs font-bold text-slate-700 leading-tight">
                                   {formatRupiah(remaining)}
                                 </p>
-                                {discount > 0 ? (
-                                  <p className="text-[10px] font-semibold text-emerald-600 mt-0.5 leading-tight">
-                                    {lang === 'en' ? 'Discount' : 'Diskon'} {formatRupiah(discount)}
-                                  </p>
-                                ) : null}
                               </>
                             )}
                           </div>
@@ -878,9 +899,13 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const floor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                                  const raw = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                                  const floor = Math.min(raw, remaining);
                                   const typed = installmentInputs[inst.id];
-                                  const input = typed != null && typed >= floor ? typed : floor;
+                                  const input =
+                                    typed != null && typed >= floor && typed <= remaining
+                                      ? typed
+                                      : remaining;
                                   const finalAmount = Math.min(Math.max(input, floor), remaining);
                                   addInstallmentToCart(inst.id, name, finalAmount);
                                 }}
@@ -932,10 +957,13 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                           const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                           const progressPercentage =
                             netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
-                          const instFloor = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                          const rawMin = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                          const instFloor = Math.min(rawMin, remaining);
                           const typedAmount = installmentInputs[inst.id];
                           const defaultInput =
-                            typedAmount != null && typedAmount >= instFloor ? typedAmount : instFloor;
+                            typedAmount != null && typedAmount >= instFloor && typedAmount <= remaining
+                              ? typedAmount
+                              : remaining;
                           const name = lang === 'en' ? inst.nameEn : inst.nameId;
                           const cartItem = !isFullyPaid ? cart.find((i) => i.id === cartId) : undefined;
 
@@ -1024,10 +1052,14 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const floor =
+                                        const raw =
                                           inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
+                                        const floor = Math.min(raw, remaining);
                                         const typed = installmentInputs[inst.id];
-                                        const input = typed != null && typed >= floor ? typed : floor;
+                                        const input =
+                                          typed != null && typed >= floor && typed <= remaining
+                                            ? typed
+                                            : remaining;
                                         const finalAmount = Math.min(Math.max(input, floor), remaining);
                                         addInstallmentToCart(inst.id, name, finalAmount);
                                       }}
