@@ -763,13 +763,17 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                   const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                   const progressPercentage =
                     netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
-                  const rawMin = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-                  const instFloor = Math.min(rawMin, remaining);
+                  // Prefill & Min. = minimal pembayaran (cap at sisa so Min. never exceeds payable).
+                  const configuredMin = inst.minPayment > 0 ? inst.minPayment : 0;
+                  const instFloor =
+                    configuredMin > 0
+                      ? Math.min(configuredMin, remaining)
+                      : remaining > 0
+                        ? 1
+                        : 0;
                   const typedAmount = installmentInputs[inst.id];
-                  const defaultInput =
-                    typedAmount != null && typedAmount >= instFloor && typedAmount <= remaining
-                      ? typedAmount
-                      : remaining;
+                  // Keep whatever the user types — do not clamp on each keystroke (that blocked editing).
+                  const defaultInput = typedAmount != null ? typedAmount : instFloor;
                   const name = lang === 'en' ? inst.nameEn : inst.nameId;
                   const cartItem = !isFullyPaid ? cart.find((i) => i.id === cartId) : undefined;
 
@@ -899,14 +903,9 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const raw = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-                                  const floor = Math.min(raw, remaining);
                                   const typed = installmentInputs[inst.id];
-                                  const input =
-                                    typed != null && typed >= floor && typed <= remaining
-                                      ? typed
-                                      : remaining;
-                                  const finalAmount = Math.min(Math.max(input, floor), remaining);
+                                  const input = typed != null ? typed : instFloor;
+                                  const finalAmount = Math.min(Math.max(input, instFloor), remaining);
                                   addInstallmentToCart(inst.id, name, finalAmount);
                                 }}
                                 className="bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-600 transition-colors w-full"
@@ -957,13 +956,15 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                           const isFullyPaid = inst.isFullyPaid || (inst.total > 0 && remaining === 0);
                           const progressPercentage =
                             netTotal === 0 ? 0 : Math.min(100, (inst.paid / netTotal) * 100);
-                          const rawMin = inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-                          const instFloor = Math.min(rawMin, remaining);
+                          const configuredMin = inst.minPayment > 0 ? inst.minPayment : 0;
+                          const instFloor =
+                            configuredMin > 0
+                              ? Math.min(configuredMin, remaining)
+                              : remaining > 0
+                                ? 1
+                                : 0;
                           const typedAmount = installmentInputs[inst.id];
-                          const defaultInput =
-                            typedAmount != null && typedAmount >= instFloor && typedAmount <= remaining
-                              ? typedAmount
-                              : remaining;
+                          const defaultInput = typedAmount != null ? typedAmount : instFloor;
                           const name = lang === 'en' ? inst.nameEn : inst.nameId;
                           const cartItem = !isFullyPaid ? cart.find((i) => i.id === cartId) : undefined;
 
@@ -1052,15 +1053,12 @@ export function FinancePageClient({ financeByChildId = {} }: FinancePageClientPr
                                     <button
                                       type="button"
                                       onClick={() => {
-                                        const raw =
-                                          inst.minPayment > 0 ? inst.minPayment : remaining > 0 ? 1 : 0;
-                                        const floor = Math.min(raw, remaining);
                                         const typed = installmentInputs[inst.id];
-                                        const input =
-                                          typed != null && typed >= floor && typed <= remaining
-                                            ? typed
-                                            : remaining;
-                                        const finalAmount = Math.min(Math.max(input, floor), remaining);
+                                        const input = typed != null ? typed : instFloor;
+                                        const finalAmount = Math.min(
+                                          Math.max(input, instFloor),
+                                          remaining,
+                                        );
                                         addInstallmentToCart(inst.id, name, finalAmount);
                                       }}
                                       className="bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-600 transition-colors shrink-0"
