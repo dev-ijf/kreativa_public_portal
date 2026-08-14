@@ -299,6 +299,14 @@ function DailyWorshipSection({ report, lang }: Props) {
 export function DailyReportReadView({ report, lang }: Props) {
   const isPrimary = report.schoolLevel === "primary";
 
+  // Class report published without a per-student report: show it on its own,
+  // no empty per-student sections.
+  if (report.classReportOnly) {
+    return report.classReport ? (
+      <ClassReportSection classReport={report.classReport} lang={lang} />
+    ) : null;
+  }
+
   const lunchOptions = (["finished", "half", "refused"] as const).map((v) => ({
     value: v,
     label: t(lang, LUNCH_KEYS[v]),

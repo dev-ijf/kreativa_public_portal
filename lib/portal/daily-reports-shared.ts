@@ -204,6 +204,12 @@ export type DailyReportFull = {
   classReport: ClassReportInfo | null;
   tilawah: DailyReportTilawah | null;
   memorize: DailyReportMemorize[];
+  /**
+   * True when only a class report exists for this date (no per-student
+   * dr_daily_reports row). Parent UI then renders the class report alone and
+   * hides the parent corner, which needs a real report row to write to.
+   */
+  classReportOnly: boolean;
 };
 
 export type DailyReportSummaryLearningArea = {

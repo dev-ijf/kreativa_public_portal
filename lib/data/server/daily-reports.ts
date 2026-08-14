@@ -65,13 +65,19 @@ async function getStudentLevelInfo(studentId: number): Promise<{
   levelOrder: number | null;
   schoolName: string | null;
   className: string | null;
+  classId: number | null;
+  schoolId: number | null;
+  studentName: string;
 } | null> {
   const rows = await sql`
     SELECT
       lg.name AS "levelGradeName",
       lg.level_order AS "levelOrder",
       sc.name AS "schoolName",
-      cc.name AS "className"
+      cc.name AS "className",
+      cc.id AS "classId",
+      s.school_id AS "schoolId",
+      s.full_name AS "studentName"
     FROM core_students s
     LEFT JOIN core_schools sc ON sc.id = s.school_id
     LEFT JOIN LATERAL (
@@ -91,6 +97,9 @@ async function getStudentLevelInfo(studentId: number): Promise<{
     levelOrder?: number | null;
     schoolName?: string | null;
     className?: string | null;
+    classId?: number | null;
+    schoolId?: number | null;
+    studentName?: string | null;
   } | undefined;
   if (!r) return null;
   return {
@@ -98,6 +107,9 @@ async function getStudentLevelInfo(studentId: number): Promise<{
     levelOrder: r.levelOrder != null ? Number(r.levelOrder) : null,
     schoolName: r.schoolName ?? null,
     className: r.className ?? null,
+    classId: r.classId != null ? Number(r.classId) : null,
+    schoolId: r.schoolId != null ? Number(r.schoolId) : null,
+    studentName: String(r.studentName ?? ''),
   };
 }
 
@@ -168,6 +180,126 @@ async function getTeacherNamesForClass(
     .filter(Boolean);
 }
 
+async function loadSubmittedClassReport(
+  classId: number,
+  date: string,
+): Promise<ClassReportInfo | null> {
+  if (!Number.isFinite(classId) || classId <= 0) return null;
+  const rows = await sql`
+    SELECT id, theme, teacher_note AS "teacherNote"
+    FROM dr_class_reports
+    WHERE class_id = ${classId}
+      AND report_date = ${date}::date
+      AND status = 'submitted'
+    LIMIT 1
+  `;
+  const row = rows[0] as
+    | { id: number; theme: string | null; teacherNote: string | null }
+    | undefined;
+  if (!row) return null;
+
+  const id = Number(row.id);
+  const mediaRows = await sql`
+    SELECT
+      id,
+      media_type    AS "mediaType",
+      url,
+      thumbnail_url AS "thumbnailUrl",
+      caption,
+      sort_order    AS "sortOrder"
+    FROM dr_class_report_media
+    WHERE class_report_id = ${id}
+    ORDER BY sort_order, id
+  `;
+
+  return {
+    id,
+    theme: row.theme ?? null,
+    teacherNote: row.teacherNote ?? null,
+    media: (
+      mediaRows as {
+        id: number;
+        mediaType: string;
+        url: string;
+        thumbnailUrl: string | null;
+        caption: string | null;
+        sortOrder: number;
+      }[]
+    ).map((m) => ({
+      id: Number(m.id),
+      mediaType: m.mediaType as ClassReportMedia['mediaType'],
+      url: m.url,
+      thumbnailUrl: m.thumbnailUrl ?? null,
+      caption: m.caption ?? null,
+      sortOrder: Number(m.sortOrder),
+    })),
+  };
+}
+
+/**
+ * Synthesise a read-only report carrying just the class report, for dates where
+ * the teacher filled the class report but no per-student report exists.
+ */
+async function buildClassReportOnlyReport(
+  info: NonNullable<Awaited<ReturnType<typeof getStudentLevelInfo>>>,
+  studentId: number,
+  date: string,
+): Promise<DailyReportFull | null> {
+  const classId = info.classId ?? 0;
+  const classReport = await loadSubmittedClassReport(classId, date);
+  if (!classReport) return null;
+
+  const teacherNames = await getTeacherNamesForClass(classId, studentId).catch(
+    () => [] as string[],
+  );
+
+  return {
+    id: 0,
+    studentName: info.studentName,
+    className: info.className ?? '',
+    reportDate: date,
+    schoolLevel: isPrimaryStudent(info) ? 'primary' : 'kindergarten',
+    focusPrayer: null,
+    focusPrayerRating: null,
+    dhuhaPrayer: null,
+    zuhurPrayer: null,
+    surahMemorised: null,
+    asmaulHusna: null,
+    playCentre: null,
+    playCentreHighlights: null,
+    lunchStatus: null,
+    waterIntake: null,
+    healthNote: null,
+    mood: null,
+    sleepTime: null,
+    wakeTime: null,
+    readingTogether: false,
+    shineMoment: null,
+    teacherNarrative: null,
+    homeGuidance: null,
+    teacherHighlight: null,
+    teacherFollowup: null,
+    parentMessage: null,
+    messages: [],
+    parentReadConfirmed: false,
+    parentReadAt: null,
+    status: 'submitted',
+    teacherNames,
+    characters: [],
+    playCentres: [],
+    learningAreas: [],
+    vocabulary: [],
+    subjects: [],
+    observeDomains: [],
+    homeTips: [],
+    studentMedia: [],
+    classReport,
+    tilawah: null,
+    memorize: [],
+    classReportOnly: true,
+  };
+}
+
 function suggestedDateFromCalendarDays(days: DailyReportCalendarDay[]): string {
   const today = new Date().toISOString().slice(0, 10);
   if (days.some((d) => d.date === today)) return today;
@@ -191,23 +323,50 @@ export async function getDailyReportCalendarMonth(
 
   const { from, toExclusive } = monthRange(year, monthIndex0);
 
-  const rows = await sql`
-    SELECT
-      dr.report_date::text AS "reportDate",
-      dr.parent_read_confirmed AS "parentReadConfirmed"
-    FROM dr_daily_reports dr
-    WHERE dr.student_id = ${studentId}
-      AND dr.report_date >= ${from}::date
-      AND dr.report_date < ${toExclusive}::date
-      AND dr.status IN ('submitted', 'read')
-    ORDER BY dr.report_date ASC
-  `;
+  const classId = access.info.classId ?? 0;
 
-  const days = (rows as { reportDate: string; parentReadConfirmed: boolean }[]).map((r) => ({
-    date: normalizeDate(r.reportDate),
-    hasReport: true,
-    parentReadConfirmed: Boolean(r.parentReadConfirmed),
-  }));
+  const [rows, classRows] = await Promise.all([
+    sql`
+      SELECT
+        dr.report_date::text AS "reportDate",
+        dr.parent_read_confirmed AS "parentReadConfirmed"
+      FROM dr_daily_reports dr
+      WHERE dr.student_id = ${studentId}
+        AND dr.report_date >= ${from}::date
+        AND dr.report_date < ${toExclusive}::date
+        AND dr.status IN ('submitted', 'read')
+      ORDER BY dr.report_date ASC
+    `,
+    // A submitted class report is published to every student in the class,
+    // even on days without a per-student report row.
+    classId > 0
+      ? sql`
+          SELECT cr.report_date::text AS "reportDate"
+          FROM dr_class_reports cr
+          WHERE cr.class_id = ${classId}
+            AND cr.report_date >= ${from}::date
+            AND cr.report_date < ${toExclusive}::date
+            AND cr.status = 'submitted'
+        `
+      : Promise.resolve([]),
+  ]);
+
+  const dayMap = new Map<string, DailyReportCalendarDay>();
+  for (const r of rows as { reportDate: string; parentReadConfirmed: boolean }[]) {
+    const date = normalizeDate(r.reportDate);
+    dayMap.set(date, {
+      date,
+      hasReport: true,
+      parentReadConfirmed: Boolean(r.parentReadConfirmed),
+    });
+  }
+  for (const r of classRows as { reportDate: string }[]) {
+    const date = normalizeDate(r.reportDate);
+    if (!dayMap.has(date)) {
+      dayMap.set(date, { date, hasReport: true, parentReadConfirmed: false });
+    }
+  }
+  const days = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   const result: DailyReportCalendarMonthResponse = {
     days,
     suggestedDate: suggestedDateFromCalendarDays(days),
@@ -285,6 +444,7 @@ export async function getDailyReportByDate(
       dr.parent_read_confirmed    AS "parentReadConfirmed",
       dr.parent_read_at           AS "parentReadAt",
       dr.status,
+      COALESCE(dr.created_from_class_report, false) AS "createdFromClassReport",
       dr.class_id                 AS "classId"
     FROM dr_daily_reports dr
     JOIN core_students cs ON cs.id = dr.student_id
@@ -297,7 +457,12 @@ export async function getDailyReportByDate(
   `;
 
   const h = headerRows[0] as Record<string, unknown> | undefined;
-  if (!h) return { ok: false, reason: 'not_found' };
+  if (!h) {
+    // No per-student report — still publish the class report if the teacher
+    // submitted one for this class/date.
+    const classOnly = await buildClassReportOnlyReport(access.info, studentId, date);
+    return classOnly ? { ok: true, report: classOnly } : { ok: false, reason: 'not_found' };
+  }
 
   const reportId = Number(h.id);
   const playCentreId = h.playCentreId != null ? Number(h.playCentreId) : null;
@@ -648,6 +813,11 @@ export async function getDailyReportByDate(
     };
   }
 
+  // A shell row with no class report left to show carries nothing for parents.
+  if (Boolean(h.createdFromClassReport) && !classReport) {
+    return { ok: false, reason: 'not_found' };
+  }
+
   const tilawahRaw = tilawahRows[0] as {
     tilawahMethod: string;
     tilawahJilid: number | null;
@@ -775,6 +945,9 @@ export async function getDailyReportByDate(
     classReport,
     tilawah,
     memorize,
+    // ERP creates an empty shell row when a class report is submitted without
+    // per-student reports — render just the class report for those.
+    classReportOnly: Boolean(h.createdFromClassReport) && classReport != null,
   };
 
   return { ok: true, report };

@@ -480,13 +480,15 @@ export function DailyReportsPageClient() {
                       .join(" ")}
                   >
                     <DailyReportReadView report={report} lang={lang} />
-                    <ParentCornerSection
-                      report={report}
-                      lang={lang}
-                      studentId={activeChildId}
-                      selectedDate={selectedDate}
-                      onUpdated={applyParentPatch}
-                    />
+                    {report.id === 0 ? null : (
+                      <ParentCornerSection
+                        report={report}
+                        lang={lang}
+                        studentId={activeChildId}
+                        selectedDate={selectedDate}
+                        onUpdated={applyParentPatch}
+                      />
+                    )}
                   </div>
                 )}
               </div>
