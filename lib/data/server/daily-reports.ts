@@ -300,8 +300,18 @@ async function buildClassReportOnlyReport(
   };
 }
 
+/** School calendar date YYYY-MM-DD in WIB — the server may run on UTC. */
+function todayWibDate(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 function suggestedDateFromCalendarDays(days: DailyReportCalendarDay[]): string {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayWibDate();
   if (days.some((d) => d.date === today)) return today;
   const latest = [...days].sort((a, b) => b.date.localeCompare(a.date))[0];
   return latest?.date ?? today;
@@ -982,7 +992,7 @@ export async function updateDailyReportParentCorner(
 > {
   if (!isValidISODate(date)) return { ok: false, reason: 'bad_date' };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayWibDate();
   if (date > today) return { ok: false, reason: 'future_date' };
 
   const access = await assertDailyReportAccess(viewerUserId, viewerRole, studentId);
