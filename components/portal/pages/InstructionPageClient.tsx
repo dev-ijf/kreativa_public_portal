@@ -1,23 +1,68 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Clock, FileDown, FileText } from 'lucide-react';
+import { CheckCircle2, Clock, FileDown, FileText, Loader2 } from 'lucide-react';
 import { FullPageBlockingLoader } from '@/components/portal/FullPageBlockingLoader';
 import { Header } from '@/components/portal/Header';
 import { usePortalState } from '@/components/portal/state/PortalProvider';
 import type { PortalCheckoutSessionPayload, PortalPaymentInstructionRow } from '@/lib/data/portal-payment';
 import { PORTAL_CHECKOUT_SESSION_KEY } from '@/lib/data/portal-payment';
+import { t } from '@/lib/i18n/translations';
 import { openTuitionReceiptPdf } from '@/lib/portal/tuition-receipt-url';
 import { formatRupiah } from '@/lib/utils/format';
 import { computePortalPaymentExpiryIso } from '@/lib/utils/payment-deadline';
 import { formatDateTimeAsiaJakarta, parsePortalDbTimestamp } from '@/lib/utils/datetime-jakarta';
 
+const PAYMENT_STATUS_POLL_MS = 5 * 60 * 1000;
+
+type InstructionData = {
+  transactionId: string;
+  transactionCreatedAt: string;
+  referenceNo: string;
+  totalAmount: number;
+  status: string;
+  paymentDate: string | null;
+  vaNo: string;
+  vaDisplay: string;
+  expiryAt: string;
+  isBmi: boolean;
+  studentId: number | null;
+  paymentMethodId: number | null;
+  paymentMethodName: string | null;
+  paymentMethodCode: string | null;
+  paymentMethodCategory: string | null;
+  instructionRows: PortalPaymentInstructionRow[];
+};
+
+function mapInstructionJson(json: Record<string, unknown>, vaClean: string): InstructionData {
+  return {
+    transactionId: String(json.transactionId ?? ''),
+    transactionCreatedAt: String(json.transactionCreatedAt ?? ''),
+    referenceNo: String(json.referenceNo ?? ''),
+    totalAmount: Number(json.totalAmount ?? 0),
+    status: String(json.status ?? 'pending'),
+    paymentDate: (json.paymentDate as string | null) ?? null,
+    vaNo: String(json.vaNo ?? vaClean),
+    vaDisplay: String(json.vaDisplay ?? vaClean),
+    expiryAt: String(json.expiryAt ?? ''),
+    isBmi: Boolean(json.isBmi),
+    studentId: (json.studentId as number | null) ?? null,
+    paymentMethodId: (json.paymentMethodId as number | null) ?? null,
+    paymentMethodName: (json.paymentMethodName as string | null) ?? null,
+    paymentMethodCode: (json.paymentMethodCode as string | null) ?? null,
+    paymentMethodCategory: (json.paymentMethodCategory as string | null) ?? null,
+    instructionRows: Array.isArray(json.instructionRows)
+      ? (json.instructionRows as PortalPaymentInstructionRow[])
+      : [],
+  };
+}
+
 function useCountdown(targetIso: string | undefined | null) {
   const targetMs = useMemo(() => {
     if (!targetIso) return 0;
-    const t = parsePortalDbTimestamp(targetIso).getTime();
-    return Number.isFinite(t) ? t : 0;
+    const parsed = parsePortalDbTimestamp(targetIso).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
   }, [targetIso]);
 
   const calc = useCallback(() => {
@@ -45,25 +90,6 @@ function useCountdown(targetIso: string | undefined | null) {
   return state;
 }
 
-type InstructionData = {
-  transactionId: string;
-  transactionCreatedAt: string;
-  referenceNo: string;
-  totalAmount: number;
-  status: string;
-  paymentDate: string | null;
-  vaNo: string;
-  vaDisplay: string;
-  expiryAt: string;
-  isBmi: boolean;
-  studentId: number | null;
-  paymentMethodId: number | null;
-  paymentMethodName: string | null;
-  paymentMethodCode: string | null;
-  paymentMethodCategory: string | null;
-  instructionRows: PortalPaymentInstructionRow[];
-};
-
 type Props = { vaNo: string };
 
 export function InstructionPageClient({ vaNo }: Props) {
@@ -72,6 +98,9 @@ export function InstructionPageClient({ vaNo }: Props) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [data, setData] = useState<InstructionData | null>(null);
+  const [checkingPaid, setCheckingPaid] = useState(false);
+  const [notYetPaidMsg, setNotYetPaidMsg] = useState(false);
+  const checkingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,26 +162,9 @@ export function InstructionPageClient({ vaNo }: Props) {
           }
           return;
         }
-        const json = await res.json();
+        const json = (await res.json()) as Record<string, unknown>;
         if (!cancelled) {
-          setData({
-            transactionId: String(json.transactionId ?? ''),
-            transactionCreatedAt: String(json.transactionCreatedAt ?? ''),
-            referenceNo: String(json.referenceNo ?? ''),
-            totalAmount: Number(json.totalAmount ?? 0),
-            status: String(json.status ?? 'pending'),
-            paymentDate: json.paymentDate ?? null,
-            vaNo: String(json.vaNo ?? vaClean),
-            vaDisplay: String(json.vaDisplay ?? vaClean),
-            expiryAt: String(json.expiryAt ?? ''),
-            isBmi: Boolean(json.isBmi),
-            studentId: json.studentId ?? null,
-            paymentMethodId: json.paymentMethodId ?? null,
-            paymentMethodName: json.paymentMethodName ?? null,
-            paymentMethodCode: json.paymentMethodCode ?? null,
-            paymentMethodCategory: json.paymentMethodCategory ?? null,
-            instructionRows: Array.isArray(json.instructionRows) ? json.instructionRows : [],
-          });
+          setData(mapInstructionJson(json, vaClean));
           setLoadError(null);
           setLoading(false);
         }
@@ -169,13 +181,73 @@ export function InstructionPageClient({ vaNo }: Props) {
     return () => { cancelled = true; };
   }, [vaNo, selectedPayment?.dbMethodId, selectedPayment?.label, selectedPayment?.code, selectedPayment?.category]);
 
+  const refreshPaymentStatus = useCallback(async (opts?: { showNotYetMsg?: boolean }) => {
+    const vaClean = (vaNo ?? '').replace(/\D/g, '');
+    if (!vaClean || checkingRef.current) return 'busy' as const;
+
+    checkingRef.current = true;
+    setCheckingPaid(true);
+    if (opts?.showNotYetMsg) setNotYetPaidMsg(false);
+
+    try {
+      const res = await fetch(`/api/portal/instruction/${encodeURIComponent(vaClean)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        if (opts?.showNotYetMsg) setNotYetPaidMsg(true);
+        return 'error' as const;
+      }
+      const json = (await res.json()) as Record<string, unknown>;
+      const next = mapInstructionJson(json, vaClean);
+      setData(next);
+      const paid = next.status.toLowerCase().trim() === 'success';
+      if (!paid && opts?.showNotYetMsg) setNotYetPaidMsg(true);
+      if (paid) setNotYetPaidMsg(false);
+      return paid ? ('paid' as const) : ('pending' as const);
+    } catch {
+      if (opts?.showNotYetMsg) setNotYetPaidMsg(true);
+      return 'error' as const;
+    } finally {
+      checkingRef.current = false;
+      setCheckingPaid(false);
+    }
+  }, [vaNo]);
+
+  const isSuccess = data?.status?.toLowerCase().trim() === 'success';
+  const hasInstructionData = data != null;
+
+  /** Poll every 5 minutes + re-check when PWA/tab becomes visible again. */
+  useEffect(() => {
+    if (loading || loadError || !hasInstructionData || isSuccess) return;
+
+    const tick = () => {
+      void refreshPaymentStatus({ showNotYetMsg: false });
+    };
+
+    const intervalId = window.setInterval(tick, PAYMENT_STATUS_POLL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [loading, loadError, hasInstructionData, isSuccess, refreshPaymentStatus]);
+
   useEffect(() => {
     if (!copied) return;
     const id = window.setTimeout(() => setCopied(false), 2000);
     return () => window.clearTimeout(id);
   }, [copied]);
 
-  const isSuccess = data?.status?.toLowerCase().trim() === 'success';
+  useEffect(() => {
+    if (!notYetPaidMsg) return;
+    const id = window.setTimeout(() => setNotYetPaidMsg(false), 6000);
+    return () => window.clearTimeout(id);
+  }, [notYetPaidMsg]);
 
   /** Utamakan `expiryAt` dari API (sudah dihitung server); recompute dari `transactionCreatedAt` hanya cadangan. */
   const effectiveExpiryIso = useMemo(() => {
@@ -344,7 +416,7 @@ export function InstructionPageClient({ vaNo }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-8">
+    <div className="min-h-screen bg-slate-50 pb-28">
       <Header title={lang === 'en' ? 'Payment Instruction' : 'Instruksi Pembayaran'} backHref="/finance" />
 
       <div className="px-4 pt-4 space-y-4">
@@ -473,6 +545,35 @@ export function InstructionPageClient({ vaNo }: Props) {
         >
           {lang === 'en' ? 'Back to tuition' : 'Kembali ke keuangan'}
         </Link>
+      </div>
+
+      <div className="fixed bottom-0 inset-x-0 z-20 border-t border-slate-100 bg-white/95 backdrop-blur-sm p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto max-w-lg space-y-2">
+          {notYetPaidMsg ? (
+            <p className="text-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-2xl px-3 py-2">
+              {t(lang, 'paymentNotYetReceived')}
+            </p>
+          ) : (
+            <p className="text-center text-[11px] text-slate-400">{t(lang, 'paymentCheckHint')}</p>
+          )}
+          <button
+            type="button"
+            disabled={checkingPaid}
+            onClick={() => {
+              void refreshPaymentStatus({ showNotYetMsg: true });
+            }}
+            className="w-full inline-flex items-center justify-center gap-2 bg-primary text-white font-bold py-3.5 rounded-full hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20 disabled:opacity-70 disabled:cursor-wait"
+          >
+            {checkingPaid ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                {t(lang, 'checkingPayment')}
+              </>
+            ) : (
+              t(lang, 'iHavePaid')
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

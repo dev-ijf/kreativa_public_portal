@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { CheckoutValidationError, finalizePortalCheckout } from '@/lib/data/server/checkout';
 import type { PortalCheckoutCartItem } from '@/lib/data/portal-payment';
+import { scheduleCheckoutEmailJob } from '@/lib/notifications/schedule-checkout-email';
 import { scheduleCheckoutWhatsAppJob } from '@/lib/qstash/schedule-checkout-whatsapp';
 
 export async function POST(request: Request) {
@@ -42,6 +43,17 @@ export async function POST(request: Request) {
     } catch (err) {
       // Jangan gagalkan checkout jika WA gagal.
       console.error('checkout_whatsapp_schedule', err);
+    }
+
+    try {
+      await scheduleCheckoutEmailJob({
+        transactionId: checkout.transactionId,
+        transactionCreatedAt: checkout.transactionCreatedAt,
+        userId,
+      });
+    } catch (err) {
+      // Jangan gagalkan checkout jika email gagal.
+      console.error('checkout_email_schedule', err);
     }
 
     return NextResponse.json({

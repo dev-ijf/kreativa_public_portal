@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
+import { schedulePaymentSuccessEmailJob } from '@/lib/notifications/schedule-payment-success-email';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
 import { releaseBmiPaymentKey, tryClaimBmiPaymentKey } from '@/lib/va/bmi-payment-idempotency';
 import { decodeTokenUnsafe, parseRequestBody } from '@/lib/va/jwt';
@@ -384,6 +385,17 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // Jangan gagalkan settlement bank jika WA gagal.
     console.error('bmi_va_payment_schedule_wa', err);
+  }
+
+  try {
+    await schedulePaymentSuccessEmailJob({
+      transactionId: String(tid),
+      userId: Number(head.user_id),
+      channelId: String(CHANNELID ?? '').trim() || undefined,
+    });
+  } catch (err) {
+    // Jangan gagalkan settlement bank jika email gagal.
+    console.error('bmi_va_payment_schedule_email', err);
   }
 
   const billOut = String(Math.max(0, Math.round(totalDb * 100)));

@@ -4,7 +4,7 @@ export const TRANSLATIONS = {
     welcomeBeforeParent: 'Welcome to ',
     welcomeParent: 'Parent',
     welcomeAfterParent: ' Portal',
-    loginDesc: "Monitor your child's academic journey, attendance, and school activities seamlessly.",
+    loginDesc: "This app is only accessible with a registered email.",
     loginGoogle: 'Sign in with Google',
     loginError: 'Your email is not registered in the system. Please contact the school admin.',
     logout: 'Logout',
@@ -445,13 +445,18 @@ export const TRANSLATIONS = {
     secSummarySessions: 'Lesson reflections',
     secSummaryEmpty: 'No self-reports for this month.',
     secSummaryTrend: 'Daily progress',
+    iHavePaid: 'I Have Paid',
+    checkingPayment: 'Checking payment…',
+    paymentNotYetReceived:
+      'Payment is still verification. If you just paid, please wait a few minutes and try again.',
+    paymentCheckHint: 'We also check automatically every 5 minutes while this page is open.',
   },
   id: {
     welcome: 'Selamat datang di Parent Portal',
     welcomeBeforeParent: 'Selamat datang di ',
     welcomeParent: 'Parent',
     welcomeAfterParent: ' Portal',
-    loginDesc: 'Pantau perjalanan akademik anak, kehadiran, dan aktivitas sekolah dengan mudah.',
+    loginDesc: 'Aplikasi ini hanya dapat diakses dengan email yang terdaftar.',
     loginGoogle: 'Masuk dengan Google',
     loginError: 'Email Anda tidak terdaftar di sistem. Silakan hubungi admin sekolah.',
     logout: 'Keluar',
@@ -893,6 +898,11 @@ export const TRANSLATIONS = {
     secSummarySessions: 'Refleksi pelajaran',
     secSummaryEmpty: 'Belum ada laporan mandiri bulan ini.',
     secSummaryTrend: 'Progres harian',
+    iHavePaid: 'Saya Sudah Bayar',
+    checkingPayment: 'Memeriksa pembayaran…',
+    paymentNotYetReceived:
+      'Pembayaran masih diverifikasi. Jika baru saja bayar, tunggu beberapa menit lalu coba lagi.',
+    paymentCheckHint: 'Kami juga memeriksa otomatis setiap 5 menit selama halaman ini terbuka.',
   },
 } as const;
 
