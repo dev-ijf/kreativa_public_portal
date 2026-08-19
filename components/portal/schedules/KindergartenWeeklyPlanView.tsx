@@ -3,7 +3,7 @@
 import { Clock } from 'lucide-react';
 import type { Lang } from '@/lib/i18n/translations';
 import { t, type TranslationKey } from '@/lib/i18n/translations';
-import type { PortalWeeklyPlanRow } from '@/lib/portal/weekly-plan-types';
+import type { PortalWeeklyPlanRow, PortalDayNote } from '@/lib/portal/weekly-plan-types';
 import { subjectColor } from '@/lib/portal/weekly-plan-colors';
 import {
   findKindergartenMainRow,
@@ -11,6 +11,7 @@ import {
   periodsForDay,
   slotForDay,
 } from '@/lib/portal/weekly-plan-utils';
+import { DayParentPrepCard } from '@/components/portal/schedules/DayParentPrepCard';
 
 const WEEKDAY_KEYS: readonly TranslationKey[] = [
   'weekdayMon',
@@ -24,9 +25,10 @@ type Props = {
   lang: Lang;
   rows: PortalWeeklyPlanRow[];
   dayIndex: number;
+  dayNote?: PortalDayNote | null;
 };
 
-export function KindergartenWeeklyPlanView({ lang, rows, dayIndex }: Props) {
+export function KindergartenWeeklyPlanView({ lang, rows, dayIndex, dayNote }: Props) {
   const mainRow = findKindergartenMainRow(rows, dayIndex);
   const mainSlot = mainRow ? slotForDay(mainRow, dayIndex) : null;
   const badge =
@@ -43,6 +45,8 @@ export function KindergartenWeeklyPlanView({ lang, rows, dayIndex }: Props) {
 
   return (
     <div className="space-y-5">
+      <DayParentPrepCard lang={lang} note={dayNote} />
+
       {mainRow && mainSlot?.topic ? (
         <div className="rounded-[20px] border border-slate-200 bg-white p-[18px]">
           <span

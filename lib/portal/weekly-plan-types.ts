@@ -26,6 +26,12 @@ export type PortalWeeklyPlanRow = {
   slots: PortalWeeklyPlanSlot[];
 };
 
+export type PortalDayNote = {
+  dayIndex: number;
+  uniformLabel: string | null;
+  parentPrep: string | null;
+};
+
 export type PortalWeeklyPlanBundle = {
   studentId: number;
   schoolId: number;
@@ -41,4 +47,5 @@ export type PortalWeeklyPlanBundle = {
     weeklyTheme: string | null;
   } | null;
   rows: PortalWeeklyPlanRow[];
+  dayNotes: PortalDayNote[];
 };

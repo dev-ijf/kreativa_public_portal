@@ -13,6 +13,7 @@ import type {
   PortalWeekConfig,
   PortalWeeklyPlanBundle,
   PortalWeeklyPlanRow,
+  PortalDayNote,
 } from '@/lib/portal/weekly-plan-types';
 
 export type {
@@ -20,6 +21,7 @@ export type {
   PortalWeeklyPlanBundle,
   PortalWeeklyPlanRow,
   PortalWeeklyPlanSlot,
+  PortalDayNote,
 } from '@/lib/portal/weekly-plan-types';
 
 type Enrollment = {
@@ -122,6 +124,7 @@ async function loadPlanForWeek(
 ): Promise<{
   plan: PortalWeeklyPlanBundle['plan'];
   rows: PortalWeeklyPlanRow[];
+  dayNotes: PortalDayNote[];
 }> {
   const planRows = await sql`
     SELECT
@@ -140,7 +143,7 @@ async function loadPlanForWeek(
   `;
   const planRaw = planRows[0] as Record<string, unknown> | undefined;
   if (!planRaw) {
-    return { plan: null, rows: [] };
+    return { plan: null, rows: [], dayNotes: [] as PortalDayNote[] };
   }
 
   const planId = Number(planRaw.id);
@@ -150,7 +153,8 @@ async function loadPlanForWeek(
     weeklyTheme: (planRaw.weeklyTheme as string | null) ?? null,
   };
 
-  const scheduleRows = await sql`
+  const [scheduleRows, dayNoteRows] = await Promise.all([
+    sql`
     SELECT
       r.id,
       r.row_type AS "rowType",
@@ -169,7 +173,17 @@ async function loadPlanForWeek(
     LEFT JOIN wl_schedule_slots s ON s.row_id = r.id
     WHERE r.weekly_plan_id = ${planId}
     ORDER BY r.sort_order ASC, r.time_start ASC, r.id ASC, s.day_index ASC NULLS LAST
-  `;
+  `,
+    sql`
+    SELECT
+      day_index AS "dayIndex",
+      uniform_label AS "uniformLabel",
+      parent_prep AS "parentPrep"
+    FROM wl_day_notes
+    WHERE weekly_plan_id = ${planId}
+    ORDER BY day_index ASC
+  `,
+  ]);
 
   const byRow = new Map<number, PortalWeeklyPlanRow>();
   for (const raw of scheduleRows as Record<string, unknown>[]) {
@@ -201,14 +215,22 @@ async function loadPlanForWeek(
     }
   }
 
-  return { plan, rows: Array.from(byRow.values()) };
+  const dayNotes: PortalDayNote[] = (dayNoteRows as Record<string, unknown>[]).map(
+    (r) => ({
+      dayIndex: Number(r.dayIndex),
+      uniformLabel: (r.uniformLabel as string | null) ?? null,
+      parentPrep: (r.parentPrep as string | null) ?? null,
+    })
+  );
+
+  return { plan, rows: Array.from(byRow.values()), dayNotes };
 }
 
 async function buildBundleForEnrollment(
   en: Enrollment,
   week: PortalWeekConfig,
 ): Promise<PortalWeeklyPlanBundle> {
-  const [{ plan, rows }, adjacency] = await Promise.all([
+  const [{ plan, rows, dayNotes }, adjacency] = await Promise.all([
     loadPlanForWeek(en.classId, week.id),
     getWeekAdjacency(en.schoolId, en.academicYearId, week.id),
   ]);
@@ -223,6 +245,7 @@ async function buildBundleForEnrollment(
     hasNextWeek: adjacency.hasNextWeek,
     plan,
     rows,
+    dayNotes,
   };
 }
 
@@ -238,6 +261,7 @@ function emptyBundle(en: Enrollment): PortalWeeklyPlanBundle {
     hasNextWeek: false,
     plan: null,
     rows: [],
+    dayNotes: [],
   };
 }
 

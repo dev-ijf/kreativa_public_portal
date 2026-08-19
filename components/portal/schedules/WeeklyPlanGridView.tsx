@@ -2,7 +2,7 @@
 
 import type { Lang } from '@/lib/i18n/translations';
 import { t, type TranslationKey } from '@/lib/i18n/translations';
-import type { PortalWeeklyPlanRow } from '@/lib/portal/weekly-plan-types';
+import type { PortalWeeklyPlanRow, PortalDayNote } from '@/lib/portal/weekly-plan-types';
 import { ROUTINE_COLOR, subjectColor } from '@/lib/portal/weekly-plan-colors';
 import {
   addDaysISO,
@@ -25,6 +25,7 @@ type Props = {
   lang: Lang;
   rows: PortalWeeklyPlanRow[];
   dateFrom: string;
+  dayNotes?: PortalDayNote[];
 };
 
 type DayCell = {
@@ -174,7 +175,7 @@ function CellCard({ cell }: { cell: DayCell }) {
   );
 }
 
-export function WeeklyPlanGridView({ lang, rows, dateFrom }: Props) {
+export function WeeklyPlanGridView({ lang, rows, dateFrom, dayNotes }: Props) {
   const bands = buildTimeBands(rows);
 
   const legend = new Map<string, { abbr: string; color: string }>();
@@ -189,6 +190,10 @@ export function WeeklyPlanGridView({ lang, rows, dateFrom }: Props) {
       });
     }
   }
+
+  const hasDayNotes = (dayNotes ?? []).some(
+    (n) => n.uniformLabel?.trim() || n.parentPrep?.trim()
+  );
 
   return (
     <div className="space-y-4">
@@ -281,6 +286,51 @@ export function WeeklyPlanGridView({ lang, rows, dateFrom }: Props) {
           </tbody>
         </table>
       </div>
+
+      {hasDayNotes ? (
+        <div className="overflow-x-auto rounded-2xl border border-amber-200 bg-amber-50/70">
+          <table className="w-full min-w-[780px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-amber-200/80">
+                <th className="w-[88px] px-3 py-2 text-[10px] font-bold uppercase text-amber-800/70">
+                  {t(lang, 'scheduleUniformLabel')}
+                </th>
+                {WEEKDAY_KEYS.map((key, idx) => {
+                  const note = (dayNotes ?? []).find((n) => n.dayIndex === idx);
+                  const uniform = note?.uniformLabel?.trim() || '';
+                  return (
+                    <th
+                      key={key}
+                      className="px-2 py-2 text-center text-[11px] font-semibold text-amber-950"
+                    >
+                      {uniform || <span className="font-normal text-amber-800/40">—</span>}
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-3 py-2 text-[10px] font-bold uppercase text-amber-800/70 align-top">
+                  {t(lang, 'scheduleParentPrepTitle')}
+                </td>
+                {WEEKDAY_KEYS.map((key, idx) => {
+                  const note = (dayNotes ?? []).find((n) => n.dayIndex === idx);
+                  const prep = note?.parentPrep?.trim() || '';
+                  return (
+                    <td
+                      key={key}
+                      className="px-2 py-2 align-top text-[11px] text-amber-950 whitespace-pre-wrap"
+                    >
+                      {prep || <span className="text-amber-800/30">—</span>}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
       {legend.size > 0 ? (
         <ul className="flex flex-wrap gap-x-4 gap-y-2 px-1">

@@ -211,12 +211,18 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
               lang={lang}
               rows={wlBundle.rows}
               dayIndex={selectedDayIndex}
+              dayNote={
+                wlBundle.dayNotes?.find((n) => n.dayIndex === selectedDayIndex) ?? null
+              }
             />
           ) : (
             <PrimaryWeeklyPlanView
               lang={lang}
               rows={wlBundle.rows}
               dayIndex={selectedDayIndex}
+              dayNote={
+                wlBundle.dayNotes?.find((n) => n.dayIndex === selectedDayIndex) ?? null
+              }
             />
           )}
         </div>
@@ -225,6 +231,7 @@ export function SchedulesPageClient({ initialPlans, initialLmsPlans }: Props) {
             lang={lang}
             rows={wlBundle.rows}
             dateFrom={week.dateFrom}
+            dayNotes={wlBundle.dayNotes ?? []}
           />
         </div>
       </>

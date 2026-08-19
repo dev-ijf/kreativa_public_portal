@@ -2,21 +2,26 @@
 
 import type { Lang } from '@/lib/i18n/translations';
 import { t } from '@/lib/i18n/translations';
-import type { PortalWeeklyPlanRow } from '@/lib/portal/weekly-plan-types';
+import type { PortalWeeklyPlanRow, PortalDayNote } from '@/lib/portal/weekly-plan-types';
 import { ROUTINE_COLOR, subjectColor } from '@/lib/portal/weekly-plan-colors';
 import { formatTimeRange, periodsForDay } from '@/lib/portal/weekly-plan-utils';
+import { DayParentPrepCard } from '@/components/portal/schedules/DayParentPrepCard';
 
 type Props = {
   lang: Lang;
   rows: PortalWeeklyPlanRow[];
   dayIndex: number;
+  dayNote?: PortalDayNote | null;
 };
 
-export function PrimaryWeeklyPlanView({ lang, rows, dayIndex }: Props) {
+export function PrimaryWeeklyPlanView({ lang, rows, dayIndex, dayNote }: Props) {
   const periods = periodsForDay(rows, dayIndex);
 
   return (
-    <div>
+    <div className="space-y-5">
+      <DayParentPrepCard lang={lang} note={dayNote} />
+
+      <div>
       <p className="mb-3 text-[13px] font-bold text-slate-800">
         {t(lang, 'scheduleDayScheduleTitle')}
       </p>
@@ -79,6 +84,7 @@ export function PrimaryWeeklyPlanView({ lang, rows, dayIndex }: Props) {
           </ul>
         </div>
       )}
+      </div>
     </div>
   );
 }
