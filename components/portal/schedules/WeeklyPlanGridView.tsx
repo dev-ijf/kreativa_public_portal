@@ -7,10 +7,13 @@ import { ROUTINE_COLOR, subjectColor } from '@/lib/portal/weekly-plan-colors';
 import {
   addDaysISO,
   dayNumberFromWeekStart,
+  dayOffByWeekday,
   formatTimeRange,
+  isDayOffRow,
   isRowActiveOnDay,
   slotForDay,
   subjectAbbrev,
+  type DayOffInfo,
 } from '@/lib/portal/weekly-plan-utils';
 
 const WEEKDAY_KEYS: readonly TranslationKey[] = [
@@ -176,8 +179,60 @@ function CellCard({ cell }: { cell: DayCell }) {
   );
 }
 
+function DayOffColumnCell({
+  info,
+  rowSpan,
+  lang,
+}: {
+  info: DayOffInfo;
+  rowSpan: number;
+  lang: Lang;
+}) {
+  return (
+    <td
+      rowSpan={rowSpan}
+      className="px-2 py-3 align-middle text-center border-l border-r border-rose-100"
+      style={{ background: '#FFF1F2' }}
+    >
+      <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-1.5 px-1">
+        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-800">
+          {info.category?.trim() || t(lang, 'scheduleDayOffBadge')}
+        </span>
+        <p className="m-0 text-[12.5px] font-bold leading-snug text-rose-950">{info.label}</p>
+        <p className="m-0 text-[10px] leading-snug text-rose-800/80">
+          {t(lang, 'scheduleDayOffTitle')}
+        </p>
+      </div>
+    </td>
+  );
+}
+
 export function WeeklyPlanGridView({ lang, rows, dateFrom, dayNotes }: Props) {
-  const bands = buildTimeBands(rows);
+  const dayOffs = dayOffByWeekday(rows);
+  const hasAnyDayOff = dayOffs.some((d) => d != null);
+  // Day-off markers must not create their own time band (e.g. 00:00–11:59).
+  const rowsForBands = rows.filter((r) => !isDayOffRow(r));
+  const rawBands = buildTimeBands(rowsForBands.length > 0 ? rowsForBands : rows);
+  const bands =
+    rawBands.length > 0
+      ? rawBands.map((band) => ({
+          ...band,
+          // Never span Mon–Fri when a day-off column must stand alone.
+          unified: hasAnyDayOff ? false : band.unified,
+          days: band.days.map((cell, di) => (dayOffs[di] ? null : cell)),
+        }))
+      : hasAnyDayOff
+        ? [
+            {
+              key: 'day-off',
+              timeStart: '08:00',
+              timeEnd: '13:00',
+              sortOrder: 0,
+              days: [null, null, null, null, null] as Array<DayCell | null>,
+              unified: false,
+            },
+          ]
+        : [];
 
   const legend = new Map<string, { abbr: string; color: string }>();
   for (const band of bands) {
@@ -209,12 +264,21 @@ export function WeeklyPlanGridView({ lang, rows, dateFrom, dayNotes }: Props) {
                 const iso = addDaysISO(dateFrom, idx);
                 const short = t(lang, key).slice(0, 3).toUpperCase();
                 const dayNum = dayNumberFromWeekStart(dateFrom, idx);
+                const off = dayOffs[idx];
                 return (
                   <th
                     key={key}
-                    className="px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide"
+                    className={[
+                      'px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide',
+                      off ? 'bg-rose-800' : '',
+                    ].join(' ')}
                   >
                     {short} {dayNum} {monthShort(iso, lang)}
+                    {off ? (
+                      <span className="mt-0.5 block text-[9px] font-semibold normal-case tracking-normal opacity-90">
+                        {t(lang, 'scheduleDayOffBadge')}
+                      </span>
+                    ) : null}
                   </th>
                 );
               })}
@@ -228,7 +292,7 @@ export function WeeklyPlanGridView({ lang, rows, dateFrom, dayNotes }: Props) {
                 </td>
               </tr>
             ) : (
-              bands.map((band) => {
+              bands.map((band, bandIdx) => {
                 const timeLabel = formatTimeRange(band.timeStart, band.timeEnd);
                 const sample = band.days.find((c) => c != null) ?? null;
 
@@ -263,6 +327,18 @@ export function WeeklyPlanGridView({ lang, rows, dateFrom, dayNotes }: Props) {
                       {timeLabel}
                     </td>
                     {WEEKDAY_KEYS.map((key, di) => {
+                      const off = dayOffs[di];
+                      if (off) {
+                        if (bandIdx !== 0) return null;
+                        return (
+                          <DayOffColumnCell
+                            key={key}
+                            info={off}
+                            rowSpan={bands.length}
+                            lang={lang}
+                          />
+                        );
+                      }
                       const cell = band.days[di] ?? null;
                       if (!cell) {
                         return (

@@ -83,6 +83,10 @@ export function subjectAbbrev(name: string | null | undefined): string {
     stem: 'STEM',
     art: 'ART',
     motoric: 'MOT',
+    // Full word — never abbreviate to "AKT"
+    aktivitas: 'Activities',
+    'aktivitas utama': 'Activities',
+    activities: 'Activities',
   };
   const hit = known[trimmed.toLowerCase()];
   if (hit) return hit;
@@ -175,4 +179,71 @@ export function subjectLessonCount(
     if (cat === 'rutin' || cat === 'routine') return false;
     return Boolean(subject || slot?.topic);
   }).length;
+}
+
+/** Detect public holiday / day-off from category, topic, or description text. */
+export function textLooksLikeDayOff(
+  ...parts: Array<string | null | undefined>
+): boolean {
+  const s = parts
+    .filter((p): p is string => typeof p === 'string' && p.trim() !== '')
+    .join(' ')
+    .toLowerCase();
+  if (!s) return false;
+  return (
+    /\bday\s*off\b/.test(s) ||
+    /\bpublic\s*holiday\b/.test(s) ||
+    /\bholiday\b/.test(s) ||
+    /\blibur\b/.test(s) ||
+    /\bno\s*school\b/.test(s) ||
+    /\bmaulid\b/.test(s) ||
+    /cuti\s*bersama/.test(s)
+  );
+}
+
+export type DayOffInfo = {
+  label: string;
+  category: string | null;
+};
+
+/** True if this schedule row itself is a day-off / public-holiday marker. */
+export function isDayOffRow(row: PortalWeeklyPlanRow): boolean {
+  const slotTexts = row.slots.flatMap((s) => [s.topic, s.description, s.subjectName]);
+  return textLooksLikeDayOff(
+    row.category,
+    row.subjectName,
+    row.routineDescription,
+    ...slotTexts,
+  );
+}
+
+/** If this weekday has a day-off / public holiday entry, return display info. */
+export function findDayOffForDay(
+  rows: PortalWeeklyPlanRow[],
+  dayIndex: number,
+): DayOffInfo | null {
+  for (const row of rows) {
+    if (!isRowActiveOnDay(row, dayIndex)) continue;
+    const slot = slotForDay(row, dayIndex);
+    const category = row.category;
+    const topic = slot?.topic ?? null;
+    const subject = slot?.subjectName ?? row.subjectName;
+    const routine = row.routineDescription;
+    if (!textLooksLikeDayOff(category, topic, subject, routine)) continue;
+    const label = (topic || subject || category || routine || 'Day off').trim();
+    const badge = textLooksLikeDayOff(category)
+      ? (category ?? 'Day off')
+      : textLooksLikeDayOff(topic, subject, routine)
+        ? 'Day off'
+        : (category ?? 'Day off');
+    return { label, category: badge };
+  }
+  return null;
+}
+
+/** Map of dayIndex → day-off info (or null). */
+export function dayOffByWeekday(
+  rows: PortalWeeklyPlanRow[],
+): Array<DayOffInfo | null> {
+  return [0, 1, 2, 3, 4].map((di) => findDayOffForDay(rows, di));
 }

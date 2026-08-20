@@ -1,11 +1,12 @@
 'use client';
 
-import { Clock } from 'lucide-react';
+import { CalendarOff } from 'lucide-react';
 import type { Lang } from '@/lib/i18n/translations';
 import { t, type TranslationKey } from '@/lib/i18n/translations';
 import type { PortalWeeklyPlanRow, PortalDayNote } from '@/lib/portal/weekly-plan-types';
 import { subjectColor } from '@/lib/portal/weekly-plan-colors';
 import {
+  findDayOffForDay,
   findKindergartenMainRow,
   formatTimeRange,
   periodsForDay,
@@ -29,6 +30,32 @@ type Props = {
 };
 
 export function KindergartenWeeklyPlanView({ lang, rows, dayIndex, dayNote }: Props) {
+  const dayOff = findDayOffForDay(rows, dayIndex);
+  const dayName = t(lang, WEEKDAY_KEYS[dayIndex] ?? 'weekdayMon');
+
+  if (dayOff) {
+    return (
+      <div className="space-y-5">
+        <DayParentPrepCard lang={lang} note={dayNote} />
+        <div className="rounded-[20px] border-2 border-rose-200 bg-rose-50 p-5 text-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-800">
+            <CalendarOff size={14} />
+            {dayOff.category?.trim() || t(lang, 'scheduleDayOffBadge')}
+          </span>
+          <h2 className="mt-3 mb-0 text-lg font-bold text-rose-950 leading-snug">
+            {dayOff.label}
+          </h2>
+          <p className="mt-2 mb-0 text-[13px] text-rose-900/80 leading-relaxed">
+            {t(lang, 'scheduleDayOffTitle')}
+          </p>
+          <p className="mt-1.5 mb-0 text-xs text-rose-800/70">
+            {t(lang, 'scheduleDayOffHint')} · {dayName}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const mainRow = findKindergartenMainRow(rows, dayIndex);
   const mainSlot = mainRow ? slotForDay(mainRow, dayIndex) : null;
   const badge =
@@ -39,7 +66,6 @@ export function KindergartenWeeklyPlanView({ lang, rows, dayIndex, dayNote }: Pr
   const timeLabel = mainRow
     ? formatTimeRange(mainRow.timeStart, mainRow.timeEnd)
     : null;
-  const dayName = t(lang, WEEKDAY_KEYS[dayIndex] ?? 'weekdayMon');
 
   const periods = periodsForDay(rows, dayIndex);
 
@@ -74,7 +100,6 @@ export function KindergartenWeeklyPlanView({ lang, rows, dayIndex, dayNote }: Pr
           ) : null}
           {timeLabel ? (
             <div className="mt-3 flex items-center gap-1.5 border-t border-slate-200 pt-2.5 text-xs font-semibold text-slate-500">
-              <Clock size={13} strokeWidth={2} />
               {timeLabel} · {dayName}
             </div>
           ) : null}
