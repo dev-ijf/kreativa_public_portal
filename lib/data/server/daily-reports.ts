@@ -1087,6 +1087,32 @@ export async function updateDailyReportParentCorner(
         INSERT INTO dr_daily_report_messages (school_id, report_id, author_role, author_user_id, body)
         VALUES (${row.school_id}, ${row.id}, 'parent', ${viewerUserId}, ${message})
       `;
+      // Re-open CRM ticket when parent posts (including after closed)
+      try {
+        await sql`
+          UPDATE dr_daily_reports
+          SET message_ticket_status = 'open',
+              message_ticket_closed_at = NULL,
+              message_ticket_closed_by = NULL,
+              updated_at = now()
+          WHERE id = ${row.id}
+        `;
+      } catch {
+        // Columns may not exist until ERP migration 0063
+      }
+      try {
+        const { notifyParentDrMessageBackground } = await import(
+          '@/lib/parent-dr-message-notify'
+        );
+        notifyParentDrMessageBackground({
+          studentId,
+          reportId: Number(row.id),
+          schoolId: row.school_id != null ? Number(row.school_id) : null,
+          messagePreview: message,
+        });
+      } catch (err) {
+        console.error('[daily-reports] parent message notify failed', err);
+      }
     } catch {
       // Table may not exist until ERP migration 0050 is applied — fall back to legacy column only
     }
@@ -1531,6 +1557,69 @@ export async function getSubjectHistory(
       characters: toStringArray(r.characters),
       privateNote: r.privateNote ?? null,
       noteToParents: r.noteToParents ?? null,
+    })),
+  };
+}
+
+export type PortalMessageTicket = {
+  reportId: number;
+  reportDate: string;
+  ticketStatus: 'open' | 'closed';
+  lastBody: string | null;
+  lastAuthorRole: 'parent' | 'staff' | null;
+  lastAt: string | null;
+};
+
+export async function listPortalMessageTickets(
+  viewerUserId: number,
+  viewerRole: string,
+  studentId: number,
+): Promise<{ ok: true; tickets: PortalMessageTicket[] } | { ok: false; reason: 'forbidden' }> {
+  const access = await assertDailyReportAccess(viewerUserId, viewerRole, studentId);
+  if (!access.ok) return { ok: false, reason: 'forbidden' };
+
+  const rows = await sql`
+    WITH last_msg AS (
+      SELECT DISTINCT ON (m.report_id)
+        m.report_id,
+        m.body AS last_body,
+        m.author_role AS last_author_role,
+        m.created_at AS last_at
+      FROM dr_daily_report_messages m
+      ORDER BY m.report_id, m.created_at DESC, m.id DESC
+    )
+    SELECT
+      dr.id AS report_id,
+      dr.report_date::text AS report_date,
+      COALESCE(dr.message_ticket_status, 'open') AS ticket_status,
+      lm.last_body,
+      lm.last_author_role,
+      lm.last_at
+    FROM dr_daily_reports dr
+    INNER JOIN last_msg lm ON lm.report_id = dr.id
+    WHERE dr.student_id = ${studentId}
+      AND dr.status IN ('submitted', 'read')
+    ORDER BY lm.last_at DESC NULLS LAST, dr.report_date DESC
+    LIMIT 60
+  `;
+
+  return {
+    ok: true,
+    tickets: (rows as Record<string, unknown>[]).map((r) => ({
+      reportId: Number(r.report_id),
+      reportDate: normalizeDate(r.report_date),
+      ticketStatus: String(r.ticket_status) === 'closed' ? 'closed' : 'open',
+      lastBody: r.last_body == null ? null : String(r.last_body),
+      lastAuthorRole:
+        r.last_author_role === 'staff' || r.last_author_role === 'parent'
+          ? (r.last_author_role as 'parent' | 'staff')
+          : null,
+      lastAt:
+        r.last_at instanceof Date
+          ? r.last_at.toISOString()
+          : r.last_at == null
+            ? null
+            : String(r.last_at),
     })),
   };
 }

@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Award, BookOpen, BookOpenCheck, Brain, CheckSquare, Megaphone, Receipt, User } from 'lucide-react';
+import { Award, BookOpen, BookOpenCheck, Brain, CalendarDays, CheckSquare, ClipboardList, Megaphone, MessageSquare, Receipt, User } from 'lucide-react';
 import { TopHero } from '@/components/portal/TopHero';
 import { ChildSelector } from '@/components/portal/ChildSelector';
 import { usePortalState, useActiveChild } from '@/components/portal/state/PortalProvider';
@@ -159,17 +159,21 @@ export function HomePageClient({
     schedules: <BookOpen size={28} className="text-blue-600" />,
     attendance: <CheckSquare size={28} className="text-orange-600" />,
     report: <Award size={28} className="text-purple-600" />,
+    agenda: <CalendarDays size={28} className="text-sky-600" />,
     updates: <Megaphone size={28} className="text-teal-600" />,
     'adaptive-learning': <Brain size={28} className="text-pink-600" />,
     habits: <CheckSquare size={28} className="text-emerald-600" />,
+    'kg-habits': <ClipboardList size={28} className="text-fuchsia-700" />,
     ttq: <BookOpenCheck size={28} className="text-violet-700" />,
+    'dr-messages': <MessageSquare size={28} className="text-amber-700" />,
   };
 
   const menus = MENU_CONFIG.map((cfg) => ({
     href: cfg.href,
-    label: cfg.moduleCode === 'habits'
-      ? t(lang, isDailyReportStudent(activeChild ?? {}) ? 'dailyReports' : 'habits')
-      : t(lang, cfg.labelKey as Parameters<typeof t>[1]),
+    label:
+      cfg.moduleCode === 'habits'
+        ? t(lang, isDailyReportStudent(activeChild ?? {}) ? 'dailyReports' : 'habits')
+        : t(lang, cfg.labelKey as Parameters<typeof t>[1]),
     color: cfg.color,
     icon: iconMap[cfg.moduleCode],
     isActive: isModuleActiveForSchool(moduleMapsBySchool, activeChild?.schoolId, cfg.moduleCode),

@@ -15,6 +15,7 @@ import {
 } from "@/components/portal/daily-reports/ReportSectionShell";
 import { Textarea } from "@/components/ui/Textarea";
 import { clampTextareaNote, TEXTAREA_NOTE_MAX } from "@/lib/portal/textarea-limits";
+import { linkifyToReact } from "@/lib/linkify";
 
 type Props = {
   report: DailyReportFull;
@@ -317,7 +318,14 @@ export function ParentCornerSection({
                             : "You"}
                         {m.createdAt ? ` · ${formatMsgAt(m.createdAt, lang)}` : ""}
                       </p>
-                      {m.body}
+                      <div className="whitespace-pre-wrap">
+                        {linkifyToReact(
+                          m.body,
+                          isStaff
+                            ? "underline break-all text-sky-700"
+                            : "underline break-all text-white/95",
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

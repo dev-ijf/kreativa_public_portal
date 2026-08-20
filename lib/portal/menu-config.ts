@@ -9,16 +9,20 @@ export type MenuItemConfig = {
 /**
  * Static mapping from module_code to UI properties.
  * Icons are provided separately at render time (since they are JSX elements).
+ * 11 tiles (Messages replaces Izin; Profile removed from Quick Menus).
  */
 export const MENU_CONFIG: MenuItemConfig[] = [
   { moduleCode: 'financial', href: '/finance', labelKey: 'tuition', color: 'bg-indigo-100', iconColor: 'text-primary' },
   { moduleCode: 'schedules', href: '/schedules', labelKey: 'schedules', color: 'bg-blue-100', iconColor: 'text-blue-600' },
   { moduleCode: 'attendance', href: '/attendance', labelKey: 'attendance', color: 'bg-orange-100', iconColor: 'text-orange-600' },
   { moduleCode: 'report', href: '/report', labelKey: 'report', color: 'bg-purple-100', iconColor: 'text-purple-600' },
+  { moduleCode: 'agenda', href: '/updates?tab=agenda', labelKey: 'agenda', color: 'bg-sky-100', iconColor: 'text-sky-600' },
   { moduleCode: 'updates', href: '/updates', labelKey: 'updates', color: 'bg-teal-100', iconColor: 'text-teal-600' },
   { moduleCode: 'adaptive-learning', href: '/adaptive-learning', labelKey: 'adaptiveLearning', color: 'bg-pink-100', iconColor: 'text-pink-600' },
   { moduleCode: 'habits', href: '/habits', labelKey: 'habits', color: 'bg-emerald-100', iconColor: 'text-emerald-600' },
+  { moduleCode: 'kg-habits', href: '/7-habits', labelKey: 'kgHabits', color: 'bg-fuchsia-100', iconColor: 'text-fuchsia-700' },
   { moduleCode: 'ttq', href: '/ttq', labelKey: 'ttq', color: 'bg-violet-100', iconColor: 'text-violet-700' },
+  { moduleCode: 'dr-messages', href: '/messages', labelKey: 'drMessages', color: 'bg-amber-100', iconColor: 'text-amber-700' },
 ];
 
 export type ModuleActiveMap = Record<string, boolean>;
@@ -60,15 +64,6 @@ export function buildSchoolModuleActiveMaps(
     schoolMap[row.module_code] = globallyOn && row.is_visible === true;
   }
 
-  // Combined "updates" stays active when agenda is on for that school
-  for (const schoolId of schoolIds) {
-    const map = maps[schoolId];
-    if (!map) continue;
-    if (map.updates || map.agenda) {
-      map.updates = true;
-    }
-  }
-
   return maps;
 }
 
@@ -87,13 +82,9 @@ export function buildModuleActiveMap(modules: { module_code: string; is_active: 
 /**
  * Check if a menu item is active for a school map.
  * Missing module_code defaults to inactive.
- * Combined "updates" entry also stays active when agenda module is on.
  */
 export function isModuleActive(map: ModuleActiveMap | undefined, moduleCode: string): boolean {
   if (!map) return false;
-  if (moduleCode === 'updates') {
-    return (map.updates ?? false) || (map.agenda ?? false);
-  }
   return map[moduleCode] ?? false;
 }
 

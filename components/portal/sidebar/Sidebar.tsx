@@ -10,10 +10,13 @@ import {
   BookOpen,
   BookOpenCheck,
   Brain,
+  CalendarDays,
   CheckSquare,
+  ClipboardList,
   Home,
   LogOut,
   Megaphone,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Receipt,
@@ -53,6 +56,7 @@ export function Sidebar({ logoUrl, logoAlt }: Props) {
     { href: '/schedules', icon: <BookOpen size={20} />, labelKey: 'schedules', moduleCode: 'schedules' },
     { href: '/attendance', icon: <CheckSquare size={20} />, labelKey: 'attendance', moduleCode: 'attendance' },
     { href: '/report', icon: <Award size={20} />, labelKey: 'report', moduleCode: 'report' },
+    { href: '/updates?tab=agenda', icon: <CalendarDays size={20} />, labelKey: 'agenda', moduleCode: 'agenda' },
     { href: '/updates', icon: <Megaphone size={20} />, labelKey: 'updates', moduleCode: 'updates' },
     { href: '/adaptive-learning', icon: <Brain size={20} />, labelKey: 'adaptiveLearning', moduleCode: 'adaptive-learning' },
     {
@@ -61,12 +65,23 @@ export function Sidebar({ logoUrl, logoAlt }: Props) {
       labelKey: isDailyReportStudent(activeChild ?? {}) ? 'dailyReports' : 'habits',
       moduleCode: 'habits',
     },
+    { href: '/7-habits', icon: <ClipboardList size={20} />, labelKey: 'kgHabits', moduleCode: 'kg-habits' },
     { href: '/ttq', icon: <BookOpenCheck size={20} />, labelKey: 'ttq', moduleCode: 'ttq' },
+    { href: '/messages', icon: <MessageSquare size={20} />, labelKey: 'drMessages', moduleCode: 'dr-messages' },
   ];
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
-    return pathname === href || pathname.startsWith(href + '/');
+    const pathOnly = href.split('?')[0] ?? href;
+    if (href.includes('tab=agenda')) {
+      return pathname === '/updates' || pathname.startsWith('/updates/');
+    }
+    if (pathOnly === '/updates') {
+      // Prefer exact Updates tile when not on agenda query — sidebar can't read searchParams easily;
+      // highlight both agenda and updates under /updates is acceptable.
+      return pathname === '/updates' || pathname.startsWith('/updates/');
+    }
+    return pathname === pathOnly || pathname.startsWith(pathOnly + '/');
   };
 
   const displayName = session?.user?.role === 'parent'
