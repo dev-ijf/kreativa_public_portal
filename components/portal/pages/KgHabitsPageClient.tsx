@@ -179,39 +179,31 @@ export function KgHabitsPageClient() {
     }
   }
 
-  const childLabel = activeChild
-    ? `${activeChild.fullName}${activeChild.className ? ` · ${activeChild.className}` : ''}`
-    : lang === 'en'
-      ? 'Select a child'
-      : 'Pilih anak';
-
   return (
-    <div className="min-h-screen bg-[#F3F1FB] pb-24">
-      <div className="bg-linear-to-br from-[#5B21B6] to-[#3B1876] text-white">
-        <Header title={lang === 'en' ? '7 Habits' : '7 Kebiasaan'} backHref="/" transparent />
-        <div className="px-4 pb-5">
-          <ChildSelector />
-          <p className="text-white/70 text-sm mt-2 truncate">{childLabel}</p>
-          <div className="mt-4 flex bg-white/10 rounded-full p-1 text-sm font-medium">
-            <button
-              type="button"
-              onClick={() => setTab('today')}
-              className={`flex-1 py-1.5 rounded-full transition ${
-                tab === 'today' ? 'bg-white text-[#3B1876]' : 'text-white/80'
-              }`}
-            >
-              {lang === 'en' ? 'Today' : 'Hari ini'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('month')}
-              className={`flex-1 py-1.5 rounded-full transition ${
-                tab === 'month' ? 'bg-white text-[#3B1876]' : 'text-white/80'
-              }`}
-            >
-              {lang === 'en' ? 'This Month' : 'Bulan ini'}
-            </button>
-          </div>
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <Header title={lang === 'en' ? '7 Habits' : '7 Kebiasaan'} backHref="/" />
+      <ChildSelector />
+
+      <div className="px-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-2 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab('today')}
+            className={`flex-1 py-2.5 rounded-xl font-bold text-sm ${
+              tab === 'today' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {lang === 'en' ? 'Today' : 'Hari ini'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('month')}
+            className={`flex-1 py-2.5 rounded-xl font-bold text-sm ${
+              tab === 'month' ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700'
+            }`}
+          >
+            {lang === 'en' ? 'This Month' : 'Bulan ini'}
+          </button>
         </div>
       </div>
 
