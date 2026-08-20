@@ -18,9 +18,11 @@ export async function GET(request: Request) {
   const id = searchParams.get('cursorId');
   const cursor: AnnouncementPageCursor | null =
     publishDate && id ? { publishDate, id } : null;
+  const limitRaw = Number(searchParams.get('limit') ?? 10);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 10;
 
   const { rows, nextCursor } = await getAnnouncementsPage(userId, role, {
-    limit: 10,
+    limit,
     cursor,
   });
 

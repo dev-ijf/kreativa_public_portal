@@ -1,5 +1,10 @@
 import { cache } from 'react';
 import { sql } from '@/lib/db/client';
+import {
+  PORTAL_CHILDREN_TTL_SEC,
+  portalChildrenKey,
+} from '@/lib/cache/portal-children';
+import { cacheGetJson, cacheSetJsonTtl } from '@/lib/cache/upstash-redis';
 
 export type StudentChildRow = {
   id: number;
@@ -45,7 +50,7 @@ export type PortalChildRow = {
   gender: string | null;
 };
 
-async function loadPortalChildren(userId: number, role: string): Promise<PortalChildRow[]> {
+async function loadPortalChildrenFromDb(userId: number, role: string): Promise<PortalChildRow[]> {
   if (role === 'parent') {
     const rows = await sql`
       SELECT
@@ -113,6 +118,16 @@ async function loadPortalChildren(userId: number, role: string): Promise<PortalC
   return rows as unknown as PortalChildRow[];
 }
 
-/** Satu query children per request (dedup layout + halaman). */
+async function loadPortalChildren(userId: number, role: string): Promise<PortalChildRow[]> {
+  const key = portalChildrenKey(role, userId);
+  const cached = await cacheGetJson<PortalChildRow[]>(key);
+  if (Array.isArray(cached)) return cached;
+
+  const rows = await loadPortalChildrenFromDb(userId, role);
+  await cacheSetJsonTtl(key, rows, PORTAL_CHILDREN_TTL_SEC);
+  return rows;
+}
+
+/** Satu query children per request (dedup layout + halaman). Redis cache-aside + Neon fallback. */
 export const getPortalChildren = cache(loadPortalChildren);
 

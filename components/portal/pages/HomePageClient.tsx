@@ -45,6 +45,12 @@ export function HomePageClient({
   const activeChild = useActiveChild();
   const [now, setNow] = useState(() => new Date());
   const [mounted, setMounted] = useState(false);
+  const [announcements, setAnnouncements] =
+    useState<PortalAnnouncementRow[]>(initialAnnouncements);
+
+  useEffect(() => {
+    setAnnouncements(initialAnnouncements);
+  }, [initialAnnouncements]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -61,6 +67,60 @@ export function HomePageClient({
     return () => {
       window.clearInterval(clockId);
       window.clearInterval(scrollId);
+    };
+  }, []);
+
+  // Soft-refresh news every 20s while the tab is visible (Redis-backed API).
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+
+    const fingerprint = (rows: PortalAnnouncementRow[]) =>
+      rows.map((r) => `${r.id}:${r.titleEn}:${r.titleId}:${r.publishDate}`).join('|');
+
+    const poll = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const res = await fetch('/api/portal/announcements?limit=5', {
+          credentials: 'same-origin',
+          cache: 'no-store',
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { rows?: PortalAnnouncementRow[] };
+        const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (cancelled) return;
+        setAnnouncements((prev) =>
+          fingerprint(prev) === fingerprint(rows) ? prev : rows,
+        );
+      } catch {
+        // ignore poll errors
+      }
+    };
+
+    const schedule = () => {
+      if (timer != null) window.clearInterval(timer);
+      timer = window.setInterval(() => {
+        void poll();
+      }, 20_000);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void poll();
+        schedule();
+      } else if (timer != null) {
+        window.clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    if (document.visibilityState === 'visible') schedule();
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (timer != null) window.clearInterval(timer);
     };
   }, []);
 
@@ -119,7 +179,7 @@ export function HomePageClient({
     ? `${t(stableLang, 'honorific')} ${session.user.fullName ?? ''}`.trim()
     : session?.user?.fullName ?? '';
 
-  const announcementCards = initialAnnouncements.map((ann) => {
+  const announcementCards = announcements.map((ann) => {
     const title = stableLang === 'en' ? ann.titleEn : ann.titleId;
     const subtitle = new Intl.DateTimeFormat(stableLang === 'en' ? 'en-GB' : 'id-ID', {
       day: 'numeric',
@@ -240,7 +300,7 @@ export function HomePageClient({
 
             <div className="mb-2 w-full">
               <div ref={carouselRef} className="flex space-x-3 overflow-x-auto pb-4 pl-4 snap-x snap-mandatory scroll-smooth scrollbar-hide">
-                {initialAnnouncements.length === 0 ? (
+                {announcements.length === 0 ? (
                   <div className="snap-start shrink-0 w-[280px] rounded-lg overflow-hidden bg-white/10 border border-white/20 p-4 text-white/80 text-sm">
                     {stableLang === 'en' ? 'No announcements yet.' : 'Belum ada pengumuman.'}
                   </div>
@@ -319,7 +379,7 @@ export function HomePageClient({
               <h2 className="text-lg font-bold text-slate-700">{t(lang, 'updates')}</h2>
               <Link href="/updates" className="text-xs font-bold text-primary hover:underline">{t(lang, 'seeAll')}</Link>
             </div>
-            {initialAnnouncements.length === 0 ? (
+            {announcements.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-100 p-6 text-sm text-slate-500">
                 {stableLang === 'en' ? 'No announcements yet.' : 'Belum ada pengumuman.'}
               </div>

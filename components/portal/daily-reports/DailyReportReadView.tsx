@@ -500,14 +500,14 @@ export function DailyReportReadView({ report, lang }: Props) {
         </ReportSectionShell>
       ) : null}
 
-      {(isPrimary ? selectedLearningAreas : report.learningAreas).length > 0 ? (
+      {selectedLearningAreas.length > 0 ? (
         <ReportSectionShell
           title={t(lang, "drSectionLearningAreas")}
           icon="📚"
           subtitle={t(lang, "drLearningAreasHint")}
         >
           <ReadOnlyLearningAreaList
-            items={isPrimary ? selectedLearningAreas : report.learningAreas}
+            items={selectedLearningAreas}
             displayName={(name, nameId) => displayName(name, nameId, lang)}
           />
         </ReportSectionShell>
