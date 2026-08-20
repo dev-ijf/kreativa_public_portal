@@ -205,21 +205,50 @@ export async function finalizePortalCheckout(params: {
   const billKeys = cart.map((item) => parseCartBillKey(item));
   const billIds = [...new Set(billKeys.map((k) => normBillId(k.billId)).filter((id) => Number.isFinite(id)))];
 
-  const billRowsRaw = (await sql`
-    SELECT
-      bill_id,
-      student_id,
-      academic_year_id,
-      product_id,
-      title,
-      balance_amount,
-      min_payment,
-      is_installment,
-      payment_type
-    FROM v_portal_finance_bills
-    WHERE student_id = ${studentId}
-      AND bill_id = ANY(${billIds}::int4[])
-  `) as unknown as Record<string, unknown>[];
+  const billRowsRaw = (await (async () => {
+    try {
+      return await sql`
+        SELECT
+          bill_id,
+          student_id,
+          academic_year_id,
+          product_id,
+          title,
+          balance_amount,
+          min_payment,
+          is_installment,
+          payment_type
+        FROM v_portal_finance_bills
+        WHERE student_id = ${studentId}
+          AND bill_id = ANY(${billIds}::int4[])
+      `;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!(msg.includes('v_portal_finance_bills') && /does not exist/i.test(msg))) throw err;
+      return await sql`
+        SELECT
+          b.id AS bill_id,
+          b.student_id,
+          b.academic_year_id,
+          b.product_id,
+          b.title,
+          GREATEST(
+            b.total_amount
+              - b.paid_amount
+              - COALESCE(b.discount_amount, 0::numeric)
+              - COALESCE(b.additional_discount, 0::numeric),
+            0::numeric(15, 2)
+          ) AS balance_amount,
+          b.min_payment,
+          COALESCE(p.is_installment, false) AS is_installment,
+          p.payment_type
+        FROM tuition_bills b
+        INNER JOIN tuition_products p ON p.id = b.product_id
+        WHERE b.student_id = ${studentId}
+          AND b.id = ANY(${billIds}::int4[])
+      `;
+    }
+  })()) as unknown as Record<string, unknown>[];
 
   const billRows: BillRow[] = billRowsRaw
     .map((raw) => ({

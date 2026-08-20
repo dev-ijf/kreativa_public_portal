@@ -3,7 +3,7 @@ import { cache } from 'react';
 /**
  * Portal finance (GET): data dari `v_portal_finance_bills`,
  * `v_portal_finance_bill_groups`, `v_portal_tuition_payment_lines`
- * (lihat sql/portal_finance_views.sql).
+ * (lihat sql/portal_finance_views.sql — re-run after DB restore if views are missing).
  *
  * billingMode:
  * - talenta (theme_id ≠ 1): kartu 12 bulan + cicilan open-amount dari tuition_bills
@@ -261,6 +261,63 @@ function mapBillViewRows(rows: Record<string, unknown>[]): BillViewRow[] {
 async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[]> {
   const unique = [...new Set(studentIds)].filter((n) => Number.isFinite(n) && n > 0);
   if (unique.length === 0) return [];
+
+  const isMissingRelation = (err: unknown, name: string) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return msg.includes(name) && /does not exist/i.test(msg);
+  };
+
+  /** Same shape as v_portal_finance_bills — used when the view is missing after a restore. */
+  const selectFromBaseTables = () =>
+    sql`
+      SELECT
+        b.id AS bill_id,
+        b.student_id,
+        b.academic_year_id,
+        ay.name AS academic_year_name,
+        b.product_id,
+        p.name AS product_name,
+        p.payment_type,
+        b.title,
+        (b.total_amount)::float8 AS total_amount,
+        (b.paid_amount)::float8 AS paid_amount,
+        (b.min_payment)::float8 AS min_payment,
+        (
+          GREATEST(
+            b.total_amount
+              - b.paid_amount
+              - COALESCE(b.discount_amount, 0::numeric)
+              - COALESCE(b.additional_discount, 0::numeric),
+            0::numeric(15, 2)
+          )
+        )::float8 AS balance_amount,
+        (COALESCE(b.discount_amount, 0))::float8 AS discount_amount,
+        (COALESCE(b.additional_discount, 0))::float8 AS additional_discount,
+        (
+          GREATEST(
+            b.total_amount
+              - b.paid_amount
+              - COALESCE(b.discount_amount, 0::numeric)
+              - COALESCE(b.additional_discount, 0::numeric),
+            0::numeric(15, 2)
+          ) <= 0
+          OR lower(coalesce(b.status, '')) = 'paid'
+        ) AS is_fully_paid,
+        b.bill_month,
+        b.bill_year,
+        b.related_month,
+        b.created_at AS bill_created_at,
+        b.due_date,
+        COALESCE(p.is_installment, false) AS is_installment,
+        b.bill_group_id,
+        b.termin_sequence
+      FROM tuition_bills b
+      INNER JOIN tuition_products p ON p.id = b.product_id
+      INNER JOIN core_academic_years ay ON ay.id = b.academic_year_id
+      WHERE b.student_id = ANY(${unique}::int[])
+      ORDER BY b.student_id ASC, b.id ASC
+    `;
+
   try {
     const rows = await sql`
       SELECT
@@ -292,34 +349,46 @@ async function fetchBillsForStudents(studentIds: number[]): Promise<BillViewRow[
       ORDER BY student_id ASC, bill_id ASC
     `;
     return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
-  } catch {
+  } catch (err) {
+    if (isMissingRelation(err, 'v_portal_finance_bills')) {
+      const rows = await selectFromBaseTables();
+      return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+    }
     // View lama tanpa kolom bill_group / discount — fallback Talenta-compatible.
-    const rows = await sql`
-      SELECT
-        bill_id,
-        student_id,
-        academic_year_id,
-        academic_year_name,
-        product_id,
-        product_name,
-        payment_type,
-        title,
-        (total_amount)::float8 AS total_amount,
-        (paid_amount)::float8 AS paid_amount,
-        (min_payment)::float8 AS min_payment,
-        (balance_amount)::float8 AS balance_amount,
-        is_fully_paid,
-        bill_month,
-        bill_year,
-        related_month,
-        bill_created_at,
-        due_date,
-        is_installment
-      FROM v_portal_finance_bills
-      WHERE student_id = ANY(${unique}::int[])
-      ORDER BY student_id ASC, bill_id ASC
-    `;
-    return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+    try {
+      const rows = await sql`
+        SELECT
+          bill_id,
+          student_id,
+          academic_year_id,
+          academic_year_name,
+          product_id,
+          product_name,
+          payment_type,
+          title,
+          (total_amount)::float8 AS total_amount,
+          (paid_amount)::float8 AS paid_amount,
+          (min_payment)::float8 AS min_payment,
+          (balance_amount)::float8 AS balance_amount,
+          is_fully_paid,
+          bill_month,
+          bill_year,
+          related_month,
+          bill_created_at,
+          due_date,
+          is_installment
+        FROM v_portal_finance_bills
+        WHERE student_id = ANY(${unique}::int[])
+        ORDER BY student_id ASC, bill_id ASC
+      `;
+      return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+    } catch (err2) {
+      if (isMissingRelation(err2, 'v_portal_finance_bills')) {
+        const rows = await selectFromBaseTables();
+        return mapBillViewRows(rows as unknown as Record<string, unknown>[]);
+      }
+      throw err2;
+    }
   }
 }
 
@@ -376,21 +445,46 @@ async function fetchBillGroupsForStudents(studentIds: number[]): Promise<BillGro
 
 async function fetchPaymentLinesForBillIds(billIds: number[]): Promise<PaymentLineRow[]> {
   if (billIds.length === 0) return [];
-  const rows = await sql`
-    SELECT
-      bill_id,
-      amount_paid,
-      detail_created_at,
-      payment_date,
-      transaction_id,
-      transaction_created_at,
-      reference_no,
-      transaction_status
-    FROM v_portal_tuition_payment_lines
-    WHERE bill_id = ANY(${billIds}::int[])
-    ORDER BY bill_id, detail_created_at ASC
-  `;
-  return rows as unknown as PaymentLineRow[];
+  try {
+    const rows = await sql`
+      SELECT
+        bill_id,
+        amount_paid,
+        detail_created_at,
+        payment_date,
+        transaction_id,
+        transaction_created_at,
+        reference_no,
+        transaction_status
+      FROM v_portal_tuition_payment_lines
+      WHERE bill_id = ANY(${billIds}::int[])
+      ORDER BY bill_id, detail_created_at ASC
+    `;
+    return rows as unknown as PaymentLineRow[];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!(msg.includes('v_portal_tuition_payment_lines') && /does not exist/i.test(msg))) {
+      throw err;
+    }
+    const rows = await sql`
+      SELECT
+        td.bill_id,
+        td.amount_paid,
+        td.created_at AS detail_created_at,
+        t.payment_date,
+        t.id AS transaction_id,
+        t.created_at AS transaction_created_at,
+        t.reference_no,
+        t.status AS transaction_status
+      FROM tuition_transaction_details td
+      INNER JOIN tuition_transactions t
+        ON t.id = td.transaction_id
+       AND t.created_at = td.transaction_created_at
+      WHERE td.bill_id = ANY(${billIds}::int[])
+      ORDER BY td.bill_id, td.created_at ASC
+    `;
+    return rows as unknown as PaymentLineRow[];
+  }
 }
 
 function mapPaymentLines(lines: PaymentLineRow[]) {
