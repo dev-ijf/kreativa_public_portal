@@ -32,7 +32,7 @@ import type {
 } from '@/lib/portal/daily-reports-shared';
 import { monthRange } from '@/lib/data/server/habits';
 
-/** Short TTL: teacher/ERP publish cannot invalidate this key. Keep low so parents see new report dots quickly. */
+/** Calendar cache: ERP invalidates `dr:cal:{studentId}:*` on submit; short TTL as fallback. */
 const DR_CALENDAR_TTL_SEC = 30;
 
 function calendarCacheKey(studentId: number, year: number, monthIndex0: number): string {

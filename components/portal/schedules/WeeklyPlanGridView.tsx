@@ -41,7 +41,8 @@ type TimeBand = {
   timeEnd: string;
   sortOrder: number;
   days: Array<DayCell | null>;
-  /** All filled days share the same content → one spanning cell. */
+  /** All 5 weekdays filled with identical content → one spanning cell.
+   *  Never unify when only some days have content (e.g. single-day Day off). */
   unified: boolean;
 };
 
@@ -126,7 +127,7 @@ function buildTimeBands(rows: PortalWeeklyPlanRow[]): TimeBand[] {
     const filled = days.filter((c): c is DayCell => c != null);
     const firstSig = filled.length > 0 ? cellSignature(filled[0]!) : '';
     const unified =
-      filled.length > 0 && filled.every((c) => cellSignature(c) === firstSig);
+      filled.length === 5 && filled.every((c) => cellSignature(c) === firstSig);
 
     return {
       key,
