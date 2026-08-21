@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { getCachedServerSession } from '@/lib/auth-cached';
 import { CheckoutValidationError, finalizePortalCheckout } from '@/lib/data/server/checkout';
 import type { PortalCheckoutCartItem } from '@/lib/data/portal-payment';
@@ -34,27 +34,23 @@ export async function POST(request: Request) {
       paymentMethodId,
     });
 
-    try {
-      await scheduleCheckoutWhatsAppJob({
-        transactionId: checkout.transactionId,
-        transactionCreatedAt: checkout.transactionCreatedAt,
-        userId,
-      });
-    } catch (err) {
-      // Jangan gagalkan checkout jika WA gagal.
-      console.error('checkout_whatsapp_schedule', err);
-    }
+    const notifBody = {
+      transactionId: checkout.transactionId,
+      transactionCreatedAt: checkout.transactionCreatedAt,
+      userId,
+    };
 
-    try {
-      await scheduleCheckoutEmailJob({
-        transactionId: checkout.transactionId,
-        transactionCreatedAt: checkout.transactionCreatedAt,
-        userId,
-      });
-    } catch (err) {
-      // Jangan gagalkan checkout jika email gagal.
-      console.error('checkout_email_schedule', err);
-    }
+    // Same scheme as paid: return response first; WA + email in parallel after response.
+    after(() => {
+      void Promise.allSettled([
+        scheduleCheckoutWhatsAppJob(notifBody).catch((err) => {
+          console.error('checkout_whatsapp_schedule', err);
+        }),
+        scheduleCheckoutEmailJob(notifBody).catch((err) => {
+          console.error('checkout_email_schedule', err);
+        }),
+      ]);
+    });
 
     return NextResponse.json({
       referenceNo: checkout.referenceNo,

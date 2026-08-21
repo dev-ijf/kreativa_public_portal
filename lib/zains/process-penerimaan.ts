@@ -363,7 +363,8 @@ export async function processZainsPenerimaanJob(
 
       const bulan = monthNameId(line.bill_month);
       const ta = tx.academic_year_name || '';
-      const keterangan = [
+      const keteranganSuffix = ' : otomatis via app';
+      const keteranganBase = [
         'Penerimaan SPP',
         bulan ? `Bulan ${bulan}` : null,
         tx.student_name || null,
@@ -371,8 +372,10 @@ export async function processZainsPenerimaanJob(
         ta ? `TA.${ta}` : null,
       ]
         .filter(Boolean)
-        .join(' : ')
-        .slice(0, 500);
+        .join(' : ');
+      const keterangan = (
+        keteranganBase.slice(0, Math.max(0, 500 - keteranganSuffix.length)) + keteranganSuffix
+      ).slice(0, 500);
 
       await zainsExecute(
         entity,

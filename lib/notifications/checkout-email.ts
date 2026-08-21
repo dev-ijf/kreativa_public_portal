@@ -27,11 +27,15 @@ function checkoutEmailTriggerForTheme(themeId: number | null | undefined): strin
 async function loadEmailConfigByTrigger(
   trigger: string,
 ): Promise<{ id: number; subject: string; message: string } | null> {
+  // is_active may be boolean or text ('t' / 'true') depending on dump/column type.
   const rows = (await sql`
     SELECT id, subject_template AS subject, message_template AS message
     FROM email_notif_configs
     WHERE trigger_event = ${trigger}
-      AND is_active IS TRUE
+      AND (
+        is_active IS TRUE
+        OR lower(trim(COALESCE(is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+      )
     ORDER BY id ASC
     LIMIT 1
   `) as unknown as { id: number; subject: string; message: string }[];
@@ -55,9 +59,10 @@ async function resolveRecipientEmail(userId: number): Promise<string | null> {
   return email;
 }
 
-function formatVaSpaced(va: string | null): string {
+/** Digits only — easy to copy/tap; matches WhatsApp checkout VA. */
+function formatVaDigits(va: string | null): string {
   if (!va) return '';
-  return va.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+  return va.replace(/\D/g, '');
 }
 
 async function loadInstructionHtml(methodId: number, lang: PaymentInstructionDbLang): Promise<string> {
@@ -192,7 +197,7 @@ export async function processCheckoutEmailJob(
     new Date(expiryMs).toISOString(),
     themeId === 1 ? 'en' : 'id',
   );
-  const vaDisplay = formatVaSpaced(h.va_no);
+  const vaDigits = formatVaDigits(h.va_no);
 
   const vars: Record<string, string> = {
     school_name: String(ctx.schoolName ?? ''),
@@ -200,7 +205,7 @@ export async function processCheckoutEmailJob(
     bill_details: billDetails || '-',
     total_amount: formatRupiah(Number(h.total_amount)),
     payment_methods: String(h.pm_name ?? '—'),
-    va_number: vaDisplay || h.va_no || '-',
+    va_number: vaDigits || h.va_no || '-',
     expiry_date: expiryDateStr,
     payment_instructions: instrIdHtml || '-',
     payment_instructions_en: instrEnHtml || '-',

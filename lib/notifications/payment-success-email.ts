@@ -25,11 +25,15 @@ function paymentSuccessEmailTriggerForTheme(themeId: number | null | undefined):
 async function loadEmailConfigByTrigger(
   trigger: string,
 ): Promise<{ id: number; subject: string; message: string } | null> {
+  // is_active may be boolean or text ('t' / 'true') depending on dump/column type.
   const rows = (await sql`
     SELECT id, subject_template AS subject, message_template AS message
     FROM email_notif_configs
     WHERE trigger_event = ${trigger}
-      AND is_active IS TRUE
+      AND (
+        is_active IS TRUE
+        OR lower(trim(COALESCE(is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+      )
     ORDER BY id ASC
     LIMIT 1
   `) as unknown as { id: number; subject: string; message: string }[];
