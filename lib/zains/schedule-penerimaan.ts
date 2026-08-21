@@ -4,25 +4,24 @@ import type { ZainsPenerimaanJobBody } from '@/lib/zains/process-penerimaan';
 export type { ZainsPenerimaanJobBody };
 
 /**
- * Fire-and-forget FINS penerimaan. Never await from Muamalat VA route.
- * Failures are logged; paid settlement / WA / email stay independent.
+ * Schedule FINS penerimaan. Prefer calling from Next.js `after()` so the work
+ * survives the HTTP response on Vercel (bare `void` is frozen after ACK).
  */
-export function scheduleZainsPenerimaanJob(body: ZainsPenerimaanJobBody): void {
-  console.info('zains_penerimaan: schedule (async)', {
+export async function scheduleZainsPenerimaanJob(body: ZainsPenerimaanJobBody): Promise<void> {
+  console.info('zains_penerimaan: start', {
     transactionId: body.transactionId,
   });
-  void processZainsPenerimaanJob(body)
-    .then((result) => {
-      console.info('zains_penerimaan_done', {
-        transactionId: body.transactionId,
-        outcome: result.outcome,
-        error: result.error,
-      });
-    })
-    .catch((err) => {
-      console.error('zains_penerimaan_unhandled', {
-        transactionId: body.transactionId,
-        err,
-      });
+  try {
+    const result = await processZainsPenerimaanJob(body);
+    console.info('zains_penerimaan_done', {
+      transactionId: body.transactionId,
+      outcome: result.outcome,
+      error: result.error,
     });
+  } catch (err) {
+    console.error('zains_penerimaan_unhandled', {
+      transactionId: body.transactionId,
+      err,
+    });
+  }
 }

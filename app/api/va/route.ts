@@ -581,22 +581,16 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
     return buildResponse(paymentError('12', CCY), 200, debug);
   }
 
-  // Fire-and-forget FINS sync — never await; must not block bank ACK / WA / email.
-  try {
-    scheduleZainsPenerimaanJob({ transactionId: String(tid) });
-  } catch (err) {
-    console.error('bmi_va_payment_schedule_zains', err);
-  }
-
+  // Fire-and-forget FINS + WA + email after bank ACK (must use after() on Vercel).
   const paidNotif = {
     transactionId: String(tid),
     userId: Number(head.user_id),
     channelId: String(CHANNELID ?? '').trim() || undefined,
   };
 
-  // Same scheme: ACK bank first; WA + email in parallel after response (do not await WA before email).
   after(() => {
     void Promise.allSettled([
+      scheduleZainsPenerimaanJob({ transactionId: String(tid) }),
       schedulePaymentSuccessWhatsAppJob(paidNotif).catch((err) => {
         console.error('bmi_va_payment_schedule_wa', err);
       }),
