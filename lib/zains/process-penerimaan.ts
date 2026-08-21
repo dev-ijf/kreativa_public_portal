@@ -1,6 +1,12 @@
 import type { RowDataPacket } from 'mysql2';
 import { sql } from '@/lib/db/client';
-import { zainsExecute, zainsQuery, type ZainsEntity } from '@/lib/mysql-zains';
+import {
+  ZainsDbConfigError,
+  ZainsMysqlError,
+  zainsExecute,
+  zainsQuery,
+  type ZainsEntity,
+} from '@/lib/mysql-zains';
 
 export type ZainsPenerimaanJobBody = {
   transactionId: string | number;
@@ -505,8 +511,8 @@ export async function processZainsPenerimaanJob(
 
     return { outcome: 'synced' };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('zains_penerimaan_failed', { transactionId: tid, err });
+    const message = formatZainsJobError(err);
+    console.error('zains_penerimaan_failed', { transactionId: tid, err: message, raw: err });
     try {
       await sql`
         UPDATE tuition_transactions
@@ -525,6 +531,18 @@ export async function processZainsPenerimaanJob(
     }
     return { outcome: 'failed', error: message };
   }
+}
+
+function formatZainsJobError(err: unknown): string {
+  if (err instanceof ZainsMysqlError || err instanceof ZainsDbConfigError) {
+    return err.message;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  // Neon HTTP driver classic message — not MySQL.
+  if (/fetch failed/i.test(msg) || /Error connecting to database/i.test(msg)) {
+    return `Neon Postgres failed (not Zains MySQL yet): ${msg}`;
+  }
+  return msg.slice(0, 500);
 }
 
 async function markSync(
