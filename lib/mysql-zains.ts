@@ -2,6 +2,17 @@ import mysql, { type Pool, type RowDataPacket, type ResultSetHeader } from 'mysq
 
 export type ZainsEntity = 'ijf' | 'yaim';
 
+/** Bind values accepted by mysql2 `query` / `execute`. */
+export type ZainsSqlParam =
+  | string
+  | number
+  | bigint
+  | boolean
+  | Date
+  | Buffer
+  | Uint8Array
+  | null;
+
 const pools = new Map<ZainsEntity, Pool>();
 
 function dbNameForEntity(entity: ZainsEntity): string | null {
@@ -57,7 +68,7 @@ export function getZainsPool(entity: ZainsEntity): Pool {
 export async function zainsQuery<T extends RowDataPacket[]>(
   entity: ZainsEntity,
   sqlText: string,
-  params: unknown[] = []
+  params: ZainsSqlParam[] = []
 ): Promise<T> {
   const pool = getZainsPool(entity);
   const [rows] = await pool.query<T>(sqlText, params);
@@ -67,7 +78,7 @@ export async function zainsQuery<T extends RowDataPacket[]>(
 export async function zainsExecute(
   entity: ZainsEntity,
   sqlText: string,
-  params: unknown[] = []
+  params: ZainsSqlParam[] = []
 ): Promise<ResultSetHeader> {
   const pool = getZainsPool(entity);
   const [result] = await pool.execute<ResultSetHeader>(sqlText, params);
