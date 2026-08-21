@@ -206,14 +206,38 @@ export async function processZainsPenerimaanJob(
     `) as NeonTx[];
 
     const tx = txRows[0];
-    if (!tx) return { outcome: 'failed', error: 'transaction not found' };
+    if (!tx) {
+      await writeLog({
+        transactionId: tid,
+        createdAt: new Date(),
+        entity: 'unknown',
+        status: 'failed',
+        errorMessage: 'transaction not found',
+      });
+      return { outcome: 'failed', error: 'transaction not found' };
+    }
 
     const status = String(tx.status || '').toLowerCase();
     if (status !== 'success' && status !== 'paid') {
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity: 'unknown',
+        status: 'skipped',
+        errorMessage: `transaction not settled (status=${tx.status})`,
+      });
       return { outcome: 'skipped', error: 'transaction not settled' };
     }
 
     if (String(tx.zains_sync_status || '').toLowerCase() === 'synced') {
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity: 'unknown',
+        status: 'skipped',
+        errorMessage: 'already synced',
+        requestPayload: { zains_sync_status: tx.zains_sync_status },
+      });
       return { outcome: 'synced' };
     }
 
@@ -228,12 +252,26 @@ export async function processZainsPenerimaanJob(
     const schoolMap = mapRows[0];
     if (!schoolMap) {
       await markSync(tid, tx.created_at, 'skipped', null);
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity: 'unknown',
+        status: 'skipped',
+        errorMessage: `no school map (school_id=${tx.school_id})`,
+      });
       return { outcome: 'skipped', error: 'no school map' };
     }
 
     const entity = String(schoolMap.entity || '').toLowerCase() as ZainsEntity;
     if (entity !== 'ijf') {
       await markSync(tid, tx.created_at, 'skipped', null);
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity,
+        status: 'skipped',
+        errorMessage: `entity not ijf (phase 1): ${entity}`,
+      });
       return { outcome: 'skipped', error: 'entity not ijf (phase 1)' };
     }
 
@@ -272,6 +310,17 @@ export async function processZainsPenerimaanJob(
     const sppLines = lines.filter((l) => /spp/i.test(String(l.product_name || '')));
     if (sppLines.length === 0) {
       await markSync(tid, tx.created_at, 'skipped', null);
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity,
+        status: 'skipped',
+        errorMessage: 'no SPP lines',
+        requestPayload: {
+          lineCount: lines.length,
+          products: lines.map((l) => l.product_name),
+        },
+      });
       return { outcome: 'skipped', error: 'no SPP lines' };
     }
 
@@ -417,6 +466,13 @@ export async function processZainsPenerimaanJob(
 
     if (inserted.length === 0) {
       await markSync(tid, tx.created_at, 'skipped', null);
+      await writeLog({
+        transactionId: tid,
+        createdAt: tx.created_at,
+        entity,
+        status: 'skipped',
+        errorMessage: 'no positive SPP amounts',
+      });
       return { outcome: 'skipped', error: 'no positive SPP amounts' };
     }
 
