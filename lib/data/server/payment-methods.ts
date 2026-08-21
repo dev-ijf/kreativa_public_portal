@@ -1,4 +1,4 @@
-import { cacheGetJson, cacheSetJson } from '@/lib/cache/upstash-redis';
+import { cacheDelByPattern, cacheGetJson, cacheSetJson } from '@/lib/cache/upstash-redis';
 import type { PortalPaymentInstructionRow, PortalPaymentMethodOption } from '@/lib/data/portal-payment';
 import { getStudentIdsAccessibleToViewer } from '@/lib/data/server/finance';
 import { sql } from '@/lib/db/client';
@@ -7,9 +7,12 @@ import {
   type PaymentInstructionDbLang,
 } from '@/lib/utils/payment-instruction-lang';
 
+/** Bump when publish/active flags change and Redis still serves stale lists (no TTL). */
+const METHODS_CACHE_VER = 'v3';
+
 function methodsCacheKey(schoolIds: number[]): string {
   const part = [...new Set(schoolIds)].sort((a, b) => a - b).join(',') || 'none';
-  return `portal:payment_methods:v2:${part}`;
+  return `portal:payment_methods:${METHODS_CACHE_VER}:${part}`;
 }
 
 function instructionsCacheKey(methodId: number, lang: PaymentInstructionDbLang): string {
@@ -20,6 +23,14 @@ function instructionsCacheKey(methodId: number, lang: PaymentInstructionDbLang):
 function methodViewerAllowedCacheKey(viewerUserId: number, viewerRole: string, methodId: number): string {
   const roleSafe = String(viewerRole || 'none').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64);
   return `portal:viewer_can_method:v1:${viewerUserId}:${roleSafe}:${methodId}`;
+}
+
+/** Drop stale payment-method lists + viewer-allow flags (e.g. after is_publish changes). */
+export async function invalidatePublishedPaymentMethodsCache(): Promise<void> {
+  await Promise.all([
+    cacheDelByPattern('portal:payment_methods:*'),
+    cacheDelByPattern('portal:viewer_can_method:*'),
+  ]);
 }
 
 async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalPaymentMethodOption[]> {
@@ -37,8 +48,14 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
             logo_url AS "logoUrl",
             sort_order AS "sortOrder"
           FROM tuition_payment_methods
-          WHERE is_active IS TRUE
-            AND is_publish IS TRUE
+          WHERE (
+              is_active IS TRUE
+              OR lower(trim(COALESCE(is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
+            AND (
+              is_publish IS TRUE
+              OR lower(trim(COALESCE(is_publish::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
             AND school_id IS NULL
           ORDER BY sort_order ASC NULLS LAST, id ASC
         `) as unknown as PortalPaymentMethodOption[])
@@ -52,8 +69,14 @@ async function fetchPublishedMethodsFromDb(schoolIds: number[]): Promise<PortalP
             logo_url AS "logoUrl",
             sort_order AS "sortOrder"
           FROM tuition_payment_methods
-          WHERE is_active IS TRUE
-            AND is_publish IS TRUE
+          WHERE (
+              is_active IS TRUE
+              OR lower(trim(COALESCE(is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
+            AND (
+              is_publish IS TRUE
+              OR lower(trim(COALESCE(is_publish::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
             AND (school_id IS NULL OR school_id = ANY(${unique}::int4[]))
           ORDER BY sort_order ASC NULLS LAST, id ASC
         `) as unknown as PortalPaymentMethodOption[]);
@@ -134,8 +157,14 @@ async function viewerCanUsePublishedPaymentMethodFromDb(
           SELECT 1 AS ok
           FROM tuition_payment_methods pm
           WHERE pm.id = ${methodId}
-            AND pm.is_active IS TRUE
-            AND pm.is_publish IS TRUE
+            AND (
+              pm.is_active IS TRUE
+              OR lower(trim(COALESCE(pm.is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
+            AND (
+              pm.is_publish IS TRUE
+              OR lower(trim(COALESCE(pm.is_publish::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
             AND pm.school_id IS NULL
           LIMIT 1
         `) as unknown as { ok: number }[])
@@ -143,8 +172,14 @@ async function viewerCanUsePublishedPaymentMethodFromDb(
           SELECT 1 AS ok
           FROM tuition_payment_methods pm
           WHERE pm.id = ${methodId}
-            AND pm.is_active IS TRUE
-            AND pm.is_publish IS TRUE
+            AND (
+              pm.is_active IS TRUE
+              OR lower(trim(COALESCE(pm.is_active::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
+            AND (
+              pm.is_publish IS TRUE
+              OR lower(trim(COALESCE(pm.is_publish::text, ''))) IN ('t', 'true', '1', 'yes')
+            )
             AND (pm.school_id IS NULL OR pm.school_id = ANY(${schoolIds}::int4[]))
           LIMIT 1
         `) as unknown as { ok: number }[]);
