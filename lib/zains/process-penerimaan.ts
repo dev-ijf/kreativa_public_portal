@@ -257,7 +257,7 @@ export async function processZainsPenerimaanJob(
 
     const schoolMap = mapRows[0];
     if (!schoolMap) {
-      await markSync(tid, tx.created_at, 'skipped', null);
+      await markSync(tid, 'skipped', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -270,7 +270,7 @@ export async function processZainsPenerimaanJob(
 
     const entity = String(schoolMap.entity || '').toLowerCase() as ZainsEntity;
     if (entity !== 'ijf') {
-      await markSync(tid, tx.created_at, 'skipped', null);
+      await markSync(tid, 'skipped', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -285,7 +285,7 @@ export async function processZainsPenerimaanJob(
     const nikInput = schoolMap.nik_input ? String(schoolMap.nik_input) : '';
     const nikApprove = schoolMap.nik_approve ? String(schoolMap.nik_approve) : '';
     if (!Number.isFinite(idKantor) || !nikInput) {
-      await markSync(tid, tx.created_at, 'failed', null);
+      await markSync(tid, 'failed', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -307,15 +307,17 @@ export async function processZainsPenerimaanJob(
         b.bill_year,
         b.title AS bill_title
       FROM tuition_transaction_details td
-      JOIN tuition_products p ON p.id = td.product_id
-      JOIN tuition_bills b ON b.id = td.bill_id
-      WHERE td.transaction_id = ${tid}
-        AND td.transaction_created_at = ${tx.created_at}
+      INNER JOIN tuition_transactions t
+        ON t.id = td.transaction_id
+       AND t.created_at = td.transaction_created_at
+      INNER JOIN tuition_products p ON p.id = td.product_id
+      INNER JOIN tuition_bills b ON b.id = td.bill_id
+      WHERE t.id = ${tid}
     `) as NeonLine[];
 
     const sppLines = lines.filter((l) => /spp/i.test(String(l.product_name || '')));
     if (sppLines.length === 0) {
-      await markSync(tid, tx.created_at, 'skipped', null);
+      await markSync(tid, 'skipped', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -341,7 +343,7 @@ export async function processZainsPenerimaanJob(
     `) as Record<string, unknown>[];
     const prodMap = prodMaps[0];
     if (!prodMap?.coa_kredit) {
-      await markSync(tid, tx.created_at, 'failed', null);
+      await markSync(tid, 'failed', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -378,7 +380,7 @@ export async function processZainsPenerimaanJob(
           : String(schoolMap.coa_bank || schoolMap.coa_kas || '');
     }
     if (!coaDebet) {
-      await markSync(tid, tx.created_at, 'failed', null);
+      await markSync(tid, 'failed', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -471,7 +473,7 @@ export async function processZainsPenerimaanJob(
     }
 
     if (inserted.length === 0) {
-      await markSync(tid, tx.created_at, 'skipped', null);
+      await markSync(tid, 'skipped', null);
       await writeLog({
         transactionId: tid,
         createdAt: tx.created_at,
@@ -489,7 +491,7 @@ export async function processZainsPenerimaanJob(
       [noresi]
     );
 
-    await markSync(tid, tx.created_at, 'synced', noresi);
+    await markSync(tid, 'synced', noresi);
     await writeLog({
       transactionId: tid,
       createdAt: tx.created_at,
@@ -547,7 +549,6 @@ function formatZainsJobError(err: unknown): string {
 
 async function markSync(
   transactionId: number,
-  createdAt: Date | string,
   status: string,
   noresi: string | null
 ) {
@@ -558,7 +559,6 @@ async function markSync(
       zains_synced_at = CASE WHEN ${status} = 'synced' THEN now() ELSE zains_synced_at END,
       zains_noresi = COALESCE(${noresi}, zains_noresi)
     WHERE id = ${transactionId}
-      AND created_at = ${createdAt}
   `;
 }
 
