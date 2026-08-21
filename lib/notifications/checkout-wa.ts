@@ -147,9 +147,10 @@ async function loadCheckoutTemplateByTrigger(trigger: string): Promise<{ id: num
   return { id: Number(rows[0].id), content: String(rows[0].content ?? '') };
 }
 
-function formatVaSpaced(va: string | null): string {
+/** Digits only — WhatsApp can treat the VA as one tappable number. */
+function formatVaDigits(va: string | null): string {
   if (!va) return '';
-  return va.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+  return va.replace(/\D/g, '');
 }
 
 export type ProcessCheckoutWaResult = {
@@ -305,7 +306,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
   const expiryMs = computePortalPaymentExpiryMs(Number.isFinite(createdMs) ? createdMs : Date.now());
   const expiryDateStr = formatDateTimeAsiaJakarta(new Date(expiryMs).toISOString(), themeId === 1 ? 'en' : 'id');
 
-  const vaDisplay = formatVaSpaced(h.va_no);
+  const vaDigits = formatVaDigits(h.va_no);
   const to = await resolveRecipientPhone(ctx.studentId, body.userId);
   console.info('checkout_wa_resolve', { transactionId: idNum, trigger, templateId: template?.id ?? null, to: to ?? null });
 
@@ -315,7 +316,7 @@ export async function processCheckoutWhatsAppJob(body: CheckoutWhatsAppJobBody):
     bill_details: billDetails,
     total_amount: formatRupiah(totalAmount),
     payment_methods: String(h.pm_name ?? '—'),
-    va_number: vaDisplay || h.va_no || '-',
+    va_number: vaDigits || h.va_no || '-',
     expiry_date: expiryDateStr,
     payment_instructions: instrIdText || '-',
     payment_instructions_en: instrEnText || '-',

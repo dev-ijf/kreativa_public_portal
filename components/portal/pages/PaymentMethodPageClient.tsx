@@ -35,18 +35,21 @@ export function PaymentMethodPageClient({ initialMethods }: PaymentMethodPageCli
     setSelectedPayment((cur) => (cur?.dbMethodId === only.dbMethodId ? cur : only));
   }, [initialMethods, setSelectedPayment]);
 
+  if (submitting) {
+    return (
+      <FullPageBlockingLoader
+        title={lang === 'en' ? 'Processing checkout…' : 'Memproses checkout…'}
+        subtitle={
+          lang === 'en'
+            ? 'Please wait. Do not close or refresh this page until finished.'
+            : 'Mohon tunggu. Jangan tutup atau segarkan halaman ini sampai selesai.'
+        }
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-8">
-      {submitting ? (
-        <FullPageBlockingLoader
-          title={lang === 'en' ? 'Processing checkout…' : 'Memproses checkout…'}
-          subtitle={
-            lang === 'en'
-              ? 'Please wait. Do not close or refresh this page until finished.'
-              : 'Mohon tunggu. Jangan tutup atau segarkan halaman ini sampai selesai.'
-          }
-        />
-      ) : null}
       <Header title={lang === 'en' ? 'Payment Method' : 'Metode Pembayaran'} backHref="/cart" />
 
       <div className="px-4 pt-4 space-y-4">

@@ -1,19 +1,21 @@
-/**
- * Overlay full-viewport + spinner (blokir interaksi). Tanpa `"use client"` agar bisa dipakai dari `loading.tsx` (RSC).
- */
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type FullPageBlockingLoaderProps = {
   title: string;
   subtitle?: string;
 };
 
-export function FullPageBlockingLoader({ title, subtitle }: FullPageBlockingLoaderProps) {
+function LoaderCard({ title, subtitle }: FullPageBlockingLoaderProps) {
   return (
     <div
-      className="min-h-[60vh] flex flex-col items-center justify-center px-5"
+      className="fixed inset-0 z-[60] flex items-center justify-center px-5 bg-black/45"
       role="status"
       aria-busy="true"
       aria-live="polite"
+      aria-modal="true"
     >
       <div className="w-full max-w-[min(22rem,calc(100vw-2.5rem))] rounded-3xl bg-white p-8 shadow-2xl border border-slate-200 flex flex-col items-center text-center">
         <div
@@ -25,4 +27,23 @@ export function FullPageBlockingLoader({ title, subtitle }: FullPageBlockingLoad
       </div>
     </div>
   );
+}
+
+/**
+ * Full-viewport blocking overlay. Portals to document.body so portal shell
+ * `overflow-hidden` / max-width do not clip it.
+ */
+export function FullPageBlockingLoader({ title, subtitle }: FullPageBlockingLoaderProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === 'undefined') {
+    // SSR / first paint: still render fixed overlay in place (avoids blank flash).
+    return <LoaderCard title={title} subtitle={subtitle} />;
+  }
+
+  return createPortal(<LoaderCard title={title} subtitle={subtitle} />, document.body);
 }

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { after, NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { schedulePaymentSuccessEmailJob } from '@/lib/notifications/schedule-payment-success-email';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
@@ -588,27 +588,23 @@ async function handlePayment(payload: Record<string, unknown>, debug: boolean): 
     console.error('bmi_va_payment_schedule_zains', err);
   }
 
-  try {
-    await schedulePaymentSuccessWhatsAppJob({
-      transactionId: String(tid),
-      userId: Number(head.user_id),
-      channelId: String(CHANNELID ?? '').trim() || undefined,
-    });
-  } catch (err) {
-    // Jangan gagalkan settlement bank jika WA gagal.
-    console.error('bmi_va_payment_schedule_wa', err);
-  }
+  const paidNotif = {
+    transactionId: String(tid),
+    userId: Number(head.user_id),
+    channelId: String(CHANNELID ?? '').trim() || undefined,
+  };
 
-  try {
-    await schedulePaymentSuccessEmailJob({
-      transactionId: String(tid),
-      userId: Number(head.user_id),
-      channelId: String(CHANNELID ?? '').trim() || undefined,
-    });
-  } catch (err) {
-    // Jangan gagalkan settlement bank jika email gagal.
-    console.error('bmi_va_payment_schedule_email', err);
-  }
+  // Same scheme: ACK bank first; WA + email in parallel after response (do not await WA before email).
+  after(() => {
+    void Promise.allSettled([
+      schedulePaymentSuccessWhatsAppJob(paidNotif).catch((err) => {
+        console.error('bmi_va_payment_schedule_wa', err);
+      }),
+      schedulePaymentSuccessEmailJob(paidNotif).catch((err) => {
+        console.error('bmi_va_payment_schedule_email', err);
+      }),
+    ]);
+  });
 
   const billOut = String(Math.max(0, Math.round(totalDb * 100)));
   const cust = formatCustomerName(String(head.student_name ?? CUSTNAME ?? ''));
