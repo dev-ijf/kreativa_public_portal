@@ -20,6 +20,7 @@
     "lucide-react": "^1.7.0",
     "mafs": "^0.21.0",
     "mermaid": "^11.14.0",
+    "mysql2": "^3.23.4",
     "next": "16.2.2",
     "next-auth": "^4.24.13",
     "nodemailer": "^7.0.13",

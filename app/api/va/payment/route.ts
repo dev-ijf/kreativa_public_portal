@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { sql } from '@/lib/db/client';
 import { schedulePaymentSuccessEmailJob } from '@/lib/notifications/schedule-payment-success-email';
 import { schedulePaymentSuccessWhatsAppJob } from '@/lib/qstash/schedule-payment-success-whatsapp';
+import { scheduleZainsPenerimaanJob } from '@/lib/zains/schedule-penerimaan';
 import { releaseBmiPaymentKey, tryClaimBmiPaymentKey } from '@/lib/va/bmi-payment-idempotency';
 import { decodeTokenUnsafe, parseRequestBody } from '@/lib/va/jwt';
 import { buildResponse } from '@/lib/va/response';
@@ -360,7 +361,8 @@ export async function POST(req: NextRequest) {
       UPDATE tuition_transactions
       SET
         status = 'success',
-        payment_date = now()
+        payment_date = now(),
+        zains_sync_status = 'pending'
       WHERE id = ${tid}
         AND created_at = (
           SELECT created_at
@@ -374,6 +376,13 @@ export async function POST(req: NextRequest) {
     console.error('bmi_va_payment_db', e);
     await releaseBmiPaymentKey(vanoNorm, refNo, trxDate);
     return buildResponse(paymentError('12', CCY), 200, debug);
+  }
+
+  // Fire-and-forget FINS sync — never await; must not block bank ACK / WA / email.
+  try {
+    scheduleZainsPenerimaanJob({ transactionId: String(tid) });
+  } catch (err) {
+    console.error('bmi_va_payment_schedule_zains', err);
   }
 
   try {
