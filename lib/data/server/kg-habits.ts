@@ -1,4 +1,9 @@
 import { sql } from '@/lib/db/client';
+import {
+  PORTAL_KG_HABITS_TTL_SEC,
+  portalKgHabitDefinitionsKey,
+} from '@/lib/cache/portal-kg-habits';
+import { cacheGetJson, cacheSetJsonTtl } from '@/lib/cache/upstash-redis';
 import { isStudentVisibleToViewer } from '@/lib/data/server/attendance';
 import {
   buildHabitTree,
@@ -43,7 +48,7 @@ function mapDefinition(r: Record<string, unknown>): KgHabitDefinition {
   };
 }
 
-export async function getKgHabitDefinitions(): Promise<KgHabitDefinition[]> {
+async function loadKgHabitDefinitionsFromDb(): Promise<KgHabitDefinition[]> {
   const rows = await sql`
     SELECT id, code, parent_code, name_en, name_id, description_en, description_id,
            sort_order, accent_color, bg_color, icon_key
@@ -52,6 +57,17 @@ export async function getKgHabitDefinitions(): Promise<KgHabitDefinition[]> {
     ORDER BY sort_order ASC, id ASC
   `;
   return (rows as Record<string, unknown>[]).map(mapDefinition);
+}
+
+/** Active habit captions (names/descriptions). Cache-aside via Upstash; logs stay on DB. */
+export async function getKgHabitDefinitions(): Promise<KgHabitDefinition[]> {
+  const key = portalKgHabitDefinitionsKey();
+  const cached = await cacheGetJson<KgHabitDefinition[]>(key);
+  if (Array.isArray(cached)) return cached;
+
+  const rows = await loadKgHabitDefinitionsFromDb();
+  await cacheSetJsonTtl(key, rows, PORTAL_KG_HABITS_TTL_SEC);
+  return rows;
 }
 
 export async function getKgHabitTree(): Promise<KgHabitTreeItem[]> {
